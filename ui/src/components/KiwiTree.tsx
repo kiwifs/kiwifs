@@ -48,6 +48,20 @@ type Props = {
   onMoved?: (newPath: string) => void;
 };
 
+type PromptDialog = {
+  title: string;
+  description: string;
+  value: string;
+  onConfirm: (value: string) => void;
+};
+
+type ConfirmDialog = {
+  title: string;
+  description: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+};
+
 export function KiwiTree({ activePath, onSelect, refreshKey, onCreateChild, onDeleted, onDuplicated, onMoved }: Props) {
   const [root, setRoot] = useState<TreeEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +72,16 @@ export function KiwiTree({ activePath, onSelect, refreshKey, onCreateChild, onDe
   const [dupSource, setDupSource] = useState("");
   const [dupTarget, setDupTarget] = useState("");
   const [dupBusy, setDupBusy] = useState(false);
+
+  const [promptDialog, setPromptDialog] = useState<PromptDialog | null>(null);
+  const [promptValue, setPromptValue] = useState("");
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null);
+
+  function openPromptDialog(d: PromptDialog) {
+    setPromptValue(d.value);
+    setPromptDialog(d);
+  }
 
   function openDupDialog(srcPath: string) {
     setDupSource(srcPath);
@@ -123,7 +147,7 @@ export function KiwiTree({ activePath, onSelect, refreshKey, onCreateChild, onDe
         const fileName = src.split("/").pop()!;
         const rootChildren = root?.children || [];
         if (rootChildren.some((c) => c.name === fileName)) {
-          alert(`A file named "${fileName}" already exists at root.`);
+          setAlertMessage(`A file named "${fileName}" already exists at root.`);
           return;
         }
         api.readFile(src).then(({ content }) =>
@@ -149,6 +173,8 @@ export function KiwiTree({ activePath, onSelect, refreshKey, onCreateChild, onDe
           dragPath={dragPath}
           dropTarget={dropTarget}
           setDropTarget={setDropTarget}
+          openPromptDialog={openPromptDialog}
+          openConfirmDialog={setConfirmDialog}
         />
       ))}
 
@@ -177,6 +203,76 @@ export function KiwiTree({ activePath, onSelect, refreshKey, onCreateChild, onDe
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!promptDialog} onOpenChange={(open) => { if (!open) setPromptDialog(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{promptDialog?.title}</DialogTitle>
+            <DialogDescription>{promptDialog?.description}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Input
+              autoFocus
+              value={promptValue}
+              onChange={(e) => setPromptValue(e.target.value)}
+              className="font-mono"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && promptValue.trim() && promptDialog) {
+                  promptDialog.onConfirm(promptValue.trim());
+                  setPromptDialog(null);
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPromptDialog(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (promptValue.trim() && promptDialog) {
+                  promptDialog.onConfirm(promptValue.trim());
+                  setPromptDialog(null);
+                }
+              }}
+              disabled={!promptValue.trim()}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!alertMessage} onOpenChange={(open) => { if (!open) setAlertMessage(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Conflict</DialogTitle>
+            <DialogDescription>{alertMessage}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setAlertMessage(null)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!confirmDialog} onOpenChange={(open) => { if (!open) setConfirmDialog(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmDialog?.title}</DialogTitle>
+            <DialogDescription>{confirmDialog?.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
+            <Button
+              variant={confirmDialog?.destructive ? "destructive" : "default"}
+              onClick={() => {
+                confirmDialog?.onConfirm();
+                setConfirmDialog(null);
+              }}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -195,6 +291,8 @@ function Node({
   dragPath,
   dropTarget,
   setDropTarget,
+  openPromptDialog,
+  openConfirmDialog,
 }: {
   entry: TreeEntry;
   depth: number;
@@ -209,6 +307,8 @@ function Node({
   dragPath: React.MutableRefObject<string | null>;
   dropTarget: string | null;
   setDropTarget: (path: string | null) => void;
+  openPromptDialog: (d: PromptDialog) => void;
+  openConfirmDialog: (d: ConfirmDialog) => void;
 }) {
   const path = stripTrailingSlash(entry.path);
   const isOpen = expanded.has(path);
@@ -306,11 +406,17 @@ function Node({
             <ContextMenuSeparator />
             <ContextMenuItem
               onClick={() => {
-                const newName = prompt("Rename folder to:", entry.name);
-                if (!newName || newName === entry.name) return;
-                const parentDir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-                const newFolder = parentDir ? `${parentDir}/${newName}` : newName;
-                moveFolder(path, newFolder, entry).then(() => onMoved?.(newFolder)).catch(() => {});
+                openPromptDialog({
+                  title: "Rename folder",
+                  description: `Rename "${entry.name}" to:`,
+                  value: entry.name,
+                  onConfirm: (newName) => {
+                    if (newName === entry.name) return;
+                    const parentDir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+                    const newFolder = parentDir ? `${parentDir}/${newName}` : newName;
+                    moveFolder(path, newFolder, entry).then(() => onMoved?.(newFolder)).catch(() => {});
+                  },
+                });
               }}
             >
               <Move className="h-3.5 w-3.5" />
@@ -318,9 +424,15 @@ function Node({
             </ContextMenuItem>
             <ContextMenuItem
               onClick={() => {
-                const newPath = prompt("Move folder to:", path);
-                if (!newPath || newPath === path) return;
-                moveFolder(path, newPath.replace(/\/+$/, ""), entry).then(() => onMoved?.(newPath)).catch(() => {});
+                openPromptDialog({
+                  title: "Move folder",
+                  description: "Enter the new path for this folder:",
+                  value: path,
+                  onConfirm: (newPath) => {
+                    if (newPath === path) return;
+                    moveFolder(path, newPath.replace(/\/+$/, ""), entry).then(() => onMoved?.(newPath)).catch(() => {});
+                  },
+                });
               }}
             >
               <Move className="h-3.5 w-3.5" />
@@ -331,8 +443,14 @@ function Node({
               className="text-destructive focus:text-destructive"
               onClick={() => {
                 const files = collectFiles(entry);
-                if (!confirm(`Delete folder "${entry.name}" and its ${files.length} file(s)?`)) return;
-                Promise.all(files.map((f) => api.deleteFile(f))).then(() => onDeleted?.()).catch(() => {});
+                openConfirmDialog({
+                  title: "Delete folder",
+                  description: `Delete folder "${entry.name}" and its ${files.length} file(s)?`,
+                  destructive: true,
+                  onConfirm: () => {
+                    Promise.all(files.map((f) => api.deleteFile(f))).then(() => onDeleted?.()).catch(() => {});
+                  },
+                });
               }}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -358,6 +476,8 @@ function Node({
                 dragPath={dragPath}
                 dropTarget={dropTarget}
                 setDropTarget={setDropTarget}
+                openPromptDialog={openPromptDialog}
+                openConfirmDialog={openConfirmDialog}
               />
             ))}
           </div>
@@ -423,15 +543,20 @@ function Node({
         </ContextMenuItem>
         <ContextMenuItem
           onClick={() => {
-            const newPath = prompt("Move to path:", path);
-            if (newPath && newPath !== path) {
-              const finalPath = newPath.endsWith(".md") ? newPath : newPath + ".md";
-              api.readFile(path).then(({ content }) =>
-                api.writeFile(finalPath, content).then(() =>
-                  api.deleteFile(path).then(() => onMoved?.(finalPath))
-                )
-              ).catch(() => {});
-            }
+            openPromptDialog({
+              title: "Move / Rename",
+              description: "Enter the new path:",
+              value: path,
+              onConfirm: (newPath) => {
+                if (newPath === path) return;
+                const finalPath = newPath.endsWith(".md") ? newPath : newPath + ".md";
+                api.readFile(path).then(({ content }) =>
+                  api.writeFile(finalPath, content).then(() =>
+                    api.deleteFile(path).then(() => onMoved?.(finalPath))
+                  )
+                ).catch(() => {});
+              },
+            });
           }}
         >
           <Move className="h-3.5 w-3.5" />
@@ -441,12 +566,17 @@ function Node({
         <ContextMenuItem
           className="text-destructive focus:text-destructive"
           onClick={() => {
-            if (confirm(`Delete "${stem(entry.name)}"?`)) {
-              api
-                .deleteFile(path)
-                .then(() => onDeleted?.())
-                .catch(() => {});
-            }
+            openConfirmDialog({
+              title: "Delete page",
+              description: `Delete "${stem(entry.name)}"?`,
+              destructive: true,
+              onConfirm: () => {
+                api
+                  .deleteFile(path)
+                  .then(() => onDeleted?.())
+                  .catch(() => {});
+              },
+            });
           }}
         >
           <Trash2 className="h-3.5 w-3.5" />

@@ -147,7 +147,7 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
           .finally(() => setLoading(false));
       } else {
         api
-          .semanticSearch(textQuery || query, 15, 0)
+          .semanticSearch(textQuery || query, 15, 0, modifiedAfter ? { modifiedAfter } : undefined)
           .then((r) => {
             const best = new Map<string, SemanticResult>();
             for (const hit of r.results) {

@@ -86,7 +86,7 @@ type = "none"
 # [[auth.api_keys]]
 # key   = "kiwi_proj_abc123"
 # space = "project-alpha"
-# actor = "jetrun-agent"
+# actor = "my-agent"
 
 # OIDC / OAuth JWT validation (auth.type = "oidc"):
 # [auth.oidc]

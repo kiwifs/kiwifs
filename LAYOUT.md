@@ -16,9 +16,9 @@ KiwiFS uses an opinionated, fixed layout structure. Users can customize
 │            │  ┌─────────────────────────────────┐  │
 │  Space     │  │ Breadcrumb (sticky)             │  │
 │  Starred   │  ├─────────────────────────────────┤  │
-│  Recent    │  │ Page header (title, meta, tags) │  │
-│  Pages     │  │                                 │  │
-│  (tree)    │  │ Content + ToC sidebar           │  │
+│  Pinned    │  │ Page header (title, meta, tags) │  │
+│  Recent    │  │                                 │  │
+│  Pages     │  │ Content + ToC sidebar           │  │
 │            │  │                                 │  │
 │            │  │ Footer (comments, backlinks)    │  │
 │            │  │                                 │  │
@@ -44,8 +44,9 @@ toggle button. Sections from top to bottom:
 
 1. **Space selector** — switch between registered spaces.
 2. **Starred** — pages the user has starred (localStorage).
-3. **Recent** — last 5 visited pages (localStorage).
-4. **Pages** — full file tree with drag-and-drop, rename, and context menu.
+3. **Pinned** — pages pinned for quick access (localStorage).
+4. **Recent** — last 5 visited pages (localStorage).
+5. **Pages** — full file tree with drag-and-drop, rename, and context menu.
 
 Each section is collapsible (state saved to localStorage).
 

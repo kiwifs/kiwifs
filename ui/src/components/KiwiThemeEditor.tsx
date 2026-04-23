@@ -29,6 +29,14 @@ const TOKEN_GROUPS: TokenGroup[] = [
     ],
   },
   {
+    label: "Secondary",
+    tokens: [
+      { key: "secondary", label: "Secondary" },
+      { key: "secondary-foreground", label: "Secondary text" },
+      { key: "secondary-hover", label: "Secondary hover" },
+    ],
+  },
+  {
     label: "Backgrounds",
     tokens: [
       { key: "background", label: "Background" },
@@ -42,6 +50,7 @@ const TOKEN_GROUPS: TokenGroup[] = [
     tokens: [
       { key: "foreground", label: "Foreground" },
       { key: "card-foreground", label: "Card text" },
+      { key: "popover-foreground", label: "Popover text" },
       { key: "muted-foreground", label: "Muted text" },
     ],
   },
@@ -49,6 +58,7 @@ const TOKEN_GROUPS: TokenGroup[] = [
     label: "Borders & Accents",
     tokens: [
       { key: "border", label: "Border" },
+      { key: "input", label: "Input border" },
       { key: "ring", label: "Ring" },
       { key: "accent", label: "Accent" },
       { key: "accent-foreground", label: "Accent text" },
@@ -76,17 +86,21 @@ const TEXT_TOKEN_GROUPS: TextTokenGroup[] = [
     tokens: [
       { key: "font-sans", label: "Sans font", placeholder: "ui-sans-serif, system-ui, sans-serif" },
       { key: "font-mono", label: "Mono font", placeholder: "ui-monospace, monospace" },
+      { key: "font-serif", label: "Serif font", placeholder: "ui-serif, Georgia, serif" },
       { key: "font-size-base", label: "Base size", placeholder: "1rem" },
       { key: "font-size-sm", label: "Small size", placeholder: "0.875rem" },
       { key: "font-size-lg", label: "Large size", placeholder: "1.125rem" },
       { key: "line-height-base", label: "Line height", placeholder: "1.75" },
+      { key: "line-height-tight", label: "Tight line height", placeholder: "1.3" },
     ],
   },
   {
-    label: "Spacing",
+    label: "Spacing & Layout",
     tokens: [
       { key: "spacing-unit", label: "Spacing unit", placeholder: "8px" },
       { key: "content-max-width", label: "Content width", placeholder: "48rem" },
+      { key: "sidebar-width", label: "Sidebar width", placeholder: "288px" },
+      { key: "radius", label: "Border radius", placeholder: "0.625rem" },
     ],
   },
   {
@@ -96,6 +110,7 @@ const TEXT_TOKEN_GROUPS: TextTokenGroup[] = [
       { key: "heading-1-size", label: "H1 size", placeholder: "1.875rem" },
       { key: "heading-2-size", label: "H2 size", placeholder: "1.5rem" },
       { key: "heading-3-size", label: "H3 size", placeholder: "1.25rem" },
+      { key: "heading-4-size", label: "H4 size", placeholder: "1.125rem" },
     ],
   },
   {

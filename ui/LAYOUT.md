@@ -15,8 +15,8 @@ customise appearance (theme, colours, fonts) but cannot rearrange the zones.
 │          │                                      │
 │ Space    │  CONTENT                             │
 │ Starred  │  (scrollable, max-w-3xl/6xl)         │
-│ Recent   │                                      │
-│ Pinned   │  Page view / Editor / Graph /        │
+│ Pinned   │                                      │
+│ Recent   │  Page view / Editor / Graph /        │
 │ Pages    │  History / Theme editor              │
 │          │                                      │
 │          ├──────────────────────────────────────┤
@@ -34,7 +34,7 @@ customise appearance (theme, colours, fonts) but cannot rearrange the zones.
 ### Sidebar
 - Default width 272px, collapsible via toggle or drag-to-resize (200–480px range).
 - Sections collapse/expand independently; state persisted in localStorage.
-- Section order is fixed: Space selector → Starred → Recent → Pinned → Pages (tree).
+- Section order is fixed: Space selector → Starred → Pinned → Recent → Pages (tree).
 
 ### Breadcrumb
 - Sticky at content top, shows path segments as clickable links.

@@ -625,7 +625,10 @@ func (h *Handlers) Search(c echo.Context) error {
 	}
 	if ma := c.QueryParam("modifiedAfter"); ma != "" {
 		cutoff, perr := time.Parse(time.RFC3339, ma)
-		if perr == nil {
+		if perr != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid modifiedAfter: expected RFC3339 date")
+		}
+		{
 			if df, ok := h.searcher.(search.DateFilterer); ok {
 				paths := make([]string, len(results))
 				for i, r := range results {
@@ -640,6 +643,15 @@ func (h *Handlers) Search(c echo.Context) error {
 					filtered := results[:0]
 					for _, r := range results {
 						if keptSet[r.Path] {
+							filtered = append(filtered, r)
+						}
+					}
+					results = filtered
+				} else {
+					filtered := results[:0]
+					for _, r := range results {
+						info, serr := h.store.Stat(c.Request().Context(), r.Path)
+						if serr == nil && info.ModTime.After(cutoff) {
 							filtered = append(filtered, r)
 						}
 					}
@@ -683,9 +695,10 @@ func parseIntParam(c echo.Context, name string, fallback int) int {
 // ─── Semantic Search ─────────────────────────────────────────────────────────
 
 type semanticRequest struct {
-	Query  string `json:"query"`
-	TopK   int    `json:"topK"`
-	Offset int    `json:"offset"`
+	Query         string `json:"query"`
+	TopK          int    `json:"topK"`
+	Offset        int    `json:"offset"`
+	ModifiedAfter string `json:"modifiedAfter,omitempty"`
 }
 
 type semanticResponse struct {
@@ -745,6 +758,20 @@ func (h *Handlers) SemanticSearch(c echo.Context) error {
 	}
 	if len(results) > topK {
 		results = results[:topK]
+	}
+	if ma := req.ModifiedAfter; ma != "" {
+		cutoff, perr := time.Parse(time.RFC3339, ma)
+		if perr != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid modifiedAfter: expected RFC3339 date")
+		}
+		filtered := results[:0]
+		for _, r := range results {
+			info, serr := h.store.Stat(c.Request().Context(), r.Path)
+			if serr == nil && info.ModTime.After(cutoff) {
+				filtered = append(filtered, r)
+			}
+		}
+		results = filtered
 	}
 	if results == nil {
 		results = []vectorstore.Result{}

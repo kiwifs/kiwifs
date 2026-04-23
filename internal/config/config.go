@@ -43,8 +43,9 @@ type SpaceConfig struct {
 }
 
 type ServerConfig struct {
-	Host string `toml:"host"`
-	Port int    `toml:"port"`
+	Host        string   `toml:"host"`
+	Port        int      `toml:"port"`
+	CORSOrigins []string `toml:"cors_origins"`
 }
 
 type StorageConfig struct {

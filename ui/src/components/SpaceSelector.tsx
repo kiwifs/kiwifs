@@ -37,6 +37,7 @@ export function SpaceSelector({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const load = useCallback(() => {
     api
@@ -78,7 +79,7 @@ export function SpaceSelector({
       setCurrentSpace(newName.trim());
       onSwitch();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to create space");
+      setErrorMsg(e instanceof Error ? e.message : "Failed to create space");
     } finally {
       setCreating(false);
     }
@@ -149,6 +150,20 @@ export function SpaceSelector({
               disabled={!newName.trim() || creating}
             >
               {creating ? "Creating..." : "Create"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={errorMsg !== null} onOpenChange={(open) => { if (!open) setErrorMsg(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Error</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-destructive">{errorMsg}</p>
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={() => setErrorMsg(null)}>
+              OK
             </Button>
           </div>
         </DialogContent>

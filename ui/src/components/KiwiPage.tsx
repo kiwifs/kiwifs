@@ -9,7 +9,7 @@ import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import matter from "gray-matter";
 import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
-import { Calendar, ChevronDown, ChevronRight, Edit, FileAxis3D, History as HistoryIcon, Link2, MessageSquareQuote, Pin, Star, Tag, User } from "lucide-react";
+import { AlertTriangle, Calendar, ChevronDown, ChevronRight, Edit, FileAxis3D, History as HistoryIcon, Link2, MessageSquareQuote, Pin, Star, Tag, User } from "lucide-react";
 import { api, type TreeEntry } from "@/lib/api";
 import { titleize } from "@/lib/paths";
 import { KiwiBreadcrumb } from "./KiwiBreadcrumb";
@@ -62,6 +62,8 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onToggleSt
   const [error, setError] = useState<string | null>(null);
   const [commentCount, setCommentCount] = useState(0);
   const [lastAuthor, setLastAuthor] = useState<string | null>(null);
+  const [versionError, setVersionError] = useState(false);
+  const [commentError, setCommentError] = useState(false);
   const proseRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,18 +87,20 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onToggleSt
 
   useEffect(() => {
     let cancelled = false;
+    setVersionError(false);
     api.versions(path).then((r) => {
       if (cancelled || !r.versions.length) return;
       setLastAuthor(r.versions[0].author);
-    }).catch(() => {});
+    }).catch(() => { if (!cancelled) setVersionError(true); });
     return () => { cancelled = true; };
   }, [path]);
 
   useEffect(() => {
     let cancelled = false;
+    setCommentError(false);
     api.listComments(path).then((r) => {
       if (!cancelled) setCommentCount(r.comments.length);
-    }).catch(() => {});
+    }).catch(() => { if (!cancelled) setCommentError(true); });
     return () => { cancelled = true; };
   }, [path, refreshKey]);
 
@@ -108,7 +112,10 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onToggleSt
       const m = matter(content);
       let body = m.content;
       if (typeof m.data?.title === "string") {
-        body = body.replace(/^\s*#\s+.+\n?/, "");
+        const h1Match = body.match(/^\s*#\s+(.+)\n?/);
+        if (h1Match && h1Match[1].trim() === m.data.title.trim()) {
+          body = body.replace(/^\s*#\s+.+\n?/, "");
+        }
       }
       return { body, meta: (m.data || {}) as Record<string, unknown> };
     } catch {
@@ -209,6 +216,14 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onToggleSt
                 <span className="flex items-center gap-1">
                   <MessageSquareQuote className="h-3 w-3" />
                   {commentCount} comment{commentCount === 1 ? "" : "s"}
+                </span>
+              )}
+              {(versionError || commentError) && (
+                <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400" title={
+                  [versionError && "version history", commentError && "comments"].filter(Boolean).join(" and ") + " unavailable"
+                }>
+                  <AlertTriangle className="h-3 w-3" />
+                  Some metadata unavailable
                 </span>
               )}
             </div>

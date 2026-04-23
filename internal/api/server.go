@@ -264,13 +264,22 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // corsOriginAllowed decides whether a CORS Origin should be echoed back as
 // allowed. Loopback origins always pass — that's the dev-server case the
 // catch-all wildcard used to cover. Beyond that, anonymous (auth=none)
-// installs reject everything else, while authenticated installs default to
-// permissive because the bearer/cookie is the real gate.
+// installs reject everything else, while authenticated installs check the
+// cors_origins allowlist if configured, falling back to permissive when
+// no list is set (the bearer/cookie is the real gate).
 func (s *Server) corsOriginAllowed(origin string) (bool, error) {
 	if isLoopbackOrigin(origin) {
 		return true, nil
 	}
 	if s.cfg.Auth.Type == "" || s.cfg.Auth.Type == "none" {
+		return false, nil
+	}
+	if len(s.cfg.Server.CORSOrigins) > 0 {
+		for _, allowed := range s.cfg.Server.CORSOrigins {
+			if origin == allowed {
+				return true, nil
+			}
+		}
 		return false, nil
 	}
 	return true, nil

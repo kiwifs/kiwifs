@@ -269,12 +269,13 @@ export const api = {
   async semanticSearch(
     query: string,
     topK = 10,
-    offset = 0
+    offset = 0,
+    opts?: { modifiedAfter?: string }
   ): Promise<SemanticResponse> {
     return request(`${kiwiBase()}/search/semantic`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, topK, offset }),
+      body: JSON.stringify({ query, topK, offset, ...(opts?.modifiedAfter ? { modifiedAfter: opts.modifiedAfter } : {}) }),
     });
   },
 
