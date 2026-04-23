@@ -121,6 +121,36 @@ func TestGitSubprocessTimeoutKillsHangingChild(t *testing.T) {
 // healthy. Without external serialisation `git add` collisions on the
 // single index.lock would surface as the "index.lock: File exists" errors
 // the old internal mutex used to hide.
+func TestGitShowRejectsPathInjection(t *testing.T) {
+	requireGit(t)
+	dir := t.TempDir()
+	g, err := NewGit(dir)
+	if err != nil {
+		t.Fatalf("NewGit: %v", err)
+	}
+
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		path string
+	}{
+		{"newline", "file\nname.md"},
+		{"carriage return", "file\rname.md"},
+		{"colon", "file:name.md"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := g.Show(ctx, tt.path, "HEAD")
+			if err == nil {
+				t.Fatal("expected error for path with invalid character")
+			}
+			if !strings.Contains(err.Error(), "invalid path") {
+				t.Fatalf("expected 'invalid path' error, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestGitConcurrentCommitsRequireExternalSerialisation(t *testing.T) {
 	requireGit(t)
 	dir := t.TempDir()

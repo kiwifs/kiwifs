@@ -28,9 +28,22 @@ The foundation. A single Go binary that serves markdown files with a web UI, git
 Make KiwiFS easy to plug into other apps. This is what turns it from a tool into a platform.
 
 - [ ] **React component library** (`kiwifs-ui` on npm) — `<KiwiProvider>`, `<KiwiTree>`, `<KiwiPage>`, `<KiwiEditor>`, `<KiwiSearch>`, `<KiwiGraph>` as standalone components
-- [ ] **MCP server** (`kiwifs mcp`) — Model Context Protocol for AI agents (Claude, Cursor, etc.)
+- [x] **MCP server** (`kiwifs mcp`) — Model Context Protocol for AI agents (Claude, Cursor, etc.)
 - [ ] **Pipeline hooks** (Go) — `OnBeforeWrite`, `OnAfterWrite` callbacks for custom validation/notifications
 - [ ] **JS hooks** — `.kiwi/hooks/*.js` scripts via embedded runtime, no recompile needed
+
+## v0.2.1 — Data durability & backup
+
+Your data must survive anything — process crash, container kill, host failure. KiwiFS is Obsidian-model (files are the truth, everything else rebuilds), and now ships with built-in backup.
+
+- [ ] **Atomic file writes** — temp-file-then-rename in storage layer, eliminates torn writes on crash
+- [ ] **Track `.kiwi/` user data in git** — comments, config, templates are user-created data that must not be silently lost
+- [ ] **`[backup]` config** — `remote = "git@github.com:user/kb.git"`, `interval = "5m"`, background goroutine pushes to any git remote
+- [ ] **`kiwifs backup`** — one-shot CLI command for manual push, cron jobs, pre-maintenance scripts
+- [ ] **`kiwifs restore`** — `git clone` + auto-reindex, one command to recover from any git remote
+- [ ] **Uncommitted path tracking** — if git commit fails after file write, track and retry so history is never silently lost
+
+---
 
 ## v0.3 — Import & export
 

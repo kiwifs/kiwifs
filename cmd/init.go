@@ -58,6 +58,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create .kiwi: %w", err)
 	}
 
+	gitignorePath := filepath.Join(root, ".gitignore")
+	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
+		gitignoreContent := `# KiwiFS — rebuildable state (SQLite indexes, WAL, vector cache)
+.kiwi/state/
+`
+		if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
+			return fmt.Errorf("write .gitignore: %w", err)
+		}
+	}
+
 	configPath := filepath.Join(kiwiDir, "config.toml")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		configContent := `[server]

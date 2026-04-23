@@ -616,7 +616,7 @@ func (h *Handlers) Search(c echo.Context) error {
 	}
 	limit := search.NormalizeLimit(parseIntParam(c, "limit", 0))
 	offset := search.NormalizeOffset(parseIntParam(c, "offset", 0))
-	results, err := h.searcher.Search(c.Request().Context(), q, limit, offset)
+	results, err := h.searcher.Search(c.Request().Context(), q, limit, offset, "")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

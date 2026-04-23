@@ -20,7 +20,7 @@ func TestGrepSearch(t *testing.T) {
 		[]byte("nothing relevant\n"), 0644)
 
 	g := NewGrep(dir)
-	results, err := g.Search(context.Background(), "websocket", 0, 0)
+	results, err := g.Search(context.Background(), "websocket", 0, 0, "")
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
@@ -44,14 +44,14 @@ func TestGrepSearchPagination(t *testing.T) {
 	}
 	g := NewGrep(dir)
 
-	page1, err := g.Search(context.Background(), "common", 10, 0)
+	page1, err := g.Search(context.Background(), "common", 10, 0, "")
 	if err != nil {
 		t.Fatalf("page1: %v", err)
 	}
 	if len(page1) != 10 {
 		t.Fatalf("page1: want 10 got %d", len(page1))
 	}
-	page2, err := g.Search(context.Background(), "common", 10, 10)
+	page2, err := g.Search(context.Background(), "common", 10, 10, "")
 	if err != nil {
 		t.Fatalf("page2: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestGrepSearchPagination(t *testing.T) {
 	}
 
 	// Default limit caps at 50 even with no explicit limit.
-	def, err := g.Search(context.Background(), "common", 0, 0)
+	def, err := g.Search(context.Background(), "common", 0, 0, "")
 	if err != nil {
 		t.Fatalf("default: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestGrepSearchPagination(t *testing.T) {
 	}
 
 	// Offset past total yields empty result, not an error.
-	empty, err := g.Search(context.Background(), "common", 10, 9999)
+	empty, err := g.Search(context.Background(), "common", 10, 9999, "")
 	if err != nil {
 		t.Fatalf("empty: %v", err)
 	}

@@ -32,4 +32,7 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(mountCmd)
+	rootCmd.AddCommand(mcpCmd)
+	rootCmd.AddCommand(backupCmd)
+	rootCmd.AddCommand(restoreCmd)
 }

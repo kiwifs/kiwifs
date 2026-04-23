@@ -25,7 +25,7 @@ func TestWatcherRoutesThroughPipeline(t *testing.T) {
 		t.Fatalf("storage: %v", err)
 	}
 	hub := events.NewHub()
-	pipe := pipeline.New(store, versioning.NewNoop(), search.NewGrep(dir), nil, hub, nil)
+	pipe := pipeline.New(store, versioning.NewNoop(), search.NewGrep(dir), nil, hub, nil, "")
 
 	w, err := New(dir, store, pipe)
 	if err != nil {
@@ -63,7 +63,7 @@ func TestWatcherRoutesThroughPipeline(t *testing.T) {
 func TestWatcherCloseIsIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := storage.NewLocal(dir)
-	pipe := pipeline.New(store, versioning.NewNoop(), search.NewGrep(dir), nil, events.NewHub(), nil)
+	pipe := pipeline.New(store, versioning.NewNoop(), search.NewGrep(dir), nil, events.NewHub(), nil, "")
 	w, _ := New(dir, store, pipe)
 	w.Start()
 	var wg sync.WaitGroup

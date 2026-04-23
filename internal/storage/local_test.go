@@ -56,6 +56,61 @@ func TestLocalListHidesDotDirs(t *testing.T) {
 	}
 }
 
+func TestLocalRejectsSymlinkEscape(t *testing.T) {
+	dir := t.TempDir()
+	l, _ := NewLocal(dir)
+
+	// Create a symlink inside root that points outside it.
+	target := t.TempDir()
+	if err := os.WriteFile(filepath.Join(target, "secret.txt"), []byte("sensitive"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, "escape")); err != nil {
+		t.Skipf("symlinks not supported: %v", err)
+	}
+
+	// Reading through the symlink should be rejected.
+	_, err := l.Read(context.Background(), "escape/secret.txt")
+	if err == nil {
+		t.Fatal("expected error reading through escaping symlink, got nil")
+	}
+	if !strings.Contains(err.Error(), "outside root") {
+		t.Fatalf("expected 'outside root' error, got: %v", err)
+	}
+
+	// Writing through the symlink should also be rejected.
+	err = l.Write(context.Background(), "escape/new.md", []byte("injected"))
+	if err == nil {
+		t.Fatal("expected error writing through escaping symlink, got nil")
+	}
+}
+
+func TestLocalAllowsInternalSymlink(t *testing.T) {
+	dir := t.TempDir()
+	l, _ := NewLocal(dir)
+
+	// Create a subdirectory and a symlink that stays inside root.
+	subdir := filepath.Join(dir, "real")
+	if err := os.MkdirAll(subdir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subdir, "ok.md"), []byte("safe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(subdir, filepath.Join(dir, "alias")); err != nil {
+		t.Skipf("symlinks not supported: %v", err)
+	}
+
+	// Reading through an internal symlink should succeed.
+	data, err := l.Read(context.Background(), "alias/ok.md")
+	if err != nil {
+		t.Fatalf("expected internal symlink read to succeed: %v", err)
+	}
+	if string(data) != "safe" {
+		t.Fatalf("unexpected content: %q", data)
+	}
+}
+
 func TestLocalConfinesTraversalToRoot(t *testing.T) {
 	// filepath.Clean("/" + "../escape") → "/escape", so traversal attempts
 	// collapse onto root rather than escaping it. Verify the path the

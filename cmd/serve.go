@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kiwifs/kiwifs/internal/backup"
 	"github.com/kiwifs/kiwifs/internal/bootstrap"
 	"github.com/kiwifs/kiwifs/internal/config"
 	kiwinfs "github.com/kiwifs/kiwifs/internal/nfs"
@@ -131,6 +132,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 			w.Start()
 			defer w.Close()
 			log.Printf("fsnotify watcher: watching %s for direct .md writes", root)
+		}
+	}
+
+	if cfg.Backup.Remote != "" {
+		syncer, berr := backup.New(root, cfg.Backup.Remote, cfg.Backup.Branch, cfg.Backup.Interval)
+		if berr != nil {
+			log.Printf("warning: backup sync disabled (%v)", berr)
+		} else {
+			syncer.Start()
+			defer syncer.Close()
 		}
 	}
 

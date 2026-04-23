@@ -73,7 +73,7 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 	}
 
 	hub := events.NewHub()
-	pipe := pipeline.New(store, ver, searcher, linker, hub, vectors)
+	pipe := pipeline.New(store, ver, searcher, linker, hub, vectors, root)
 
 	cstore, err := comments.New(root)
 	if err != nil {
@@ -101,6 +101,8 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 		Comments:  cstore,
 		Server:    server,
 	}
+
+	pipe.DrainUncommitted(context.Background())
 
 	if vectors != nil {
 		go stack.reindexIfEmpty()

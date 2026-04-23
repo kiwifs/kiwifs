@@ -35,7 +35,7 @@ func buildTestServer(t *testing.T) *Server {
 	searcher := search.NewGrep(dir)
 	ver := versioning.NewNoop()
 	hub := events.NewHub()
-	pipe := pipeline.New(store, ver, searcher, nil, hub, nil)
+	pipe := pipeline.New(store, ver, searcher, nil, hub, nil, "")
 	cstore, err := comments.New(dir)
 	if err != nil {
 		t.Fatalf("comments: %v", err)
@@ -62,7 +62,7 @@ func buildSQLiteTestServer(t *testing.T) (*Server, string) {
 	t.Cleanup(func() { _ = searcher.Close() })
 	ver := versioning.NewNoop()
 	hub := events.NewHub()
-	pipe := pipeline.New(store, ver, searcher, searcher, hub, nil)
+	pipe := pipeline.New(store, ver, searcher, searcher, hub, nil, "")
 	cstore, err := comments.New(dir)
 	if err != nil {
 		t.Fatalf("comments: %v", err)
@@ -286,7 +286,7 @@ func TestPerSpaceKeyMiddlewareValidates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("storage: %v", err)
 	}
-	pipe := pipeline.New(store, versioning.NewNoop(), search.NewGrep(dir), nil, events.NewHub(), nil)
+	pipe := pipeline.New(store, versioning.NewNoop(), search.NewGrep(dir), nil, events.NewHub(), nil, "")
 	cstore, err := comments.New(dir)
 	if err != nil {
 		t.Fatalf("comments: %v", err)
@@ -714,7 +714,7 @@ func buildTestServerWithAssets(t *testing.T, assets config.AssetsConfig) *Server
 	searcher := search.NewGrep(dir)
 	ver := versioning.NewNoop()
 	hub := events.NewHub()
-	pipe := pipeline.New(store, ver, searcher, nil, hub, nil)
+	pipe := pipeline.New(store, ver, searcher, nil, hub, nil, "")
 	cstore, err := comments.New(dir)
 	if err != nil {
 		t.Fatalf("comments: %v", err)

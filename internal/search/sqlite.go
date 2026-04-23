@@ -159,7 +159,7 @@ func (s *SQLite) isEmpty(ctx context.Context) (bool, error) {
 
 // ─── Searcher interface ─────────────────────────────────────────────────────
 
-func (s *SQLite) Search(ctx context.Context, query string, limit, offset int) ([]Result, error) {
+func (s *SQLite) Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error) {
 	q := buildFTS5Query(query)
 	if q == "" {
 		return nil, nil
@@ -167,7 +167,20 @@ func (s *SQLite) Search(ctx context.Context, query string, limit, offset int) ([
 	limit = NormalizeLimit(limit)
 	offset = NormalizeOffset(offset)
 
-	const sqlQ = `
+	var sqlQ string
+	var args []any
+	if pathPrefix != "" {
+		sqlQ = `
+SELECT path,
+       snippet(docs, 1, '<mark>', '</mark>', '…', 16) AS snip,
+       bm25(docs) AS score
+FROM docs
+WHERE docs MATCH ? AND path LIKE ?
+ORDER BY rank
+LIMIT ? OFFSET ?;`
+		args = []any{q, pathPrefix + "%", limit, offset}
+	} else {
+		sqlQ = `
 SELECT path,
        snippet(docs, 1, '<mark>', '</mark>', '…', 16) AS snip,
        bm25(docs) AS score
@@ -175,15 +188,21 @@ FROM docs
 WHERE docs MATCH ?
 ORDER BY rank
 LIMIT ? OFFSET ?;`
+		args = []any{q, limit, offset}
+	}
 
-	rows, err := s.readDB.QueryContext(ctx, sqlQ, q, limit, offset)
+	rows, err := s.readDB.QueryContext(ctx, sqlQ, args...)
 	if err != nil {
-		// Malformed FTS5 query — retry with a pure phrase form as a safety net.
 		fallback := phraseFallback(query)
 		if fallback == "" || fallback == q {
 			return nil, fmt.Errorf("search: %w", err)
 		}
-		rows, err = s.readDB.QueryContext(ctx, sqlQ, fallback, limit, offset)
+		if pathPrefix != "" {
+			args[0] = fallback
+		} else {
+			args[0] = fallback
+		}
+		rows, err = s.readDB.QueryContext(ctx, sqlQ, args...)
 		if err != nil {
 			return nil, fmt.Errorf("search (fallback): %w", err)
 		}

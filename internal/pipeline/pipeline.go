@@ -10,6 +10,9 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,6 +66,12 @@ type Pipeline struct {
 	// watcher Observe that re-embeds the same content — doubling the
 	// vector-embedding API cost per change.
 	inflight sync.Map // map[string]time.Time
+
+	// uncommittedLog is the path to .kiwi/state/uncommitted.log. When a
+	// versioner commit fails after a successful storage write, the path is
+	// appended here so it can be retried on the next successful commit or
+	// at process startup. Empty disables the feature (tests).
+	uncommittedLog string
 }
 
 // Result is returned from Write so callers can set ETag headers, log, etc.
@@ -101,6 +110,8 @@ func coalesce(actor string) string {
 
 // New builds a pipeline. Pass nil for linker, hub, or vectors when those
 // aren't wired. vectors is nil when [search.vector] is disabled.
+// root is the knowledge root directory; when non-empty, uncommitted path
+// tracking is enabled at <root>/.kiwi/state/uncommitted.log.
 func New(
 	store storage.Storage,
 	versioner versioning.Versioner,
@@ -108,14 +119,20 @@ func New(
 	linker links.Linker,
 	hub *events.Hub,
 	vectors *vectorstore.Service,
+	root string,
 ) *Pipeline {
+	var ulog string
+	if root != "" {
+		ulog = filepath.Join(root, ".kiwi", "state", "uncommitted.log")
+	}
 	return &Pipeline{
-		Store:     store,
-		Versioner: versioner,
-		Searcher:  searcher,
-		Linker:    linker,
-		Hub:       hub,
-		Vectors:   vectors,
+		Store:          store,
+		Versioner:      versioner,
+		Searcher:       searcher,
+		Linker:         linker,
+		Hub:            hub,
+		Vectors:        vectors,
+		uncommittedLog: ulog,
 	}
 }
 
@@ -153,7 +170,9 @@ func (p *Pipeline) indexFile(ctx context.Context, path string, content []byte) {
 			log.Printf("pipeline: searcher.IndexMeta(%s): %v", path, err)
 		}
 	}
-	p.Vectors.Enqueue(path, content)
+	if p.Vectors != nil {
+		p.Vectors.Enqueue(path, content)
+	}
 }
 
 // deindexFile removes a path from every index. Caller must hold writeMu.
@@ -180,7 +199,9 @@ func (p *Pipeline) deindexFile(ctx context.Context, path string) {
 			}
 		}
 	}
-	p.Vectors.EnqueueDelete(path)
+	if p.Vectors != nil {
+		p.Vectors.EnqueueDelete(path)
+	}
 }
 
 // broadcast sends an event to all SSE subscribers if the hub is wired, and
@@ -283,6 +304,7 @@ func (p *Pipeline) WriteWithOpts(ctx context.Context, path string, content []byt
 	}
 	if err := p.Versioner.Commit(ctx, path, actor, fmt.Sprintf("%s: %s", actor, path)); err != nil {
 		log.Printf("pipeline: versioner.Commit(%s): %v", path, err)
+		p.trackUncommitted(path)
 	}
 	p.indexFile(ctx, path, content)
 	etag := ETag(content)
@@ -312,6 +334,7 @@ func (p *Pipeline) Observe(ctx context.Context, path string, content []byte, act
 	defer p.writeMu.Unlock()
 	if err := p.Versioner.Commit(ctx, path, actor, fmt.Sprintf("%s: %s", actor, path)); err != nil {
 		log.Printf("pipeline: versioner.Commit(%s): %v", path, err)
+		p.trackUncommitted(path)
 	}
 	p.indexFile(ctx, path, content)
 	etag := ETag(content)
@@ -408,14 +431,18 @@ func (p *Pipeline) BulkWrite(ctx context.Context, files []struct {
 				// up with the rolled-back-to state — we just invalidated
 				// the queue entry above, so this is the only write that
 				// will actually embed.
-				p.Vectors.Enqueue(pre.path, pre.content)
+				if p.Vectors != nil {
+					p.Vectors.Enqueue(pre.path, pre.content)
+				}
 			} else {
 				_ = p.Store.Delete(ctx, pre.path)
 				_ = p.Searcher.Remove(ctx, pre.path)
 				if p.Linker != nil {
 					_ = p.Linker.RemoveLinks(ctx, pre.path)
 				}
-				p.Vectors.EnqueueDelete(pre.path)
+				if p.Vectors != nil {
+					p.Vectors.EnqueueDelete(pre.path)
+				}
 			}
 		}
 	}
@@ -437,6 +464,7 @@ func (p *Pipeline) BulkWrite(ctx context.Context, files []struct {
 	}
 	if err := p.Versioner.BulkCommit(ctx, paths, actor, message); err != nil {
 		rollback(len(files))
+		p.broadcast(events.Event{Op: "rollback", Paths: paths, Actor: actor})
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 	p.broadcast(events.Event{Op: "bulk", Paths: paths, Actor: actor})
@@ -471,6 +499,17 @@ func (p *Pipeline) Delete(ctx context.Context, path, actor string) error {
 	return nil
 }
 
+// CommitOnly stages and commits a path under writeMu without indexing.
+// Used for .kiwi/ metadata files (config.toml, templates) that should be
+// version-tracked but don't belong in the search or vector index.
+func (p *Pipeline) CommitOnly(ctx context.Context, path, actor, message string) {
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
+	if err := p.Versioner.Commit(ctx, path, actor, message); err != nil {
+		log.Printf("pipeline: versioner.Commit(%s): %v", path, err)
+	}
+}
+
 // ETag returns the git blob hash of the content — the same value that
 // `git hash-object` would emit. Using the real blob hash (not a sha256
 // prefix) means the ETag is also a usable handle into the object store
@@ -493,4 +532,58 @@ func ETag(content []byte) string {
 	fmt.Fprintf(h, "blob %d\x00", len(content))
 	h.Write(content)
 	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// trackUncommitted appends a path to the uncommitted log so it can be
+// retried on the next successful commit. Caller must hold writeMu.
+func (p *Pipeline) trackUncommitted(path string) {
+	if p.uncommittedLog == "" {
+		return
+	}
+	f, err := os.OpenFile(p.uncommittedLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("pipeline: trackUncommitted: open: %v", err)
+		return
+	}
+	defer f.Close()
+	fmt.Fprintln(f, path)
+}
+
+// DrainUncommitted reads the uncommitted log and attempts to recommit
+// each path. Successfully committed paths are removed from the log.
+// Call at process startup or after a successful commit.
+func (p *Pipeline) DrainUncommitted(ctx context.Context) {
+	if p.uncommittedLog == "" {
+		return
+	}
+	data, err := os.ReadFile(p.uncommittedLog)
+	if err != nil {
+		return
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) == 0 || (len(lines) == 1 && lines[0] == "") {
+		return
+	}
+
+	seen := make(map[string]bool)
+	var remaining []string
+	for _, path := range lines {
+		path = strings.TrimSpace(path)
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		if err := p.Versioner.Commit(ctx, path, DefaultActor, "recommit: "+path); err != nil {
+			log.Printf("pipeline: recommit(%s): %v", path, err)
+			remaining = append(remaining, path)
+		} else {
+			log.Printf("pipeline: recommitted %s", path)
+		}
+	}
+
+	if len(remaining) == 0 {
+		os.Remove(p.uncommittedLog)
+	} else {
+		os.WriteFile(p.uncommittedLog, []byte(strings.Join(remaining, "\n")+"\n"), 0644)
+	}
 }

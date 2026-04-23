@@ -47,7 +47,7 @@ func TestPipelineWriteDeleteFansOut(t *testing.T) {
 	ver := versioning.NewNoop()
 	searcher := search.NewGrep(dir)
 	hub := events.NewHub()
-	p := New(store, ver, searcher, nil, hub, nil)
+	p := New(store, ver, searcher, nil, hub, nil, "")
 
 	// Subscribe to SSE so we can verify the broadcast.
 	ch, err := hub.Subscribe()
@@ -96,7 +96,7 @@ func TestObserveSkippedAfterWrite(t *testing.T) {
 		t.Fatalf("storage: %v", err)
 	}
 	hub := events.NewHub()
-	p := New(store, versioning.NewNoop(), search.NewGrep(dir), nil, hub, nil)
+	p := New(store, versioning.NewNoop(), search.NewGrep(dir), nil, hub, nil, "")
 
 	ch, err := hub.Subscribe()
 	if err != nil {
@@ -135,7 +135,7 @@ func TestPipelineIndexesMetaViaSQLite(t *testing.T) {
 	}
 	defer sqliteSearcher.Close()
 
-	p := New(store, versioning.NewNoop(), sqliteSearcher, sqliteSearcher, nil, nil)
+	p := New(store, versioning.NewNoop(), sqliteSearcher, sqliteSearcher, nil, nil, "")
 
 	ctx := context.Background()
 	content := []byte("---\nstatus: published\npriority: high\n---\n# Hello\n")
@@ -192,7 +192,7 @@ func TestPipelineConcurrentWritesGitNoDeadlockOrIndexCorruption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("git: %v", err)
 	}
-	p := New(store, git, search.NewGrep(dir), nil, nil, nil)
+	p := New(store, git, search.NewGrep(dir), nil, nil, nil, "")
 
 	const writers = 16
 	done := make(chan error, writers)
@@ -235,7 +235,7 @@ func TestPipelineWriteRespectsCancelledContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("storage: %v", err)
 	}
-	p := New(store, versioning.NewNoop(), search.NewGrep(dir), nil, nil, nil)
+	p := New(store, versioning.NewNoop(), search.NewGrep(dir), nil, nil, nil, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -260,13 +260,64 @@ func TestPipelineWriteRespectsCancelledContext(t *testing.T) {
 	}
 }
 
+func TestPipelineWriteDeleteVectorsNil(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewLocal(dir)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+	p := New(store, versioning.NewNoop(), search.NewGrep(dir), nil, nil, nil, "")
+	if p.Vectors != nil {
+		t.Fatal("expected Vectors to be nil")
+	}
+
+	ctx := context.Background()
+	if _, err := p.Write(ctx, "vec-test.md", []byte("# Test\n"), "tester"); err != nil {
+		t.Fatalf("Write with nil Vectors: %v", err)
+	}
+	if !store.Exists(ctx, "vec-test.md") {
+		t.Fatal("file not created")
+	}
+	if err := p.Delete(ctx, "vec-test.md", "tester"); err != nil {
+		t.Fatalf("Delete with nil Vectors: %v", err)
+	}
+	if store.Exists(ctx, "vec-test.md") {
+		t.Fatal("file not deleted")
+	}
+}
+
+func TestBulkWriteVectorsNil(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewLocal(dir)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+	p := New(store, versioning.NewNoop(), search.NewGrep(dir), nil, nil, nil, "")
+
+	ctx := context.Background()
+	files := []struct {
+		Path    string
+		Content []byte
+	}{
+		{Path: "a.md", Content: []byte("# A")},
+		{Path: "b.md", Content: []byte("# B")},
+	}
+	results, err := p.BulkWrite(ctx, files, "tester", "")
+	if err != nil {
+		t.Fatalf("BulkWrite with nil Vectors: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+}
+
 func TestBulkWriteRollbackOnWriteFailure(t *testing.T) {
 	dir := t.TempDir()
 	store, err := storage.NewLocal(dir)
 	if err != nil {
 		t.Fatalf("storage: %v", err)
 	}
-	p := New(store, versioning.NewNoop(), search.NewGrep(dir), nil, nil, nil)
+	p := New(store, versioning.NewNoop(), search.NewGrep(dir), nil, nil, nil, "")
 
 	// Seed one existing file.
 	if err := store.Write(context.Background(), "existing.md", []byte("before\n")); err != nil {

@@ -149,6 +149,27 @@ echo "# New finding" > /kiwi/reports/finding-042.md
 
 When a real mount isn't available, KiwiFS translates `cat`/`grep`/`ls` into API calls transparently. The agent doesn't know the difference.
 
+### MCP (Model Context Protocol)
+
+```bash
+kiwifs mcp --root ~/knowledge          # in-process, no server needed
+kiwifs mcp --remote http://host:3333   # proxy to a running KiwiFS server
+```
+
+7 tools: `kiwi_read`, `kiwi_write`, `kiwi_search`, `kiwi_tree`, `kiwi_query_meta`, `kiwi_delete`, `kiwi_bulk_write`. Plus resources (`kiwi://schema`, `kiwi://file/{path}`, `kiwi://tree/{path}`).
+
+**Claude Desktop / Cursor:**
+```json
+{
+  "mcpServers": {
+    "kiwifs": {
+      "command": "kiwifs",
+      "args": ["mcp", "--root", "/path/to/knowledge"]
+    }
+  }
+}
+```
+
 ### Search (three tiers)
 
 ```bash
@@ -202,6 +223,7 @@ Every protocol flows through the same storage layer. Every write — regardless 
 | Protocol | Use case | Example |
 |---|---|---|
 | **REST API** | Web frontend, scripts | `curl localhost:3333/api/kiwi/file?path=index.md` |
+| **MCP** | AI agents (Claude, Cursor, custom) | `kiwifs mcp --root ~/knowledge` |
 | **NFS** | Docker, Kubernetes (native mount, no FUSE, no privileged) | `docker run --mount type=nfs,...` |
 | **S3** | Backup, data pipelines, any tool that "supports S3" | `aws s3 sync s3://knowledge/ /backup/` |
 | **WebDAV** | Windows mapped drives, legacy tools | Map Network Drive in Explorer |

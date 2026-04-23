@@ -28,7 +28,13 @@ func NewLocal(root string) (*Local, error) {
 	if err := os.MkdirAll(abs, 0755); err != nil {
 		return nil, fmt.Errorf("create root: %w", err)
 	}
-	return &Local{root: abs}, nil
+	// Resolve symlinks on root itself so guardPath's post-resolution Rel
+	// check works correctly (e.g. macOS /var -> /private/var).
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return nil, fmt.Errorf("resolve root symlinks: %w", err)
+	}
+	return &Local{root: resolved}, nil
 }
 
 // hidden returns true for internal dirs that should not be exposed via the
@@ -44,10 +50,50 @@ func (l *Local) AbsPath(path string) string {
 
 func (l *Local) guardPath(path string) (string, error) {
 	abs := l.AbsPath(path)
-	// Prevent path traversal outside root
 	rel, err := filepath.Rel(l.root, abs)
 	if err != nil || strings.HasPrefix(rel, "..") {
 		return "", fmt.Errorf("path outside root: %s", path)
+	}
+	// Resolve symlinks and re-check — a symlink inside root can point outside.
+	evaluated, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Target doesn't exist yet (write to new file). Check the
+			// deepest existing ancestor instead.
+			return l.guardAncestor(abs)
+		}
+		return "", fmt.Errorf("eval symlinks: %w", err)
+	}
+	rel, err = filepath.Rel(l.root, evaluated)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("path outside root (symlink): %s", path)
+	}
+	return abs, nil
+}
+
+// guardAncestor walks up from abs until it finds an existing ancestor,
+// evaluates its symlinks, and checks that the ancestor is inside root.
+// Used when the target path doesn't exist yet (new file writes).
+func (l *Local) guardAncestor(abs string) (string, error) {
+	dir := abs
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+		evaluated, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return "", fmt.Errorf("eval symlinks: %w", err)
+		}
+		rel, err := filepath.Rel(l.root, evaluated)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return "", fmt.Errorf("path outside root (symlink ancestor): %s", abs)
+		}
+		return abs, nil
 	}
 	return abs, nil
 }
@@ -65,10 +111,50 @@ func (l *Local) Write(_ context.Context, path string, content []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0755); err != nil {
+	dir := filepath.Dir(abs)
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("create parent dirs: %w", err)
 	}
-	return os.WriteFile(abs, content, 0644)
+
+	tmp, err := os.CreateTemp(dir, ".kiwi-write-*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		// Clean up the temp file on any failure path.
+		if tmpName != "" {
+			os.Remove(tmpName)
+		}
+	}()
+
+	if _, err := tmp.Write(content); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("fsync temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err := os.Chmod(tmpName, 0644); err != nil {
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if err := os.Rename(tmpName, abs); err != nil {
+		return fmt.Errorf("rename temp to target: %w", err)
+	}
+	tmpName = "" // rename succeeded — don't remove in defer
+
+	// fsync the parent directory so the new directory entry is durable.
+	d, err := os.Open(dir)
+	if err != nil {
+		return nil // file is already in place; dir sync failure is non-fatal
+	}
+	d.Sync()
+	d.Close()
+	return nil
 }
 
 func (l *Local) Delete(_ context.Context, path string) error {

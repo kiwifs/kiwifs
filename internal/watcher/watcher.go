@@ -107,8 +107,15 @@ func skipDirName(name string) bool {
 	return strings.HasPrefix(name, ".") || name == "node_modules"
 }
 
+// kiwiWatchDirs are the .kiwi/ subdirectories that contain user data and
+// should be version-tracked. Changes to files in these directories are
+// committed to git (via Pipeline.CommitOnly) but not indexed for search.
+var kiwiWatchDirs = []string{
+	filepath.Join(".kiwi", "templates"),
+}
+
 func (w *Watcher) addTree(dir string) error {
-	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -122,7 +129,25 @@ func (w *Watcher) addTree(dir string) error {
 			log.Printf("watcher: add %s: %v", path, addErr)
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	// Watch the .kiwi/ directories that hold user data (config, templates).
+	for _, sub := range kiwiWatchDirs {
+		full := filepath.Join(dir, sub)
+		if fi, err := os.Stat(full); err == nil && fi.IsDir() {
+			if addErr := w.fsw.Add(full); addErr != nil {
+				log.Printf("watcher: add %s: %v", full, addErr)
+			}
+		}
+	}
+	kiwiDir := filepath.Join(dir, ".kiwi")
+	if fi, err := os.Stat(kiwiDir); err == nil && fi.IsDir() {
+		if addErr := w.fsw.Add(kiwiDir); addErr != nil {
+			log.Printf("watcher: add %s: %v", kiwiDir, addErr)
+		}
+	}
+	return nil
 }
 
 func (w *Watcher) run() {
@@ -192,7 +217,28 @@ func (w *Watcher) scanDir(dir string) {
 	})
 }
 
+// isKiwiMetaFile reports whether path is a .kiwi/ file that should be
+// version-tracked (config.toml, templates/*). These are committed to git
+// but not indexed for search.
+func (w *Watcher) isKiwiMetaFile(path string) bool {
+	rel, err := filepath.Rel(w.root, path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	if rel == ".kiwi/config.toml" {
+		return true
+	}
+	if strings.HasPrefix(rel, ".kiwi/templates/") {
+		return true
+	}
+	return false
+}
+
 func (w *Watcher) relevantFile(path string) bool {
+	if w.isKiwiMetaFile(path) {
+		return true
+	}
 	if !strings.HasSuffix(path, ".md") {
 		return false
 	}
@@ -236,6 +282,14 @@ func (w *Watcher) flush() {
 			continue
 		}
 		rel = filepath.ToSlash(rel)
+		if w.isKiwiMetaFile(absPath) {
+			if _, serr := os.Stat(absPath); os.IsNotExist(serr) {
+				w.pipe.CommitOnly(context.Background(), rel, w.actor, "delete: "+rel)
+			} else {
+				w.pipe.CommitOnly(context.Background(), rel, w.actor, w.actor+": "+rel)
+			}
+			continue
+		}
 		content, err := w.readContent(rel, absPath)
 		if err != nil {
 			if os.IsNotExist(err) {

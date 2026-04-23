@@ -226,7 +226,7 @@ func TestConcurrentSearchAndIndex(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for !stop.Load() {
-				if _, err := s.Search(ctxBG, "alpha", 5, 0); err != nil {
+				if _, err := s.Search(ctxBG, "alpha", 5, 0, ""); err != nil {
 					firstErr.CompareAndSwap(nil, err.Error())
 					return
 				}

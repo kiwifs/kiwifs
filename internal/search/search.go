@@ -44,7 +44,9 @@ type Searcher interface {
 	// default" (DefaultSearchLimit). Negative values are treated as zero.
 	// offset < 0 is treated as zero. Engines should cap limit at
 	// MaxSearchLimit even if the caller forgets to.
-	Search(ctx context.Context, query string, limit, offset int) ([]Result, error)
+	// pathPrefix, when non-empty, restricts results to paths starting with
+	// that prefix (server-side filtering, not post-fetch).
+	Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error)
 	// Index upserts a file into the search index. No-op for stateless engines.
 	Index(ctx context.Context, path string, content []byte) error
 	// Remove drops a file from the search index. No-op for stateless engines.

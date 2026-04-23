@@ -254,6 +254,9 @@ func (g *Git) Log(ctx context.Context, path string) ([]Version, error) {
 }
 
 func (g *Git) Show(ctx context.Context, path, hash string) ([]byte, error) {
+	if strings.ContainsAny(path, "\n\r:") {
+		return nil, fmt.Errorf("invalid path: must not contain newlines or colons")
+	}
 	out, err := g.output(ctx, "git", "show", fmt.Sprintf("%s:%s", hash, path))
 	if err != nil {
 		return nil, err

@@ -24,7 +24,7 @@ func NewGrep(root string) *Grep {
 	return &Grep{root: root}
 }
 
-func (g *Grep) Search(ctx context.Context, query string, limit, offset int) ([]Result, error) {
+func (g *Grep) Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error) {
 	if query == "" {
 		return nil, nil
 	}
@@ -69,6 +69,9 @@ func (g *Grep) Search(ctx context.Context, query string, limit, offset int) ([]R
 
 		rel, err := filepath.Rel(g.root, path)
 		if err != nil {
+			return nil
+		}
+		if pathPrefix != "" && !strings.HasPrefix(rel, pathPrefix) {
 			return nil
 		}
 		results = append(results, Result{Path: rel, Matches: matches})
