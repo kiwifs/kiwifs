@@ -14,11 +14,10 @@
 
 <p align="center">
   <a href="https://github.com/amelia751/kiwifs/actions/workflows/ci.yml"><img src="https://github.com/amelia751/kiwifs/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/amelia751/kiwifs/releases"><img src="https://img.shields.io/github/v/release/amelia751/kiwifs?include_prereleases&label=release" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL--1.1-blue" alt="License: BSL 1.1"></a>
   <a href="https://github.com/amelia751/kiwifs"><img src="https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25"></a>
   <a href="https://github.com/amelia751/kiwifs"><img src="https://img.shields.io/badge/single_binary-yes-green" alt="Single Binary"></a>
-  <a href="https://github.com/amelia751/kiwifs/discussions"><img src="https://img.shields.io/github/discussions/amelia751/kiwifs" alt="Discussions"></a>
+  <a href="https://github.com/amelia751/kiwifs"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome"></a>
 </p>
 
 ```bash
