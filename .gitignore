@@ -8,8 +8,20 @@ tasks.md
 todo.md
 todolist.md
 
+# Environment & secrets
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
 # Claude Code / Cursor local settings
 .claude/
+
+# IDE / editor
+.vscode/
+.idea/
+*.tsbuildinfo
 
 # Runtime data (created by `kiwifs init`)
 knowledge/

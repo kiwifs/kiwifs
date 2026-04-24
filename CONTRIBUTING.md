@@ -33,20 +33,24 @@ go build -o kiwifs .
 
 ```
 kiwifs/
-├── cmd/              CLI commands (serve, init, reindex, mount)
+├── cmd/              CLI commands (serve, init, reindex, mcp, mount, lint, backup, restore)
 ├── internal/
 │   ├── api/          REST API handlers
 │   ├── bootstrap/    Dependency wiring
 │   ├── pipeline/     Write pipeline (git + index + SSE)
-│   ├── search/       grep + SQLite FTS5
+│   ├── search/       grep + SQLite FTS5 + metadata index
 │   ├── storage/      Filesystem abstraction
 │   ├── vectorstore/  Vector search backends
 │   ├── versioning/   Git, copy-on-write, noop
+│   ├── mcpserver/    MCP server (local + remote backends)
 │   ├── nfs/          NFS server
-│   ├── s3/           S3-compatible API
+│   ├── s3/           S3-compatible API (gofakes3)
 │   ├── webdav/       WebDAV server
 │   ├── fuse/         FUSE client
+│   ├── spaces/       Multi-space manager
+│   ├── backup/       Git remote sync
 │   └── ...
+├── pkg/kiwi/         Public Go library (embed KiwiFS in your app)
 ├── ui/               React + TypeScript + shadcn/ui
 └── main.go
 ```

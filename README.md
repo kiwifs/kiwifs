@@ -272,6 +272,23 @@ data: {"path":"reports/finding-042.md","actor":"agent:exec_abc"}
 
 UI updates live when knowledge changes. No polling.
 
+### CLI
+
+Every feature is accessible via `kiwifs <command>`:
+
+| Command | What it does |
+|---|---|
+| `kiwifs serve` | Start the server (REST API + web UI + optional NFS/S3/WebDAV) |
+| `kiwifs init` | Scaffold a knowledge base from a template (`agent-knowledge`, `team-wiki`, `runbook`, `research`, or blank) |
+| `kiwifs mcp` | Start a Model Context Protocol server (for Claude, Cursor, etc.) |
+| `kiwifs mount` | FUSE-mount a remote KiwiFS server as a local folder |
+| `kiwifs reindex` | Rebuild search indexes from files (FTS5 + vector + metadata) |
+| `kiwifs lint` | Validate knowledge base (orphan pages, broken links, missing frontmatter) |
+| `kiwifs backup` | Push to a git remote for off-site backup |
+| `kiwifs restore` | Clone from a git remote and rebuild indexes |
+
+All commands support `--help` for full flag reference.
+
 ---
 
 ## Quickstart

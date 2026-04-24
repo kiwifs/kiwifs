@@ -36,13 +36,13 @@ services:
   db:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: kiwi
-      POSTGRES_PASSWORD: kiwi
-      POSTGRES_DB: kiwi
+      POSTGRES_USER: ${POSTGRES_USER:-kiwi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kiwi}
+      POSTGRES_DB: ${POSTGRES_DB:-kiwi}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kiwi -d kiwi"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kiwi} -d ${POSTGRES_DB:-kiwi}"]
       interval: 5s
       timeout: 3s
       retries: 10
