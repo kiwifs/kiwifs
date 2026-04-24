@@ -8,7 +8,7 @@ COPY ui ./
 RUN npm run build
 
 # Stage 2: Build the Go binary with the UI assets embedded.
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25.5-alpine AS builder
 
 RUN apk add --no-cache git
 

@@ -40,8 +40,9 @@ type Watcher struct {
 	pending map[string]struct{}
 	timer   *time.Timer
 
-	stopCh chan struct{}
-	doneCh chan struct{}
+	stopCh   chan struct{}
+	doneCh   chan struct{}
+	closeOnce sync.Once
 }
 
 // New creates a watcher rooted at root. It does not start watching until
@@ -82,25 +83,25 @@ func (w *Watcher) Start() {
 	go w.run()
 }
 
-// Close stops the watcher, flushing any pending work.
+// Close stops the watcher, flushing any pending work. It is safe to call
+// concurrently or more than once; only the first call performs cleanup.
 func (w *Watcher) Close() error {
-	select {
-	case <-w.stopCh:
-		// already closed
-	default:
+	var err error
+	w.closeOnce.Do(func() {
 		close(w.stopCh)
-	}
-	<-w.doneCh
+		<-w.doneCh
 
-	w.mu.Lock()
-	if w.timer != nil {
-		w.timer.Stop()
-		w.timer = nil
-	}
-	w.mu.Unlock()
+		w.mu.Lock()
+		if w.timer != nil {
+			w.timer.Stop()
+			w.timer = nil
+		}
+		w.mu.Unlock()
 
-	w.flush()
-	return w.fsw.Close()
+		w.flush()
+		err = w.fsw.Close()
+	})
+	return err
 }
 
 func skipDirName(name string) bool {
