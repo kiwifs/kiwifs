@@ -16,11 +16,13 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/kiwifs/kiwifs/internal/comments"
 	"github.com/kiwifs/kiwifs/internal/config"
+	"github.com/kiwifs/kiwifs/internal/dataview"
 	"github.com/kiwifs/kiwifs/internal/events"
 	"github.com/kiwifs/kiwifs/internal/janitor"
 	"github.com/kiwifs/kiwifs/internal/links"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/rbac"
+	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
 	"github.com/kiwifs/kiwifs/internal/webui"
 	"github.com/labstack/echo/v4"
@@ -193,6 +195,31 @@ func (s *Server) installAuth(cfg *config.AuthConfig) {
 }
 
 func (s *Server) setupRoutes() {
+	// Build the dataview executor, auto-indexer, and view registry if the
+	// search backend is SQLite.
+	var dvExec *dataview.Executor
+	var viewReg *dataview.Registry
+	if sq, ok := s.pipe.Searcher.(*search.SQLite); ok {
+		readDB := sq.ReadDB()
+		writeDB := sq.WriteDB()
+		dvExec = dataview.NewExecutor(readDB)
+		ai := dataview.NewAutoIndexer(writeDB, readDB, s.cfg.Dataview.MaxAutoIndexes)
+		dvExec.SetAutoIndexer(ai)
+
+		timeout, _ := time.ParseDuration(s.cfg.Dataview.QueryTimeout)
+		if timeout == 0 {
+			timeout = 5 * time.Second
+		}
+		maxRows := s.cfg.Dataview.MaxScanRows
+		if maxRows == 0 {
+			maxRows = 10000
+		}
+		dvExec.SetLimits(maxRows, timeout)
+
+		viewReg = dataview.NewRegistry(dvExec, s.pipe.Store)
+		_ = viewReg.Scan(context.Background())
+	}
+
 	h := &Handlers{
 		store:            s.pipe.Store,
 		versioner:        s.pipe.Versioner,
@@ -201,6 +228,8 @@ func (s *Server) setupRoutes() {
 		hub:              s.pipe.Hub,
 		pipe:             s.pipe,
 		vectors:          s.vectors,
+		dv:               dvExec,
+		viewReg:          viewReg,
 		comments:         s.comments,
 		shares:           s.shares,
 		assets:           s.cfg.Assets,
@@ -217,6 +246,12 @@ func (s *Server) setupRoutes() {
 			prev()
 		}
 		h.invalidateGraphCache()
+	}
+
+	if viewReg != nil {
+		s.pipe.OnPathChange = func(path string) {
+			viewReg.OnWrite(path)
+		}
 	}
 
 	s.echo.GET("/health", h.Health)
@@ -260,6 +295,9 @@ func (s *Server) setupRoutes() {
 	api.PUT("/theme", h.PutTheme)
 	api.GET("/ui-config", h.UIConfig)
 	api.GET("/janitor", h.Janitor)
+	api.GET("/query", h.Query)
+	api.GET("/query/aggregate", h.QueryAggregate)
+	api.POST("/view/refresh", h.ViewRefresh)
 
 	api.POST("/share", h.CreateShareLink)
 	api.GET("/share", h.ListShareLinks)

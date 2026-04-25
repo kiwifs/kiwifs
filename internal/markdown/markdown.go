@@ -15,9 +15,12 @@ package markdown
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	extast "github.com/yuin/goldmark/extension/ast"
 	meta "github.com/yuin/goldmark-meta"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
@@ -144,4 +147,106 @@ func extractText(buf *bytes.Buffer, n ast.Node, source []byte) {
 			extractText(buf, c, source)
 		}
 	}
+}
+
+// Task represents a task item extracted from markdown content.
+type Task struct {
+	Text      string         `json:"text"`
+	Completed bool           `json:"completed"`
+	Line      int            `json:"line"`
+	Tags      []string       `json:"tags,omitempty"`
+	Due       string         `json:"due,omitempty"`
+	Meta      map[string]any `json:"meta,omitempty"`
+}
+
+var inlineMetaRe = regexp.MustCompile(`\[(\w+)::\s*([^\]]+)\]`)
+var inlineTagRe = regexp.MustCompile(`#([a-zA-Z0-9_/.-]+)`)
+
+// Tasks extracts task items from markdown content using goldmark's TaskList extension.
+func Tasks(content []byte) []Task {
+	md := goldmark.New(
+		goldmark.WithExtensions(meta.Meta, extension.TaskList),
+	)
+	ctx := parser.NewContext()
+	doc := md.Parser().Parse(text.NewReader(content), parser.WithContext(ctx))
+
+	var tasks []Task
+
+	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		li, ok := n.(*ast.ListItem)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+
+		var checked *bool
+		var textBuf bytes.Buffer
+
+		// Walk all descendants of the list item to find TaskCheckBox and text
+		ast.Walk(li, func(child ast.Node, childEntering bool) (ast.WalkStatus, error) {
+			if !childEntering {
+				return ast.WalkContinue, nil
+			}
+			if tc, ok := child.(*extast.TaskCheckBox); ok {
+				v := tc.IsChecked
+				checked = &v
+				return ast.WalkContinue, nil
+			}
+			if t, ok := child.(*ast.Text); ok {
+				textBuf.Write(t.Segment.Value(content))
+				return ast.WalkContinue, nil
+			}
+			return ast.WalkContinue, nil
+		})
+
+		if checked == nil {
+			return ast.WalkContinue, nil
+		}
+
+		taskText := strings.TrimSpace(textBuf.String())
+
+		task := Task{
+			Text:      taskText,
+			Completed: *checked,
+			Line:      lineNumber(content, li),
+		}
+
+		if matches := inlineTagRe.FindAllStringSubmatch(taskText, -1); len(matches) > 0 {
+			for _, m := range matches {
+				task.Tags = append(task.Tags, m[1])
+			}
+		}
+
+		if matches := inlineMetaRe.FindAllStringSubmatch(taskText, -1); len(matches) > 0 {
+			task.Meta = make(map[string]any)
+			for _, m := range matches {
+				key, val := m[1], strings.TrimSpace(m[2])
+				task.Meta[key] = val
+				if key == "due" {
+					task.Due = val
+				}
+			}
+		}
+
+		tasks = append(tasks, task)
+		return ast.WalkSkipChildren, nil
+	})
+
+	return tasks
+}
+
+func lineNumber(source []byte, n ast.Node) int {
+	if n.Lines().Len() > 0 {
+		seg := n.Lines().At(0)
+		line := 1
+		for i := 0; i < seg.Start && i < len(source); i++ {
+			if source[i] == '\n' {
+				line++
+			}
+		}
+		return line
+	}
+	return 0
 }

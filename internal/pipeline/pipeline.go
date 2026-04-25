@@ -60,6 +60,11 @@ type Pipeline struct {
 	// just announces "something changed".
 	OnInvalidate func()
 
+	// OnPathChange, when set, fires on every write/delete with the
+	// affected path. Used by the view registry to mark overlapping
+	// computed views as stale.
+	OnPathChange func(path string)
+
 	// writeMu serialises the whole Store.Write → Versioner.Commit sequence
 	// across concurrent Write / BulkWrite / Delete / Observe* callers.
 	// Without it, a REST-origin Write could race with an fsnotify-origin
@@ -227,6 +232,14 @@ func (p *Pipeline) broadcast(ev events.Event) {
 	}
 	if p.OnInvalidate != nil {
 		p.OnInvalidate()
+	}
+	if p.OnPathChange != nil {
+		if ev.Path != "" {
+			p.OnPathChange(ev.Path)
+		}
+		for _, pa := range ev.Paths {
+			p.OnPathChange(pa)
+		}
 	}
 }
 

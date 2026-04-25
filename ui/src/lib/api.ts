@@ -85,6 +85,13 @@ export type MetaResponse = {
   offset: number;
   results: MetaResult[];
 };
+export type QueryResponse = {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  total: number;
+  has_more: boolean;
+  groups?: { key: string; count: number }[];
+};
 
 export type SpaceMeta = {
   name: string;
@@ -361,6 +368,19 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ resolved }),
     });
+  },
+
+  async query(dql: string, opts?: {
+    limit?: number;
+    offset?: number;
+    format?: string;
+  }): Promise<QueryResponse> {
+    const qs = new URLSearchParams();
+    qs.set("q", dql);
+    if (opts?.limit != null) qs.set("limit", String(opts.limit));
+    if (opts?.offset != null) qs.set("offset", String(opts.offset));
+    if (opts?.format) qs.set("format", opts.format);
+    return request(`${kiwiBase()}/query?${qs}`);
   },
 
   async meta(opts: {

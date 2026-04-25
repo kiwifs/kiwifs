@@ -20,6 +20,7 @@ import (
 
 	"github.com/kiwifs/kiwifs/internal/comments"
 	"github.com/kiwifs/kiwifs/internal/config"
+	"github.com/kiwifs/kiwifs/internal/dataview"
 	"github.com/kiwifs/kiwifs/internal/events"
 	"github.com/kiwifs/kiwifs/internal/janitor"
 	"github.com/kiwifs/kiwifs/internal/links"
@@ -46,7 +47,9 @@ type Handlers struct {
 	linker    links.Linker
 	hub       *events.Hub
 	pipe      *pipeline.Pipeline
-	vectors   *vectorstore.Service // nil when vector search is disabled
+	vectors   *vectorstore.Service    // nil when vector search is disabled
+	dv        *dataview.Executor      // nil when sqlite search is not active
+	viewReg   *dataview.Registry      // nil when sqlite search is not active
 	comments  *comments.Store
 	shares    *rbac.ShareStore
 	assets    config.AssetsConfig
@@ -261,6 +264,13 @@ func (h *Handlers) ReadFile(c echo.Context) error {
 	path := c.QueryParam("path")
 	if path == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "path is required")
+	}
+
+	// Lazy view regeneration: if this file is a computed view and
+	// stale, regenerate it before serving so readers always get
+	// up-to-date results.
+	if h.viewReg != nil && h.viewReg.IsStale(path) {
+		_, _ = h.viewReg.RegenerateIfStale(c.Request().Context(), path)
 	}
 
 	content, err := h.store.Read(c.Request().Context(), path)
@@ -1086,11 +1096,11 @@ func (h *Handlers) SemanticSearch(c echo.Context) error {
 // ─── Metadata Query ──────────────────────────────────────────────────────────
 
 // metaQuerier is the narrow interface handlers.Meta uses to talk to the
-// searcher. Keeping it here (not in the search package) documents the one
-// call the API layer actually needs and avoids widening the Searcher
-// interface for engines that don't support structured metadata (grep).
+// searcher. QueryMetaOr extends with OR groups; QueryMeta is the backward-
+// compatible AND-only path.
 type metaQuerier interface {
 	QueryMeta(ctx context.Context, filters []search.MetaFilter, sort, order string, limit, offset int) ([]search.MetaResult, error)
+	QueryMetaOr(ctx context.Context, andFilters, orFilters []search.MetaFilter, sort, order string, limit, offset int) ([]search.MetaResult, error)
 }
 
 type metaResultEntry struct {
@@ -1130,24 +1140,30 @@ func (h *Handlers) Meta(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotImplemented, "metadata index requires sqlite search backend")
 	}
 
-	// Accept multiple ?where= clauses. Each is "<field><op><value>".
-	// We split on the FIRST operator match so values containing "=", "<",
-	// etc. don't mis-parse.
-	var filters []search.MetaFilter
+	var andFilters []search.MetaFilter
 	for _, raw := range c.QueryParams()["where"] {
 		f, err := parseMetaWhere(raw)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
-		filters = append(filters, f)
+		andFilters = append(andFilters, f)
 	}
 
-	sort := c.QueryParam("sort")
+	var orFilters []search.MetaFilter
+	for _, raw := range c.QueryParams()["or"] {
+		f, err := parseMetaWhere(raw)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		orFilters = append(orFilters, f)
+	}
+
+	sortField := c.QueryParam("sort")
 	order := c.QueryParam("order")
 	limit := parseIntParam(c, "limit", 0)
 	offset := parseIntParam(c, "offset", 0)
 
-	results, err := mq.QueryMeta(c.Request().Context(), filters, sort, order, limit, offset)
+	results, err := mq.QueryMetaOr(c.Request().Context(), andFilters, orFilters, sortField, order, limit, offset)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
@@ -1793,6 +1809,139 @@ func (h *Handlers) PutTheme(c echo.Context) error {
 	return c.JSON(http.StatusOK, theme)
 }
 
+// ─── Dataview Query ────────────────────────────────────────────────────────
+
+type queryResponse struct {
+	Columns []string             `json:"columns"`
+	Rows    []map[string]any     `json:"rows"`
+	Total   int                  `json:"total"`
+	HasMore bool                 `json:"has_more"`
+	Groups  []dataview.GroupResult `json:"groups,omitempty"`
+}
+
+func (h *Handlers) Query(c echo.Context) error {
+	if h.dv == nil {
+		return echo.NewHTTPError(http.StatusNotImplemented, "dataview requires sqlite search backend")
+	}
+	q := c.QueryParam("q")
+	if q == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "q is required")
+	}
+	limit := parseIntParam(c, "limit", 0)
+	offset := parseIntParam(c, "offset", 0)
+	format := c.QueryParam("format")
+	if format == "" {
+		format = "json"
+	}
+
+	result, err := h.dv.Query(c.Request().Context(), q, limit, offset)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	if format == "table" || format == "list" || format == "count" || format == "distinct" {
+		rendered := dataview.Render(result, format)
+		return c.String(http.StatusOK, rendered)
+	}
+
+	return c.JSON(http.StatusOK, queryResponse{
+		Columns: result.Columns,
+		Rows:    result.Rows,
+		Total:   result.Total,
+		HasMore: result.HasMore,
+		Groups:  result.Groups,
+	})
+}
+
+type aggregateGroup struct {
+	Key   string `json:"key"`
+	Count int    `json:"count,omitempty"`
+}
+
+type aggregateResponse struct {
+	Groups []aggregateGroup `json:"groups"`
+}
+
+func (h *Handlers) QueryAggregate(c echo.Context) error {
+	if h.dv == nil {
+		return echo.NewHTTPError(http.StatusNotImplemented, "dataview requires sqlite search backend")
+	}
+	groupBy := c.QueryParam("group_by")
+	if groupBy == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "group_by is required")
+	}
+
+	if !dataview.ValidFieldName(groupBy) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid group_by field")
+	}
+
+	var dql strings.Builder
+	dql.WriteString("TABLE " + groupBy)
+
+	wheres := c.QueryParams()["where"]
+	for _, w := range wheres {
+		if _, err := dataview.ParseExpr(w); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest,
+				fmt.Sprintf("invalid where expression: %v", err))
+		}
+	}
+	if len(wheres) > 0 {
+		dql.WriteString(" WHERE ")
+		dql.WriteString(strings.Join(wheres, " AND "))
+	}
+
+	dql.WriteString(" GROUP BY " + groupBy)
+
+	result, err := h.dv.Query(c.Request().Context(), dql.String(), 0, 0)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	groups := make([]aggregateGroup, 0, len(result.Groups))
+	for _, g := range result.Groups {
+		groups = append(groups, aggregateGroup{
+			Key:   g.Key,
+			Count: g.Count,
+		})
+	}
+
+	return c.JSON(http.StatusOK, aggregateResponse{Groups: groups})
+}
+
+type viewRefreshRequest struct {
+	Path string `json:"path"`
+}
+
+func (h *Handlers) ViewRefresh(c echo.Context) error {
+	if h.dv == nil {
+		return echo.NewHTTPError(http.StatusNotImplemented, "dataview requires sqlite search backend")
+	}
+	var req viewRefreshRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid JSON body")
+	}
+	if req.Path == "" {
+		req.Path = c.QueryParam("path")
+	}
+	if req.Path == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "path is required")
+	}
+
+	changed, err := dataview.RegenerateView(c.Request().Context(), h.store, h.dv, req.Path)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	status := "unchanged"
+	if changed {
+		status = "regenerated"
+	}
+	return c.JSON(http.StatusOK, map[string]string{
+		"path":   req.Path,
+		"status": status,
+	})
+}
+
 // ─── Share Links ─────────────────────────────────────────────────────────────
 
 type createShareRequest struct {
@@ -1801,8 +1950,6 @@ type createShareRequest struct {
 	Password  string `json:"password,omitempty"`
 }
 
-// CreateShareLink generates a shareable public link for a page.
-// POST /api/kiwi/share
 func (h *Handlers) CreateShareLink(c echo.Context) error {
 	if h.shares == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "share links not enabled")
@@ -1838,8 +1985,6 @@ func (h *Handlers) CreateShareLink(c echo.Context) error {
 	return c.JSON(http.StatusOK, link)
 }
 
-// ListShareLinks returns share links for a path.
-// GET /api/kiwi/share?path=
 func (h *Handlers) ListShareLinks(c echo.Context) error {
 	if h.shares == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "share links not enabled")
@@ -1858,8 +2003,6 @@ func (h *Handlers) ListShareLinks(c echo.Context) error {
 	return c.JSON(http.StatusOK, links)
 }
 
-// RevokeShareLink removes a share link by id.
-// DELETE /api/kiwi/share/:id
 func (h *Handlers) RevokeShareLink(c echo.Context) error {
 	if h.shares == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "share links not enabled")
@@ -1874,9 +2017,6 @@ func (h *Handlers) RevokeShareLink(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"revoked": id})
 }
 
-// PublicPage serves a page via a share link token (no auth required).
-// Supports password-protected links via ?password= or X-Share-Password header.
-// GET /api/kiwi/public/:token
 func (h *Handlers) PublicPage(c echo.Context) error {
 	if h.shares == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
@@ -1891,7 +2031,6 @@ func (h *Handlers) PublicPage(c echo.Context) error {
 	}
 	link, err := h.shares.Resolve(token, password)
 	if errors.Is(err, rbac.ErrInvalidPassword) {
-		// 401 + WWW-Authenticate so browsers prompt for the secret.
 		c.Response().Header().Set(echo.HeaderWWWAuthenticate, `Basic realm="kiwifs-share"`)
 		return echo.NewHTTPError(http.StatusUnauthorized, "password required")
 	}
@@ -1912,14 +2051,11 @@ func (h *Handlers) PublicPage(c echo.Context) error {
 	return c.Blob(http.StatusOK, detectContentType(link.Path, content), content)
 }
 
-// PublicFile serves a page with visibility:public in its frontmatter (no auth).
-// GET /api/kiwi/public/file?path=
 func (h *Handlers) PublicFile(c echo.Context) error {
 	raw := c.QueryParam("path")
 	if raw == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "path is required")
 	}
-	// Reject traversal attempts — the storage layer may not always catch them.
 	cleaned := pathpkg.Clean("/" + raw)
 	if cleaned == "/" || strings.HasPrefix(cleaned, "/..") {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid path")
@@ -1936,8 +2072,6 @@ func (h *Handlers) PublicFile(c echo.Context) error {
 	return c.Blob(http.StatusOK, detectContentType(cleaned, content), content)
 }
 
-// PublicTree returns a tree of only public-visibility pages (no auth).
-// GET /api/kiwi/public/tree
 func (h *Handlers) PublicTree(c echo.Context) error {
 	path := c.QueryParam("path")
 	if path == "" {

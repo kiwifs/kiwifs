@@ -21,27 +21,24 @@ type Config struct {
 	UI         UIConfig         `toml:"ui"`
 	Backup     BackupConfig     `toml:"backup"`
 	Janitor    JanitorConfig    `toml:"janitor"`
+	Dataview   DataviewConfig   `toml:"dataview"`
 	// Spaces enables multi-tenant mode: each entry becomes an
 	// independent knowledge base mapped under /api/kiwi/{name}/...
 	// When empty, the server runs single-space against Storage.Root.
 	Spaces []SpaceConfig `toml:"spaces"`
 }
 
-// JanitorConfig controls the background Knowledge Janitor scans. The zero
-// value means "every 24 hours, 90-day stale threshold, run one scan on
-// startup" — sane defaults for a self-hosted wiki. Set Interval to "0" to
-// disable scheduled scans entirely (the UI's manual scan button still
-// works).
 type JanitorConfig struct {
-	// Interval is a duration string ("24h", "6h", "0s" to disable).
-	Interval string `toml:"interval"`
-	// StaleDays overrides the hard-coded 90-day stale threshold. Per-
-	// space workspaces can set different values depending on how fast
-	// the content decays (engineering docs age faster than HR policies).
-	StaleDays int `toml:"stale_days"`
-	// StartupScan, when true, kicks off one scan immediately at boot so
-	// the Janitor panel isn't empty until the first scheduled tick.
-	StartupScan bool `toml:"startup_scan"`
+	Interval    string `toml:"interval"`
+	StaleDays   int    `toml:"stale_days"`
+	StartupScan bool   `toml:"startup_scan"`
+}
+
+type DataviewConfig struct {
+	MaxScanRows    int    `toml:"max_scan_rows"`
+	QueryTimeout   string `toml:"query_timeout"`
+	MaxAutoIndexes int    `toml:"max_auto_indexes"`
+	ComputedFields bool   `toml:"computed_fields"`
 }
 
 // BackupConfig controls automatic git push to a remote repository.

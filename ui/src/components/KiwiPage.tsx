@@ -349,7 +349,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onToggleSt
                       const lang = match ? match[1] : undefined;
                       const raw = String(children).replace(/\n$/, "");
                       if (lang === "kiwi-query") {
-                        return <KiwiQuery source={raw} onNavigate={onNavigate} />;
+                        return <KiwiQuery source={raw} onNavigate={onNavigate} isComputedView={parsed.meta?.["kiwi-view"] === true} />;
                       }
                       if (!lang || !raw.includes("\n")) {
                         return <code className={className} {...rest}>{children}</code>;
