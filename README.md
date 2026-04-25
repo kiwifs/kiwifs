@@ -527,18 +527,6 @@ Writes accept `X-Actor` (git attribution), `X-Provenance` (lineage tracking), an
 
 ---
 
-## Contributors
-
-Thanks to everyone who has contributed to KiwiFS.
-
-<a href="https://github.com/PranavChahal"><img src="https://avatars.githubusercontent.com/u/76513953?v=4" width="50" height="50" alt="Pranav" style="border-radius:50%"></a>
-
-- **[Pranav](https://github.com/PranavChahal)** — write-path hardening, knowledge janitor, trust-ranked search, ops endpoints, share links, FUSE auth
-
-Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
-
----
-
 ## Inspired by
 
 - **[PocketBase](https://pocketbase.io)** — single Go binary, zero config, just works. KiwiFS is PocketBase for knowledge.
@@ -554,3 +542,7 @@ Want to contribute? See [CONTRIBUTING.md](CONTRIBUTING.md).
 If you want to offer KiwiFS as a managed service or need a commercial license, [get in touch](mailto:amelia.anh.lam@gmail.com).
 
 "KiwiFS" and the KiwiFS logo are trademarks of the KiwiFS Authors. See [LICENSE](LICENSE) for trademark usage guidelines.
+
+## Contributors
+
+<a href="https://github.com/PranavChahal"><img src="https://avatars.githubusercontent.com/u/76513953?v=4" width="50" height="50" alt="Pranav" style="border-radius:50%"></a>
