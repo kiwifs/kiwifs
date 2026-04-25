@@ -40,10 +40,11 @@ import (
 //             `query_only=1` so a bug in this layer can't silently mutate
 //             through the read pool.
 type SQLite struct {
-	root    string
-	store   storage.Storage // reindex source; keeps the search layer storage-agnostic
-	writeDB *sql.DB         // MaxOpenConns=1 — every write/DDL
-	readDB  *sql.DB         // MaxOpenConns=N — read-only snapshot reads
+	root           string
+	store          storage.Storage // reindex source; keeps the search layer storage-agnostic
+	writeDB        *sql.DB         // MaxOpenConns=1 — every write/DDL
+	readDB         *sql.DB         // MaxOpenConns=N — read-only snapshot reads
+	computedFields bool            // when true, _word_count etc. are injected into frontmatter
 }
 
 // NewSQLite opens (or creates) the FTS5 index at <root>/.kiwi/state/search.db.
@@ -92,7 +93,7 @@ func NewSQLite(root string, store storage.Storage) (*SQLite, error) {
 	readDB.SetMaxOpenConns(readers)
 	readDB.SetMaxIdleConns(readers)
 
-	s := &SQLite{root: abs, store: store, writeDB: writeDB, readDB: readDB}
+	s := &SQLite{root: abs, store: store, writeDB: writeDB, readDB: readDB, computedFields: true}
 
 	// Construction has no caller ctx — the schema bootstrap and initial
 	// reindex run with Background. Production calls pass a real ctx.
@@ -141,6 +142,7 @@ CREATE INDEX IF NOT EXISTS idx_links_target_lc ON links(target_lc);
 CREATE TABLE IF NOT EXISTS file_meta (
 	path TEXT PRIMARY KEY,
 	frontmatter TEXT NOT NULL DEFAULT '{}',
+	tasks TEXT NOT NULL DEFAULT '[]',
 	updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_meta_status ON file_meta(json_extract(frontmatter, '$.status'));
@@ -154,6 +156,10 @@ CREATE INDEX IF NOT EXISTS idx_meta_visibility ON file_meta(json_extract(frontma
 	if err != nil {
 		return fmt.Errorf("create schema: %w", err)
 	}
+
+	// Migration: add tasks column if it doesn't exist (for pre-v0.2 databases)
+	s.writeDB.ExecContext(ctx, `ALTER TABLE file_meta ADD COLUMN tasks TEXT NOT NULL DEFAULT '[]'`)
+
 	return nil
 }
 
@@ -288,14 +294,6 @@ func (s *SQLite) Reindex(ctx context.Context) (int, error) {
 	return s.reindexLocked(ctx)
 }
 
-// Resync reconciles the search index with the underlying storage without
-// throwing everything away. It handles the common "someone edited the git
-// repo directly while the server was down" case: we add rows for files on
-// disk that aren't indexed, and drop rows for files that no longer exist.
-//
-// It does NOT detect content changes — for that you'd need a full reindex
-// — but the far cheaper add/remove pass is enough to keep the tree and
-// search in sync after routine git operations.
 func (s *SQLite) Resync(ctx context.Context) (added, removed int, err error) {
 	rows, err := s.readDB.QueryContext(ctx, `SELECT path FROM docs`)
 	if err != nil {
@@ -350,6 +348,9 @@ func (s *SQLite) Resync(ctx context.Context) (added, removed int, err error) {
 	}
 	return added, removed, nil
 }
+
+func (s *SQLite) ReadDB() *sql.DB  { return s.readDB }
+func (s *SQLite) WriteDB() *sql.DB { return s.writeDB }
 
 func (s *SQLite) Close() error {
 	// Close the read pool first so any in-flight reader returns before the
@@ -407,26 +408,70 @@ func (s *SQLite) IndexMeta(ctx context.Context, path string, content []byte) err
 	if !storage.IsKnowledgeFile(path) {
 		return nil
 	}
-	fm, err := markdown.Frontmatter(content)
+	parsed, err := markdown.Parse(content)
 	if err != nil {
-		return fmt.Errorf("parse frontmatter: %w", err)
+		return fmt.Errorf("parse markdown: %w", err)
 	}
+	fm := parsed.Frontmatter
 	if fm == nil {
 		fm = map[string]any{}
 	}
-	// Normalise to JSON-safe types. goldmark-meta yields map[any]any for
-	// nested YAML mappings, which `encoding/json` refuses; converting up
-	// front keeps the persisted JSON clean.
+	if s.computedFields {
+		body := bodyAfterFrontmatter(content)
+		fm["_word_count"] = len(strings.Fields(string(body)))
+		fm["_link_count"] = len(links.Extract(content))
+		fm["_heading_count"] = len(parsed.Headings)
+		fm["_has_frontmatter"] = len(parsed.Frontmatter) > 0
+
+		forms := links.TargetForms(path)
+		if len(forms) > 0 {
+			placeholders := make([]string, len(forms))
+			args := make([]any, len(forms))
+			for i, f := range forms {
+				placeholders[i] = "?"
+				args[i] = strings.ToLower(f)
+			}
+			var blCount int
+			_ = s.readDB.QueryRowContext(ctx,
+				fmt.Sprintf(`SELECT COUNT(DISTINCT source) FROM links WHERE target_lc IN (%s)`,
+					strings.Join(placeholders, ",")),
+				args...,
+			).Scan(&blCount)
+			fm["_backlink_count"] = blCount
+		}
+	}
 	encodable := toJSONSafe(fm)
 	payload, err := json.Marshal(encodable)
 	if err != nil {
 		return fmt.Errorf("marshal frontmatter: %w", err)
 	}
+
+	tasks := markdown.Tasks(content)
+	tasksPayload := "[]"
+	if len(tasks) > 0 {
+		tb, err := json.Marshal(tasks)
+		if err == nil {
+			tasksPayload = string(tb)
+		}
+	}
+
 	_, err = s.writeDB.ExecContext(ctx,
-		`INSERT OR REPLACE INTO file_meta(path, frontmatter, updated_at) VALUES (?, ?, ?)`,
-		path, string(payload), time.Now().UTC().Format(time.RFC3339),
+		`INSERT OR REPLACE INTO file_meta(path, frontmatter, tasks, updated_at) VALUES (?, ?, ?, ?)`,
+		path, string(payload), tasksPayload, time.Now().UTC().Format(time.RFC3339),
 	)
 	return err
+}
+
+func bodyAfterFrontmatter(content []byte) []byte {
+	s := strings.TrimLeft(string(content), "\n\r")
+	if !strings.HasPrefix(s, "---") {
+		return content
+	}
+	idx := strings.Index(s[3:], "\n---")
+	if idx < 0 {
+		return content
+	}
+	return []byte(strings.TrimLeft(s[3+idx+4:], "\n\r"))
 }
 
 // RemoveMeta drops the file_meta row for a path — called from the pipeline's
@@ -533,43 +578,65 @@ func arrayPathPrefix(field string) (parent, sub string, ok bool) {
 // limit ≤ 0 falls back to 50 (MaxSearchLimit caps at 200); negative offset
 // is treated as zero.
 func (s *SQLite) QueryMeta(ctx context.Context, filters []MetaFilter, sort, order string, limit, offset int) ([]MetaResult, error) {
+	return s.QueryMetaOr(ctx, filters, nil, sort, order, limit, offset)
+}
+
+// QueryMetaOr extends QueryMeta with OR-group support. andFilters are AND-ed,
+// orFilters are OR-ed together, and the two groups are AND-ed with each other.
+// When filters are empty (both nil), all rows are returned (subject to limit).
+func (s *SQLite) QueryMetaOr(ctx context.Context, andFilters, orFilters []MetaFilter, sort, order string, limit, offset int) ([]MetaResult, error) {
 	limit = NormalizeLimit(limit)
 	offset = NormalizeOffset(offset)
 
 	var (
-		whereParts []string
+		conditions []string
 		args       []any
 	)
-	for i, f := range filters {
+
+	compileFilter := func(i int, f MetaFilter) (string, []any, error) {
 		if !validMetaField(f.Field) {
-			return nil, fmt.Errorf("filter[%d]: invalid field %q (must start with $. and use letters/digits/_-./[*])", i, f.Field)
+			return "", nil, fmt.Errorf("filter[%d]: invalid field %q (must start with $. and use letters/digits/_-./[*])", i, f.Field)
 		}
 		op, ok := normaliseMetaOp(f.Op)
 		if !ok {
-			return nil, fmt.Errorf("filter[%d]: invalid op %q", i, f.Op)
+			return "", nil, fmt.Errorf("filter[%d]: invalid op %q", i, f.Op)
 		}
 		if parent, sub, isArr := arrayPathPrefix(f.Field); isArr {
-			// Array predicate: EXISTS a json_each row whose value at `sub`
-			// matches. This handles `$.derived-from[*].id = run-249` and
-			// plain `$.tags[*] = alpha`.
-			whereParts = append(whereParts,
-				fmt.Sprintf(
-					"EXISTS (SELECT 1 FROM json_each(frontmatter, ?) AS j WHERE json_extract(j.value, ?) %s ?)",
-					op,
-				))
-			args = append(args, parent, sub, f.Value)
-		} else {
-			whereParts = append(whereParts,
-				fmt.Sprintf("json_extract(frontmatter, ?) %s ?", op))
-			args = append(args, f.Field, f.Value)
+			return fmt.Sprintf(
+				"EXISTS (SELECT 1 FROM json_each(frontmatter, ?) AS j WHERE json_extract(j.value, ?) %s ?)",
+				op,
+			), []any{parent, sub, f.Value}, nil
 		}
+		return fmt.Sprintf("json_extract(frontmatter, ?) %s ?", op), []any{f.Field, f.Value}, nil
+	}
+
+	for i, f := range andFilters {
+		clause, fArgs, err := compileFilter(i, f)
+		if err != nil {
+			return nil, err
+		}
+		conditions = append(conditions, clause)
+		args = append(args, fArgs...)
+	}
+
+	if len(orFilters) > 0 {
+		var orParts []string
+		for i, f := range orFilters {
+			clause, fArgs, err := compileFilter(i, f)
+			if err != nil {
+				return nil, err
+			}
+			orParts = append(orParts, clause)
+			args = append(args, fArgs...)
+		}
+		conditions = append(conditions, "("+strings.Join(orParts, " OR ")+")")
 	}
 
 	sb := strings.Builder{}
 	sb.WriteString(`SELECT path, frontmatter FROM file_meta`)
-	if len(whereParts) > 0 {
+	if len(conditions) > 0 {
 		sb.WriteString(" WHERE ")
-		sb.WriteString(strings.Join(whereParts, " AND "))
+		sb.WriteString(strings.Join(conditions, " AND "))
 	}
 	if sort != "" {
 		if !validMetaField(sort) {
@@ -1149,7 +1216,7 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 		if linkStmt, perr = tx.PrepareContext(ctx, `INSERT OR IGNORE INTO links(source, target, target_lc) VALUES (?, ?, ?)`); perr != nil {
 			return perr
 		}
-		if metaStmt, perr = tx.PrepareContext(ctx, `INSERT OR REPLACE INTO file_meta(path, frontmatter, updated_at) VALUES (?, ?, ?)`); perr != nil {
+		if metaStmt, perr = tx.PrepareContext(ctx, `INSERT OR REPLACE INTO file_meta(path, frontmatter, tasks, updated_at) VALUES (?, ?, ?, ?)`); perr != nil {
 			return perr
 		}
 		return nil
@@ -1201,10 +1268,28 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 				return fmt.Errorf("insert link %s→%s: %w", e.Path, t, err)
 			}
 		}
-		if fm, ferr := markdown.Frontmatter(content); ferr == nil && fm != nil {
+		if parsed, perr := markdown.Parse(content); perr == nil {
+			fm := parsed.Frontmatter
+			if fm == nil {
+				fm = map[string]any{}
+			}
+			if s.computedFields {
+				body := bodyAfterFrontmatter(content)
+				fm["_word_count"] = len(strings.Fields(string(body)))
+				fm["_link_count"] = len(links.Extract(content))
+				fm["_heading_count"] = len(parsed.Headings)
+				fm["_has_frontmatter"] = len(parsed.Frontmatter) > 0
+			}
 			payload, jerr := json.Marshal(toJSONSafe(fm))
 			if jerr == nil {
-				if _, err := metaStmt.ExecContext(ctx, e.Path, string(payload), now); err != nil {
+				fileTasks := markdown.Tasks(content)
+				tasksJSON := "[]"
+				if len(fileTasks) > 0 {
+					if tb, terr := json.Marshal(fileTasks); terr == nil {
+						tasksJSON = string(tb)
+					}
+				}
+				if _, err := metaStmt.ExecContext(ctx, e.Path, string(payload), tasksJSON, now); err != nil {
 					return fmt.Errorf("insert meta %s: %w", e.Path, err)
 				}
 			}
@@ -1234,9 +1319,30 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 		}
 		tx = nil
 	}
+
+	if s.computedFields {
+		if err := s.updateBacklinkCounts(ctx); err != nil {
+			log.Printf("kiwifs search: backlink count pass failed: %v", err)
+		}
+	}
+
 	return count, nil
 }
 
+func (s *SQLite) updateBacklinkCounts(ctx context.Context) error {
+	// TargetForms generates up to 4 forms: full path, stem, basename, basename stem.
+	// Match all of them so [[alice]] resolves to students/alice.md.
+	_, err := s.writeDB.ExecContext(ctx, `
+		UPDATE file_meta
+		SET frontmatter = json_set(frontmatter, '$._backlink_count',
+			(SELECT COUNT(DISTINCT source) FROM links
+			 WHERE target_lc = LOWER(file_meta.path)
+			    OR target_lc = LOWER(REPLACE(file_meta.path, '.md', ''))
+			    OR target_lc = LOWER(REPLACE(file_meta.path, RTRIM(file_meta.path, REPLACE(file_meta.path, '/', '')), ''))
+			    OR target_lc = LOWER(REPLACE(REPLACE(file_meta.path, RTRIM(file_meta.path, REPLACE(file_meta.path, '/', '')), ''), '.md', ''))))
+	`)
+	return err
+}
 
 // buildFTS5Query turns a user-supplied search string into a well-formed FTS5
 // MATCH expression. If the user is clearly using FTS5 syntax (operators,

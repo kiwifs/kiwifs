@@ -9,9 +9,11 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kiwifs/kiwifs/internal/bootstrap"
 	"github.com/kiwifs/kiwifs/internal/config"
+	"github.com/kiwifs/kiwifs/internal/dataview"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/storage"
@@ -19,8 +21,9 @@ import (
 )
 
 type LocalBackend struct {
-	root  string
-	stack *bootstrap.Stack
+	root   string
+	stack  *bootstrap.Stack
+	dvExec *dataview.Executor
 
 	once sync.Once
 	err  error
@@ -55,6 +58,19 @@ func (b *LocalBackend) init() error {
 			return
 		}
 		b.stack = stack
+
+		if sq, ok := b.stack.Searcher.(*search.SQLite); ok {
+			b.dvExec = dataview.NewExecutor(sq.ReadDB())
+			timeout := 5 * time.Second
+			maxRows := 10000
+			if t, err := time.ParseDuration(cfg.Dataview.QueryTimeout); err == nil && t > 0 {
+				timeout = t
+			}
+			if cfg.Dataview.MaxScanRows > 0 {
+				maxRows = cfg.Dataview.MaxScanRows
+			}
+			b.dvExec.SetLimits(maxRows, timeout)
+		}
 	})
 	return b.err
 }
@@ -202,24 +218,41 @@ type metaQuerier interface {
 }
 
 func (b *LocalBackend) QueryMeta(ctx context.Context, filters []string, sort, order string, limit, offset int) ([]MetaResult, error) {
+	return b.QueryMetaOr(ctx, filters, nil, sort, order, limit, offset)
+}
+
+type orMetaQuerier interface {
+	QueryMetaOr(ctx context.Context, andFilters, orFilters []search.MetaFilter, sort, order string, limit, offset int) ([]search.MetaResult, error)
+}
+
+func (b *LocalBackend) QueryMetaOr(ctx context.Context, andFilters, orFilters []string, sort, order string, limit, offset int) ([]MetaResult, error) {
 	if err := b.init(); err != nil {
 		return nil, err
 	}
-	mq, ok := b.stack.Searcher.(metaQuerier)
+	mq, ok := b.stack.Searcher.(orMetaQuerier)
 	if !ok {
 		return nil, fmt.Errorf("metadata index requires sqlite search backend")
 	}
 
-	parsed := make([]search.MetaFilter, 0, len(filters))
-	for _, raw := range filters {
+	parsedAnd := make([]search.MetaFilter, 0, len(andFilters))
+	for _, raw := range andFilters {
 		f, err := parseMetaFilter(raw)
 		if err != nil {
 			return nil, err
 		}
-		parsed = append(parsed, f)
+		parsedAnd = append(parsedAnd, f)
 	}
 
-	results, err := mq.QueryMeta(ctx, parsed, sort, order, limit, offset)
+	parsedOr := make([]search.MetaFilter, 0, len(orFilters))
+	for _, raw := range orFilters {
+		f, err := parseMetaFilter(raw)
+		if err != nil {
+			return nil, err
+		}
+		parsedOr = append(parsedOr, f)
+	}
+
+	results, err := mq.QueryMetaOr(ctx, parsedAnd, parsedOr, sort, order, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -257,6 +290,39 @@ func parseMetaFilter(expr string) (search.MetaFilter, error) {
 		}, nil
 	}
 	return search.MetaFilter{}, fmt.Errorf("invalid filter %q — expected <field><op><value>", expr)
+}
+
+func (b *LocalBackend) ViewRefresh(ctx context.Context, path string) (bool, error) {
+	if err := b.init(); err != nil {
+		return false, err
+	}
+	if b.dvExec == nil {
+		return false, fmt.Errorf("view refresh requires sqlite search backend")
+	}
+	return dataview.RegenerateView(ctx, b.stack.Store, b.dvExec, path)
+}
+
+func (b *LocalBackend) QueryDQL(ctx context.Context, dql string, limit, offset int) (*QueryResult, error) {
+	if err := b.init(); err != nil {
+		return nil, err
+	}
+	if b.dvExec == nil {
+		return nil, fmt.Errorf("dataview requires sqlite search backend")
+	}
+	result, err := b.dvExec.Query(ctx, dql, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	qr := &QueryResult{
+		Columns: result.Columns,
+		Rows:    result.Rows,
+		Total:   result.Total,
+		HasMore: result.HasMore,
+	}
+	for _, g := range result.Groups {
+		qr.Groups = append(qr.Groups, GroupResult{Key: g.Key, Count: g.Count})
+	}
+	return qr, nil
 }
 
 func (b *LocalBackend) Versions(ctx context.Context, path string) ([]Version, error) {

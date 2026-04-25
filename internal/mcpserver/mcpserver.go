@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/config"
+	"github.com/kiwifs/kiwifs/internal/dataview"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -115,8 +116,9 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 		},
 		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_query_meta",
-				mcp.WithDescription("Query files by their YAML frontmatter fields. Use this for structured queries like 'find all failure patterns with status=open' or 'find all run records for project X sorted by date'. Filter format: $.field=value (e.g. $.status=published, $.priority=high)."),
-				mcp.WithArray("filters", mcp.Required(), mcp.Description("Filters in format $.field=value"), mcp.WithStringItems()),
+				mcp.WithDescription("Query files by their YAML frontmatter fields. Use this for structured queries like 'find all failure patterns with status=open' or 'find all run records for project X sorted by date'. Filter format: $.field=value (e.g. $.status=published, $.priority=high). Filters can be empty to return all rows."),
+				mcp.WithArray("filters", mcp.Description("Filters in format $.field=value (AND-ed). Can be empty to return all rows."), mcp.WithStringItems()),
+				mcp.WithArray("or", mcp.Description("OR-group filters in format $.field=value (OR-ed together, AND-ed with filters)"), mcp.WithStringItems()),
 				mcp.WithString("sort", mcp.Description("Sort field like $.last-exercised")),
 				mcp.WithString("order", mcp.Description("asc or desc")),
 				mcp.WithNumber("limit", mcp.Description("Max results (default 20)")),
@@ -125,6 +127,27 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 				mcp.WithDestructiveHintAnnotation(false),
 			),
 			Handler: handleQueryMeta(b),
+		},
+		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_query",
+				mcp.WithDescription("Run a DQL (Dataview Query Language) query against the knowledge base. Supports TABLE, LIST, COUNT, DISTINCT queries with WHERE filters, SORT, GROUP BY, FLATTEN, and pagination. Examples: 'TABLE name, status FROM \"students/\" WHERE status = \"active\" SORT name ASC', 'COUNT WHERE tags IN (\"math\")', 'DISTINCT status'."),
+				mcp.WithString("query", mcp.Required(), mcp.Description("DQL query text")),
+				mcp.WithString("format", mcp.Description("Output format: table, list, json (default table)")),
+				mcp.WithNumber("limit", mcp.Description("Max results (default 20)")),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleQuery(b),
+		},
+		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_view_refresh",
+				mcp.WithDescription("Force-regenerate a computed view file. A computed view is a markdown file with 'kiwi-view: true' in frontmatter — its body is auto-generated from the DQL query in 'kiwi-query'. Use this to refresh a dashboard or report view."),
+				mcp.WithString("path", mcp.Required(), mcp.Description("Path to the computed view file")),
+				mcp.WithReadOnlyHintAnnotation(false),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+			),
+			Handler: handleViewRefresh(b),
 		},
 		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_delete",
@@ -433,8 +456,19 @@ func handleQueryMeta(b Backend) server.ToolHandlerFunc {
 				filters = v
 			}
 		}
-		if len(filters) == 0 {
-			return mcp.NewToolResultError("filters is required — at least one $.field=value expression"), nil
+
+		var orFilters []string
+		if raw, ok := args["or"]; ok {
+			switch v := raw.(type) {
+			case []any:
+				for _, item := range v {
+					if s, ok := item.(string); ok {
+						orFilters = append(orFilters, s)
+					}
+				}
+			case []string:
+				orFilters = v
+			}
 		}
 
 		sortField, _ := args["sort"].(string)
@@ -442,7 +476,7 @@ func handleQueryMeta(b Backend) server.ToolHandlerFunc {
 		limit := intArg(args, "limit", 20)
 		offset := intArg(args, "offset", 0)
 
-		results, err := b.QueryMeta(ctx, filters, sortField, order, limit+1, offset)
+		results, err := b.QueryMetaOr(ctx, filters, orFilters, sortField, order, limit+1, offset)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Query failed: %v", err)), nil
 		}
@@ -476,6 +510,56 @@ func handleQueryMeta(b Backend) server.ToolHandlerFunc {
 			fmt.Fprintf(&sb, "\nShowing %d-%d. Use offset=%d to see more.\n", offset+1, offset+limit, offset+limit)
 		}
 		return mcp.NewToolResultText(sb.String()), nil
+	}
+}
+
+func handleViewRefresh(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		path, _ := args["path"].(string)
+		if path == "" {
+			return mcp.NewToolResultError("path is required"), nil
+		}
+		changed, err := b.ViewRefresh(ctx, path)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("View refresh failed: %v", err)), nil
+		}
+		if changed {
+			return mcp.NewToolResultText(fmt.Sprintf("Regenerated view %s", path)), nil
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("View %s is already up to date", path)), nil
+	}
+}
+
+func handleQuery(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		query, _ := args["query"].(string)
+		if query == "" {
+			return mcp.NewToolResultError("query is required"), nil
+		}
+		format, _ := args["format"].(string)
+		if format == "" {
+			format = "table"
+		}
+		limit := intArg(args, "limit", 20)
+
+		result, err := b.QueryDQL(ctx, query, limit, 0)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Query failed: %v", err)), nil
+		}
+
+		dvResult := &dataview.QueryResult{
+			Columns: result.Columns,
+			Rows:    result.Rows,
+			Total:   result.Total,
+			HasMore: result.HasMore,
+		}
+		for _, g := range result.Groups {
+			dvResult.Groups = append(dvResult.Groups, dataview.GroupResult{Key: g.Key, Count: g.Count})
+		}
+		rendered := dataview.Render(dvResult, format)
+		return mcp.NewToolResultText(rendered), nil
 	}
 }
 

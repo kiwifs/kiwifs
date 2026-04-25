@@ -38,6 +38,21 @@ var (
 	_ Backend = (*LocalBackend)(nil)
 )
 
+// QueryResult is the response from a DQL query via the dataview engine.
+type QueryResult struct {
+	Columns []string           `json:"columns"`
+	Rows    []map[string]any   `json:"rows"`
+	Total   int                `json:"total"`
+	HasMore bool               `json:"has_more"`
+	Groups  []GroupResult      `json:"groups,omitempty"`
+}
+
+// GroupResult mirrors dataview.GroupResult for MCP transport.
+type GroupResult struct {
+	Key   string `json:"key"`
+	Count int    `json:"count"`
+}
+
 type Backend interface {
 	ReadFile(ctx context.Context, path string) (content string, etag string, err error)
 	WriteFile(ctx context.Context, path, content, actor string, provenance string) (etag string, err error)
@@ -46,6 +61,9 @@ type Backend interface {
 	Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]SearchResult, error)
 	SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error)
 	QueryMeta(ctx context.Context, filters []string, sort, order string, limit, offset int) ([]MetaResult, error)
+	QueryMetaOr(ctx context.Context, andFilters, orFilters []string, sort, order string, limit, offset int) ([]MetaResult, error)
+	QueryDQL(ctx context.Context, dql string, limit, offset int) (*QueryResult, error)
+	ViewRefresh(ctx context.Context, path string) (changed bool, err error)
 	Versions(ctx context.Context, path string) ([]Version, error)
 	BulkWrite(ctx context.Context, files []BulkFile, actor, provenance string) (map[string]string, error)
 	Backlinks(ctx context.Context, path string) ([]Backlink, error)
