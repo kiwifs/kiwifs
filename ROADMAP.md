@@ -29,6 +29,8 @@ Make KiwiFS easy to plug into other apps. This is what turns it from a tool into
 
 - [ ] **React component library** (`kiwifs-ui` on npm) — `<KiwiProvider>`, `<KiwiTree>`, `<KiwiPage>`, `<KiwiEditor>`, `<KiwiSearch>`, `<KiwiGraph>` as standalone components
 - [x] **MCP server** (`kiwifs mcp`) — Model Context Protocol for AI agents (Claude, Cursor, etc.)
+- [x] **Permalinks** — shareable page URLs with SPA deep linking, `X-Permalink` header, wiki-link resolution
+- [ ] **Dataview** — computed views over frontmatter (Obsidian Dataview as a server). Hand-written Pratt parser for DQL, `json_extract`-based SQLite queries, TABLE/LIST/COUNT output, aggregation, GROUP BY. REST `GET /api/kiwi/query`, MCP `kiwi_query`, CLI `kiwifs query`. Computed view files with `kiwi-view: true` frontmatter.
 - [ ] **Pipeline hooks** (Go) — `OnBeforeWrite`, `OnAfterWrite` callbacks for custom validation/notifications
 - [ ] **JS hooks** — `.kiwi/hooks/*.js` scripts via embedded runtime, no recompile needed
 
@@ -60,7 +62,6 @@ Outbound integration and content health signals.
 
 - [ ] **Webhooks** — POST to Slack/CI/custom URLs on write/delete events, HMAC signing, retry with backoff
 - [ ] **Content analytics** — page views, stale page detection, failed search queries, orphan pages
-- [ ] **Computed views** — markdown files whose body auto-generates from a `kiwi-query` on read
 
 ## v0.5 — Access control & governance
 

@@ -22,6 +22,56 @@ func TestParseFrontmatterAndHeadings(t *testing.T) {
 	}
 }
 
+func TestTasks_ExtractTasks(t *testing.T) {
+	input := []byte(`---
+title: Test
+---
+
+# Todos
+
+- [x] Buy groceries #shopping
+- [ ] Send email [due:: 2026-05-01]
+  - [ ] Follow up by Friday
+- Regular list item (not a task)
+- [ ] Read chapter 3 #study #math
+`)
+	tasks := Tasks(input)
+	if len(tasks) < 3 {
+		t.Fatalf("got %d tasks, want at least 3", len(tasks))
+	}
+
+	// First task: completed, has tag
+	if !tasks[0].Completed {
+		t.Error("task[0] should be completed")
+	}
+	if tasks[0].Text == "" {
+		t.Error("task[0] has empty text")
+	}
+	found := false
+	for _, tag := range tasks[0].Tags {
+		if tag == "shopping" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("task[0] tags = %v, want #shopping", tasks[0].Tags)
+	}
+
+	// Second task: not completed, has due metadata
+	if tasks[1].Completed {
+		t.Error("task[1] should not be completed")
+	}
+	if tasks[1].Due != "2026-05-01" {
+		t.Errorf("task[1] due = %q, want 2026-05-01", tasks[1].Due)
+	}
+
+	// Last task: has multiple tags
+	last := tasks[len(tasks)-1]
+	if len(last.Tags) < 2 {
+		t.Errorf("last task tags = %v, want at least 2", last.Tags)
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
 		"Hello World":         "hello-world",

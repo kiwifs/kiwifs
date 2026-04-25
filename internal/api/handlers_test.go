@@ -851,3 +851,113 @@ func TestGraphCachingAndInvalidation(t *testing.T) {
 		t.Fatalf("invalidation didn't refresh response")
 	}
 }
+
+func TestHandler_Query(t *testing.T) {
+	s, _ := buildSQLiteTestServer(t)
+
+	for _, f := range []struct {
+		path, body string
+	}{
+		{"alpha.md", "---\nname: Alpha\nstatus: active\n---\n# Alpha\n"},
+		{"beta.md", "---\nname: Beta\nstatus: draft\n---\n# Beta\n"},
+		{"gamma.md", "---\nname: Gamma\nstatus: active\n---\n# Gamma\n"},
+	} {
+		req := httptest.NewRequest(http.MethodPut, "/api/kiwi/file?path="+f.path, strings.NewReader(f.body))
+		rec := httptest.NewRecorder()
+		s.echo.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("PUT %s: %d %s", f.path, rec.Code, rec.Body.String())
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, `/api/kiwi/query?q=TABLE+name+WHERE+status+%3D+"active"&format=json`, nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /query: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var resp queryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Rows) != 2 {
+		t.Fatalf("want 2 rows, got %d: %v", len(resp.Rows), resp.Rows)
+	}
+}
+
+func TestHandler_Query_BadDQL(t *testing.T) {
+	s, _ := buildSQLiteTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, `/api/kiwi/query?q=FROBNICATE+stuff`, nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandler_QueryAggregate(t *testing.T) {
+	s, _ := buildSQLiteTestServer(t)
+
+	for _, f := range []struct {
+		path, body string
+	}{
+		{"a.md", "---\nstatus: active\n---\n"},
+		{"b.md", "---\nstatus: active\n---\n"},
+		{"c.md", "---\nstatus: draft\n---\n"},
+	} {
+		req := httptest.NewRequest(http.MethodPut, "/api/kiwi/file?path="+f.path, strings.NewReader(f.body))
+		rec := httptest.NewRecorder()
+		s.echo.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("PUT %s: %d %s", f.path, rec.Code, rec.Body.String())
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, `/api/kiwi/query/aggregate?group_by=status`, nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /query/aggregate: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var resp aggregateResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Groups) < 2 {
+		t.Fatalf("want at least 2 groups, got %d: %v", len(resp.Groups), resp.Groups)
+	}
+
+	total := 0
+	for _, g := range resp.Groups {
+		total += g.Count
+	}
+	if total != 3 {
+		t.Fatalf("total count = %d, want 3", total)
+	}
+}
+
+func TestHandler_QueryAggregate_InvalidField(t *testing.T) {
+	s, _ := buildSQLiteTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, `/api/kiwi/query/aggregate?group_by=status;+DROP`, nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400 for injection attempt, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandler_QueryAggregate_UnionBypass(t *testing.T) {
+	s, _ := buildSQLiteTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet,
+		`/api/kiwi/query/aggregate?group_by=status&where=1%3D1+UNION+SELECT+*+FROM+sqlite_master`, nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400 for UNION injection, got %d %s", rec.Code, rec.Body.String())
+	}
+}

@@ -18,10 +18,20 @@ type Config struct {
 	Assets     AssetsConfig     `toml:"assets"`
 	UI         UIConfig         `toml:"ui"`
 	Backup     BackupConfig     `toml:"backup"`
+	Dataview   DataviewConfig   `toml:"dataview"`
 	// Spaces enables multi-tenant mode: each entry becomes an
 	// independent knowledge base mapped under /api/kiwi/{name}/...
 	// When empty, the server runs single-space against Storage.Root.
 	Spaces []SpaceConfig `toml:"spaces"`
+}
+
+// DataviewConfig controls the DQL query engine. All fields have sensible
+// defaults so a missing [dataview] section works out of the box.
+type DataviewConfig struct {
+	MaxScanRows    int    `toml:"max_scan_rows"`     // max rows scanned per query (default 10000)
+	QueryTimeout   string `toml:"query_timeout"`     // max wall-clock time per query (default "5s")
+	MaxAutoIndexes int    `toml:"max_auto_indexes"`  // max generated column indexes (default 20)
+	ComputedFields bool   `toml:"computed_fields"`   // enable _word_count, _link_count, etc.
 }
 
 // BackupConfig controls automatic git push to a remote repository.

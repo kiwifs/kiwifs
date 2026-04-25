@@ -208,10 +208,17 @@ func (r *RemoteBackend) SearchSemantic(ctx context.Context, query string, limit 
 }
 
 func (r *RemoteBackend) QueryMeta(ctx context.Context, filters []string, sort, order string, limit, offset int) ([]MetaResult, error) {
-	q := r.apiPrefix+"/meta?"
+	return r.QueryMetaOr(ctx, filters, nil, sort, order, limit, offset)
+}
+
+func (r *RemoteBackend) QueryMetaOr(ctx context.Context, andFilters, orFilters []string, sort, order string, limit, offset int) ([]MetaResult, error) {
+	q := r.apiPrefix + "/meta?"
 	params := url.Values{}
-	for _, f := range filters {
+	for _, f := range andFilters {
 		params.Add("where", f)
+	}
+	for _, f := range orFilters {
+		params.Add("or", f)
 	}
 	if sort != "" {
 		params.Set("sort", sort)
@@ -240,6 +247,48 @@ func (r *RemoteBackend) QueryMeta(ctx context.Context, filters []string, sort, o
 		return nil, err
 	}
 	return result.Results, nil
+}
+
+func (r *RemoteBackend) ViewRefresh(ctx context.Context, path string) (bool, error) {
+	body := fmt.Sprintf(`{"path":%q}`, path)
+	resp, err := r.do(ctx, http.MethodPost, r.apiPrefix+"/view/refresh", strings.NewReader(body), "Content-Type", "application/json")
+	if err != nil {
+		return false, err
+	}
+	data, err := r.readBody(resp)
+	if err != nil {
+		return false, err
+	}
+	var result struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return false, err
+	}
+	return result.Status == "regenerated", nil
+}
+
+func (r *RemoteBackend) QueryDQL(ctx context.Context, dql string, limit, offset int) (*QueryResult, error) {
+	q := r.apiPrefix + "/query?q=" + url.QueryEscape(dql)
+	if limit > 0 {
+		q += "&limit=" + strconv.Itoa(limit)
+	}
+	if offset > 0 {
+		q += "&offset=" + strconv.Itoa(offset)
+	}
+	resp, err := r.do(ctx, http.MethodGet, q, nil)
+	if err != nil {
+		return nil, err
+	}
+	data, err := r.readBody(resp)
+	if err != nil {
+		return nil, err
+	}
+	var result QueryResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 func (r *RemoteBackend) Versions(ctx context.Context, path string) ([]Version, error) {
