@@ -1,10 +1,12 @@
 package config
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -75,6 +77,7 @@ type ServerConfig struct {
 	Host        string   `toml:"host"`
 	Port        int      `toml:"port"`
 	CORSOrigins []string `toml:"cors_origins"`
+	PublicURL   string   `toml:"public_url"`
 }
 
 type StorageConfig struct {
@@ -177,12 +180,40 @@ func Load(root string) (*Config, error) {
 	return &cfg, nil
 }
 
+// ResolvedPublicURL returns the public URL for building permalinks.
+// Priority: explicit public_url > KIWI_PUBLIC_URL env var.
+// Returns "" when neither is configured — the localhost fallback is only
+// useful for the UI's own routing, not for shareable permalinks.
+func (c *Config) ResolvedPublicURL() string {
+	if c.Server.PublicURL != "" {
+		return strings.TrimRight(c.Server.PublicURL, "/")
+	}
+	return ""
+}
+
+// Permalink returns the full permalink URL for a given file path.
+// Each path segment is individually URL-encoded per RFC 3986.
+// Returns "" when publicURL is empty.
+func Permalink(publicURL, path string) string {
+	if publicURL == "" {
+		return ""
+	}
+	segments := strings.Split(strings.TrimPrefix(path, "/"), "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+	return publicURL + "/page/" + strings.Join(segments, "/")
+}
+
 func applyBackupEnv(cfg *Config) {
 	if v := os.Getenv("KIWI_BACKUP_REMOTE"); v != "" {
 		cfg.Backup.Remote = v
 	}
 	if v := os.Getenv("KIWI_BACKUP_INTERVAL"); v != "" {
 		cfg.Backup.Interval = v
+	}
+	if v := os.Getenv("KIWI_PUBLIC_URL"); v != "" {
+		cfg.Server.PublicURL = v
 	}
 }
 

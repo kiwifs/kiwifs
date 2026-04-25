@@ -1,7 +1,3 @@
-// Package bootstrap assembles the KiwiFS dependency graph for a single
-// knowledge space. Both the top-level serve command and the multi-space
-// Manager route through Build so error-handling policy ("git unavailable
-// → degrade to Noop"), component ordering, and teardown stay consistent.
 package bootstrap
 
 import (
@@ -24,9 +20,6 @@ import (
 	"github.com/kiwifs/kiwifs/internal/versioning"
 )
 
-// janitorInterval parses the configured interval or returns the default
-// 24 h. Returning 0 disables the scheduler; negative values are coerced
-// to 0 so a typo in TOML can't accidentally spin up a tight loop.
 func janitorInterval(cfg *config.Config) time.Duration {
 	raw := cfg.Janitor.Interval
 	if raw == "" {
@@ -43,29 +36,23 @@ func janitorInterval(cfg *config.Config) time.Duration {
 	return d
 }
 
-// Stack is the set of live components backing one knowledge space.
 type Stack struct {
-	Name          string
-	Root          string
-	Store         storage.Storage
-	Versioner     versioning.Versioner
-	Searcher      search.Searcher
-	Linker        links.Linker
-	Hub           *events.Hub
-	Pipeline      *pipeline.Pipeline
-	Vectors       *vectorstore.Service // nil when disabled or build failed
-	Comments      *comments.Store
-	Server        *api.Server
-	JanitorSched  *janitor.Scheduler          // nil when scheduled scans are disabled
+	Name         string
+	Root         string
+	Config       *config.Config
+	Store        storage.Storage
+	Versioner    versioning.Versioner
+	Searcher     search.Searcher
+	Linker       links.Linker
+	LinkResolver *links.Resolver
+	Hub          *events.Hub
+	Pipeline     *pipeline.Pipeline
+	Vectors      *vectorstore.Service
+	Comments     *comments.Store
+	Server       *api.Server
+	JanitorSched *janitor.Scheduler
 }
 
-// Build assembles every dependency for one space. name is used as a log
-// prefix so multi-space deployments can tell which space emitted what;
-// use "default" (or "") for the single-space case to keep logs unprefixed.
-//
-// Fatal failures (storage, comments store) return an error. Soft failures
-// (git unavailable, sqlite FTS unavailable, vector store unreachable) log
-// a warning and degrade — the server still starts.
 func Build(name, root string, cfg *config.Config) (*Stack, error) {
 	prefix := logPrefix(name)
 
@@ -77,9 +64,6 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 	ver := buildVersioner(prefix, root, cfg)
 	searcher := buildSearcher(prefix, root, store, cfg)
 
-	// Vector search is optional. Build returns (nil, nil) when
-	// [search.vector] is disabled; only a configuration error surfaces
-	// here and it's non-fatal — the /search/semantic endpoint will 503.
 	vectors, verr := vectorstore.Build(root, store, cfg.Search.Vector)
 	if verr != nil {
 		log.Printf("%svector search disabled (%v)", prefix, verr)
@@ -94,13 +78,20 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 		linker = l
 	}
 
+	linkResolver := links.NewResolver(func(ctx context.Context, fn func(path string)) error {
+		return storage.Walk(ctx, store, "/", func(e storage.Entry) error {
+			fn(e.Path)
+			return nil
+		})
+	})
+
 	hub := events.NewHub()
 	pipe := pipeline.New(store, ver, searcher, linker, hub, vectors, root)
 
+	pipe.OnInvalidate = func() { linkResolver.MarkDirty() }
+
 	cstore, err := comments.New(root)
 	if err != nil {
-		// Unwind anything that was already opened so the caller doesn't
-		// have to care about partial construction.
 		if vectors != nil {
 			_ = vectors.Close()
 		}
@@ -114,12 +105,8 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 		shares = nil
 	}
 
-	server := api.NewServer(cfg, pipe, vectors, cstore, shares)
+	server := api.NewServer(cfg, pipe, vectors, cstore, shares, linkResolver)
 
-	// Background Knowledge Janitor. Runs nightly by default so admins
-	// find a fresh report of stale/contradictory/unowned pages waiting
-	// when they open the panel. Interval=0 disables — useful on small
-	// personal wikis where the scan cost outweighs the signal.
 	var janitorSched *janitor.Scheduler
 	if iv := janitorInterval(cfg); iv > 0 {
 		staleDays := cfg.Janitor.StaleDays
@@ -137,27 +124,24 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 	}
 
 	stack := &Stack{
-		Name:          name,
-		Root:          root,
-		Store:         store,
-		Versioner:     ver,
-		Searcher:      searcher,
-		Linker:        linker,
-		Hub:           hub,
-		Pipeline:      pipe,
-		Vectors:       vectors,
-		Comments:      cstore,
-		Server:        server,
-		JanitorSched:  janitorSched,
+		Name:         name,
+		Root:         root,
+		Config:       cfg,
+		Store:        store,
+		Versioner:    ver,
+		Searcher:     searcher,
+		Linker:       linker,
+		LinkResolver: linkResolver,
+		Hub:          hub,
+		Pipeline:     pipe,
+		Vectors:      vectors,
+		Comments:     cstore,
+		Server:       server,
+		JanitorSched: janitorSched,
 	}
 
 	pipe.DrainUncommitted(context.Background())
 
-	// Search index catch-up. If someone edited the git repo directly
-	// while the server was down — `git pull`, manual edits, a restore
-	// from backup — the SQLite index will be out of sync with disk.
-	// Resync does a cheap path-only reconciliation in the background so
-	// startup stays fast on large workspaces.
 	if rs, ok := searcher.(search.Resyncer); ok {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -183,9 +167,6 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 	return stack, nil
 }
 
-// Close tears down components in reverse dependency order. It returns the
-// first error but still attempts to close every component so a partially
-// broken stack doesn't leak file handles or sqlite connections.
 func (s *Stack) Close() error {
 	var firstErr error
 	if s.Vectors != nil {
@@ -239,10 +220,6 @@ func buildSearcher(prefix, root string, store storage.Storage, cfg *config.Confi
 	}
 }
 
-// reindexIfEmpty mirrors the FTS bootstrap: on fresh deploys the vector
-// store is empty, so kick off one background reindex so semantic search
-// works without a manual reindex step. Fire-and-forget — the 10-minute
-// timeout caps runaway embeddings and failures stay in the log.
 func (s *Stack) reindexIfEmpty() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
