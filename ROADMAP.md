@@ -77,9 +77,9 @@ Enterprise features for teams that need enforced boundaries.
 1. **Pick something** — find an item above that interests you
 2. **Open an issue** — describe your approach, we'll discuss before you code
 3. **Start small** — even one bullet point from a section is a meaningful PR
-4. **Suggest new items** — open a [Discussion](https://github.com/amelia751/kiwifs/discussions) if you think something is missing
+4. **Suggest new items** — open a [Discussion](https://github.com/kiwifs/kiwifs/discussions) if you think something is missing
 
-Items labeled [`good first issue`](https://github.com/amelia751/kiwifs/labels/good%20first%20issue) are specifically scoped for new contributors.
+Items labeled [`good first issue`](https://github.com/kiwifs/kiwifs/labels/good%20first%20issue) are specifically scoped for new contributors.
 
 ---
 

@@ -148,5 +148,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            amelia751/kiwifs:${{ steps.version.outputs.version }}
-            amelia751/kiwifs:latest
+            kiwifs/kiwifs:${{ steps.version.outputs.version }}
+            kiwifs/kiwifs:latest

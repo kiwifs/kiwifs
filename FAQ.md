@@ -34,13 +34,13 @@ Just the binary. KiwiFS is a single statically-linked Go binary with zero runtim
 
 ```bash
 # One-line install (macOS / Linux) — downloads the pre-built binary
-curl -fsSL https://raw.githubusercontent.com/amelia751/kiwifs/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/kiwifs/kiwifs/main/install.sh | sh
 ```
 
 Or build from source (requires Go 1.25+ and Node.js 20+):
 
 ```bash
-git clone https://github.com/amelia751/kiwifs.git && cd kiwifs
+git clone https://github.com/kiwifs/kiwifs.git && cd kiwifs
 cd ui && npm install && npm run build && cd ..
 go build -o kiwifs .
 ```

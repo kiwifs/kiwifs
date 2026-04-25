@@ -4,7 +4,7 @@ A filesystem-based knowledge system. Agents write with `cat`. Humans read in the
 
 One binary. Storage-agnostic. Git-versioned. Embeddable.
 
-> **Note:** This npm package is not yet published. For now, build from source — see the [main README](https://github.com/amelia751/kiwifs).
+> **Note:** This npm package is not yet published. For now, build from source — see the [main README](https://github.com/kiwifs/kiwifs).
 
 ## Installation (once published)
 
@@ -85,8 +85,8 @@ strategy = "git"  # or "cow" or "none"
 
 ## Documentation
 
-- [GitHub](https://github.com/amelia751/kiwifs)
+- [GitHub](https://github.com/kiwifs/kiwifs)
 
 ## License
 
-[BSL 1.1](https://github.com/amelia751/kiwifs/blob/main/LICENSE)
+[BSL 1.1](https://github.com/kiwifs/kiwifs/blob/main/LICENSE)

@@ -13,15 +13,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/amelia751/kiwifs/actions/workflows/ci.yml"><img src="https://github.com/amelia751/kiwifs/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/kiwifs/kiwifs/actions/workflows/ci.yml"><img src="https://github.com/kiwifs/kiwifs/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL--1.1-blue" alt="License: BSL 1.1"></a>
-  <a href="https://github.com/amelia751/kiwifs"><img src="https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25"></a>
-  <a href="https://github.com/amelia751/kiwifs"><img src="https://img.shields.io/badge/single_binary-yes-green" alt="Single Binary"></a>
-  <a href="https://github.com/amelia751/kiwifs"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome"></a>
+  <a href="https://github.com/kiwifs/kiwifs"><img src="https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25"></a>
+  <a href="https://github.com/kiwifs/kiwifs"><img src="https://img.shields.io/badge/single_binary-yes-green" alt="Single Binary"></a>
+  <a href="https://github.com/kiwifs/kiwifs"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome"></a>
 </p>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/amelia751/kiwifs/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/kiwifs/kiwifs/main/install.sh | sh
 kiwifs init ./knowledge && kiwifs serve --root ./knowledge
 # Open http://localhost:3333
 ```
@@ -292,13 +292,13 @@ All commands support `--help` for full flag reference.
 
 ```bash
 # One-line install (macOS / Linux)
-curl -fsSL https://raw.githubusercontent.com/amelia751/kiwifs/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/kiwifs/kiwifs/main/install.sh | sh
 ```
 
 Or build from source (requires Go 1.25+ and Node.js 20+):
 
 ```bash
-git clone https://github.com/amelia751/kiwifs.git && cd kiwifs
+git clone https://github.com/kiwifs/kiwifs.git && cd kiwifs
 cd ui && npm install && npm run build && cd ..
 go build -o kiwifs .
 ```

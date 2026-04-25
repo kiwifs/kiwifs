@@ -13,7 +13,7 @@ Thanks for your interest in contributing! KiwiFS is early-stage and we welcome a
 ### Local development
 
 ```bash
-git clone https://github.com/amelia751/kiwifs.git
+git clone https://github.com/kiwifs/kiwifs.git
 cd kiwifs
 
 # Build the frontend
@@ -59,7 +59,7 @@ kiwifs/
 
 ### Reporting bugs
 
-Open a [GitHub issue](https://github.com/amelia751/kiwifs/issues/new?template=bug_report.md). Include:
+Open a [GitHub issue](https://github.com/kiwifs/kiwifs/issues/new?template=bug_report.md). Include:
 
 - What you did
 - What you expected
@@ -68,7 +68,7 @@ Open a [GitHub issue](https://github.com/amelia751/kiwifs/issues/new?template=bu
 
 ### Suggesting features
 
-Open a [GitHub issue](https://github.com/amelia751/kiwifs/issues/new?template=feature_request.md) or start a [Discussion](https://github.com/amelia751/kiwifs/discussions). Describe the use case, not just the solution.
+Open a [GitHub issue](https://github.com/kiwifs/kiwifs/issues/new?template=feature_request.md) or start a [Discussion](https://github.com/kiwifs/kiwifs/discussions). Describe the use case, not just the solution.
 
 ### Submitting code
 
@@ -85,7 +85,7 @@ Open a [GitHub issue](https://github.com/amelia751/kiwifs/issues/new?template=fe
 
 ### What we're looking for help with
 
-Check the [issues labeled `good first issue`](https://github.com/amelia751/kiwifs/labels/good%20first%20issue) for starter tasks. Areas where help is especially welcome:
+Check the [issues labeled `good first issue`](https://github.com/kiwifs/kiwifs/labels/good%20first%20issue) for starter tasks. Areas where help is especially welcome:
 
 - **Testing** — more integration tests, especially for NFS/S3/WebDAV protocols
 - **Documentation** — usage guides, examples, config reference
