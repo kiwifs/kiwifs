@@ -164,7 +164,21 @@ func (h *Handlers) ReadFile(c echo.Context) error {
 
 	etag := fmt.Sprintf(`"%s"`, pipeline.ETag(content))
 	c.Response().Header().Set("ETag", etag)
-	c.Response().Header().Set("Cache-Control", "no-cache")
+	// Markdown is the "live" page content — collaborators expect their
+	// latest write to show up on the next navigation, so we keep the
+	// validating no-cache policy. Everything else (images, PDFs, other
+	// attachments) can be cached aggressively: the ETag is content-
+	// addressable (sha256-prefix), so a mutation changes the URL's
+	// effective cache key and the browser fetches the new body. An
+	// hour of CDN-ish caching dramatically reduces page-nav bandwidth
+	// on image-heavy pages without risking stale content.
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == ".md" || ext == ".markdown" {
+		c.Response().Header().Set("Cache-Control", "no-cache")
+	} else {
+		c.Response().Header().Set("Cache-Control", "public, max-age=3600, must-revalidate")
+		c.Response().Header().Set("Vary", "Authorization, Cookie")
+	}
 
 	// Add Last-Modified when we can stat the file. Best-effort: a missing
 	// mtime shouldn't fail the read.
