@@ -273,7 +273,11 @@ func (s *Scanner) checkStale(p pageInfo) []Issue {
 	now := time.Now()
 	var issues []Issue
 
-	if reviewed, ok := fmDateField(p.frontmatter, "reviewed"); ok {
+	reviewed, ok := fmDateField(p.frontmatter, "reviewed")
+	if !ok {
+		reviewed, ok = fmDateField(p.frontmatter, "last-reviewed")
+	}
+	if ok {
 		if now.Sub(reviewed).Hours()/24 > float64(s.staleDays) {
 			issues = append(issues, Issue{
 				Kind:       IssueStale,

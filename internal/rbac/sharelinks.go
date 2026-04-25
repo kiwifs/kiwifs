@@ -3,8 +3,6 @@ package rbac
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -155,12 +154,11 @@ func (s *ShareStore) Create(path, createdBy string, expiresIn time.Duration, pas
 		link.ExpiresAt = now.Add(expiresIn)
 	}
 	if password != "" {
-		salt, err := randomHex(8)
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
-			return nil, fmt.Errorf("sharelinks: generate salt: %w", err)
+			return nil, fmt.Errorf("sharelinks: hash password: %w", err)
 		}
-		link.PasswordSalt = salt
-		link.PasswordHash = hashPassword(salt, password)
+		link.PasswordHash = string(hash)
 	}
 
 	s.mu.Lock()
@@ -190,9 +188,7 @@ func (s *ShareStore) Resolve(token, password string) (*ShareLink, error) {
 		return nil, nil
 	}
 	if link.PasswordHash != "" {
-		got := hashPassword(link.PasswordSalt, password)
-		// Constant-time compare to resist timing attacks on the shared secret.
-		if subtle.ConstantTimeCompare([]byte(got), []byte(link.PasswordHash)) != 1 {
+		if err := bcrypt.CompareHashAndPassword([]byte(link.PasswordHash), []byte(password)); err != nil {
 			return nil, ErrInvalidPassword
 		}
 	}
@@ -248,12 +244,12 @@ func (s *ShareStore) load() error {
 	for _, l := range all {
 		// Migrate older entries that stored the password in plaintext.
 		if l.Password != "" && l.PasswordHash == "" {
-			salt, err := randomHex(8)
+			hash, err := bcrypt.GenerateFromPassword([]byte(l.Password), bcrypt.DefaultCost)
 			if err != nil {
-				return fmt.Errorf("sharelinks: upgrade salt: %w", err)
+				return fmt.Errorf("sharelinks: upgrade hash: %w", err)
 			}
-			l.PasswordSalt = salt
-			l.PasswordHash = hashPassword(salt, l.Password)
+			l.PasswordHash = string(hash)
+			l.PasswordSalt = ""
 			l.Password = ""
 			upgraded = true
 		}
@@ -275,7 +271,7 @@ func (s *ShareStore) save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, data, 0o644)
+	return os.WriteFile(s.path, data, 0o600)
 }
 
 func randomHex(n int) (string, error) {
@@ -284,11 +280,6 @@ func randomHex(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
-}
-
-func hashPassword(salt, password string) string {
-	sum := sha256.Sum256([]byte(salt + ":" + password))
-	return hex.EncodeToString(sum[:])
 }
 
 // sanitize returns a shallow copy with secrets removed for outbound responses.

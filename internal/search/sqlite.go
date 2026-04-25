@@ -742,18 +742,17 @@ func (s *SQLite) FilterByDate(ctx context.Context, paths []string, after time.Ti
 // endpoint — a silent boost is more useful than a toggle nobody checks.
 //
 // SearchVerified below does the same lookup but with aggressive
-// multipliers that can push a page off the results list entirely; the
-// two diverged for correctness rather than a single tunable because the
-// "only show verified" and "rank verified first" UX goals pull in
-// different directions on tie-breaks.
+// multipliers so verified/source-of-truth pages dominate the ranking
+// while deprecated pages drop near the bottom.
 func (s *SQLite) SearchBoosted(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error) {
 	return s.searchTrust(ctx, query, limit, offset, pathPrefix, softTrustBoost)
 }
 
-// SearchVerified runs a normal FTS5 search and then re-ranks results by
-// trust signals stored in file_meta frontmatter. The boosted TrustScore
-// replaces raw BM25 ordering so verified, high-confidence pages float to
-// the top.
+// SearchVerified runs a normal FTS5 search and then aggressively re-ranks
+// results using hard trust multipliers. Unlike SearchBoosted (soft nudge),
+// verified/source-of-truth pages get 2–3x boosts while deprecated pages
+// are pushed to 0.1x — effectively burying them. Note: this re-ranks
+// the full result set rather than filtering; all BM25 hits are retained.
 func (s *SQLite) SearchVerified(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error) {
 	return s.searchTrust(ctx, query, limit, offset, pathPrefix, hardTrustBoost)
 }
@@ -1016,7 +1015,6 @@ func (s *SQLite) FindContradictions(ctx context.Context, path string) ([]string,
 		placeholders[i] = "?"
 		args[i] = strings.ToLower(t)
 	}
-	args = append(args, path)
 
 	q := fmt.Sprintf(`
 SELECT DISTINCT fm.path, fm.frontmatter FROM file_meta fm

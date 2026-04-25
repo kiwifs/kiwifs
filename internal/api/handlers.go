@@ -99,11 +99,10 @@ func (h *Handlers) Healthz(c echo.Context) error {
 	})
 }
 
-// Readyz checks that the core subsystems (storage, search) are actually
-// ready to serve traffic, not just that the HTTP server is alive. Fresh
-// installs stream a full FTS5 backfill at startup; /healthz lies "OK"
-// while search is still building, but /readyz stays 503 until the store
-// can list its root. K8s rolling updates should point at /readyz.
+// Readyz checks that storage is reachable and ready to serve traffic.
+// Unlike /healthz (which always returns 200 if the HTTP server is up),
+// /readyz returns 503 until the store can be stat'd — useful for K8s
+// rolling updates so traffic isn't routed before the filesystem is mounted.
 func (h *Handlers) Readyz(c echo.Context) error {
 	if h.store == nil {
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "no-store"})

@@ -80,7 +80,7 @@ func runJanitor(cmd *cobra.Command, args []string) error {
 	}
 
 	if result.HasErrors() {
-		os.Exit(1)
+		return fmt.Errorf("janitor: %d error-severity issue(s) found", len(result.Issues))
 	}
 	return nil
 }
