@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -49,7 +48,6 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	c := exec.CommandContext(ctx, "git", cloneArgs...)
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Stdout = os.Stdout
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
