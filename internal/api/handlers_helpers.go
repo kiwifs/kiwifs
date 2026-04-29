@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -50,12 +51,27 @@ func sanitizeActor(raw string) string {
 func readFileOr404(ctx context.Context, store storage.Storage, path string) ([]byte, error) {
 	content, err := store.Read(ctx, path)
 	if err != nil {
+		if errors.Is(err, storage.ErrPathDenied) {
+			return nil, echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		if os.IsNotExist(err) {
 			return nil, echo.NewHTTPError(http.StatusNotFound, "file not found")
 		}
 		return nil, echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return content, nil
+}
+
+// storageErrToHTTP maps storage-layer errors to the correct HTTP status.
+// Use this in any handler that calls storage directly (Write, Delete, List, etc.).
+func storageErrToHTTP(err error) *echo.HTTPError {
+	if errors.Is(err, storage.ErrPathDenied) {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	if os.IsNotExist(err) {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
+	}
+	return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 }
 
 func buildSearchEntries(results []search.Result, publicURL string) []searchResultEntry {

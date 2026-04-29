@@ -2,12 +2,18 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 )
+
+// ErrPathDenied is returned when a user-supplied path targets a forbidden
+// location (path traversal, hidden/internal directories). API handlers
+// should map this to HTTP 400 rather than 500.
+var ErrPathDenied = errors.New("path denied")
 
 // Local implements Storage over a local directory.
 //
@@ -58,10 +64,10 @@ func GuardPath(root, userPath string) (string, error) {
 	abs := filepath.Join(root, filepath.FromSlash(clean))
 	rel, err := filepath.Rel(root, abs)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path traversal denied: %s", userPath)
+		return "", fmt.Errorf("%w: path traversal denied: %s", ErrPathDenied, userPath)
 	}
 	if hasHiddenComponent(rel) {
-		return "", fmt.Errorf("access to internal path denied: %s", userPath)
+		return "", fmt.Errorf("%w: access to internal path denied: %s", ErrPathDenied, userPath)
 	}
 	return abs, nil
 }
