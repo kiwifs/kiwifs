@@ -50,13 +50,18 @@ func (l *Local) AbsPath(path string) string {
 }
 
 // GuardPath resolves userPath against root and rejects any result that
-// escapes root via ".." or other traversal. It returns the absolute path.
+// escapes root via ".." or other traversal. It also blocks access to
+// internal directories (.git, .kiwi, and any other dot-prefixed dirs)
+// that must never be exposed through the API. Returns the absolute path.
 func GuardPath(root, userPath string) (string, error) {
 	clean := normalizeUserPath(userPath)
 	abs := filepath.Join(root, filepath.FromSlash(clean))
 	rel, err := filepath.Rel(root, abs)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path traversal denied: %s", userPath)
+	}
+	if hasHiddenComponent(rel) {
+		return "", fmt.Errorf("access to internal path denied: %s", userPath)
 	}
 	return abs, nil
 }
@@ -66,6 +71,18 @@ func normalizeUserPath(userPath string) string {
 	slash := strings.ReplaceAll(userPath, "\\", "/")
 	clean := path.Clean("/" + slash)
 	return strings.TrimPrefix(clean, "/")
+}
+
+// hasHiddenComponent reports whether any segment of a slash-separated
+// relative path starts with a dot (e.g. ".git/config", "a/.kiwi/state").
+// The lone "." (current directory) is not considered hidden.
+func hasHiddenComponent(rel string) bool {
+	for _, seg := range strings.Split(filepath.ToSlash(rel), "/") {
+		if seg != "." && strings.HasPrefix(seg, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *Local) guardPath(path string) (string, error) {
@@ -188,7 +205,7 @@ func (l *Local) List(_ context.Context, path string) ([]Entry, error) {
 	}
 	entries, err := os.ReadDir(abs)
 	if err != nil {
-		return nil, fmt.Errorf("read dir: %w", err)
+		return nil, err
 	}
 
 	// Normalize the dir path: strip leading/trailing slashes for consistent joining.
