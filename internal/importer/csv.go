@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -26,10 +27,7 @@ func NewCSV(filePath string, hasHeader bool) (*CSVSource, error) {
 }
 
 func (s *CSVSource) Name() string {
-	base := s.filePath
-	if idx := strings.LastIndex(base, "/"); idx >= 0 {
-		base = base[idx+1:]
-	}
+	base := filepath.Base(s.filePath)
 	return strings.TrimSuffix(base, ".csv")
 }
 

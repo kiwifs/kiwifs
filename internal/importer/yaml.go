@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -21,10 +22,7 @@ func NewYAML(filePath string) (*YAMLSource, error) {
 }
 
 func (s *YAMLSource) Name() string {
-	base := s.filePath
-	if idx := strings.LastIndex(base, "/"); idx >= 0 {
-		base = base[idx+1:]
-	}
+	base := filepath.Base(s.filePath)
 	base = strings.TrimSuffix(base, ".yaml")
 	base = strings.TrimSuffix(base, ".yml")
 	return base

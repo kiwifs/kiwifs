@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -24,10 +25,7 @@ func NewJSON(filePath string) (*JSONSource, error) {
 }
 
 func (s *JSONSource) Name() string {
-	base := s.filePath
-	if idx := strings.LastIndex(base, "/"); idx >= 0 {
-		base = base[idx+1:]
-	}
+	base := filepath.Base(s.filePath)
 	base = strings.TrimSuffix(base, ".jsonl")
 	base = strings.TrimSuffix(base, ".json")
 	return base
