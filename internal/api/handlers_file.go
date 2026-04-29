@@ -24,6 +24,9 @@ func (h *Handlers) Tree(c echo.Context) error {
 	}
 	st, err := storage.BuildTree(c.Request().Context(), h.store, path, maxTreeDepth)
 	if err != nil {
+		if errors.Is(err, storage.ErrPathDenied) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		if os.IsNotExist(err) {
 			return echo.NewHTTPError(http.StatusNotFound, "path not found")
 		}
@@ -164,6 +167,9 @@ func (h *Handlers) WriteFile(c echo.Context) error {
 
 	res, err := h.pipe.WriteWithOpts(c.Request().Context(), path, body, actor, pipeline.WriteOpts{IfMatch: ifMatch})
 	if err != nil {
+		if errors.Is(err, storage.ErrPathDenied) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		if errors.Is(err, pipeline.ErrConflict) {
 			return echo.NewHTTPError(http.StatusConflict, "file modified since last read — re-fetch and retry")
 		}
@@ -232,6 +238,9 @@ func (h *Handlers) BulkWrite(c echo.Context) error {
 	}
 	pipeResults, err := h.pipe.BulkWrite(c.Request().Context(), files, actor, req.Message)
 	if err != nil {
+		if errors.Is(err, storage.ErrPathDenied) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -316,6 +325,9 @@ func (h *Handlers) UploadAsset(c echo.Context) error {
 	actor := sanitizeActor(c.Request().Header.Get("X-Actor"))
 	res, err := h.pipe.Write(c.Request().Context(), fullPath, content, actor)
 	if err != nil {
+		if errors.Is(err, storage.ErrPathDenied) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -415,6 +427,9 @@ func (h *Handlers) DeleteFile(c echo.Context) error {
 	}
 
 	if err := h.pipe.Delete(c.Request().Context(), path, sanitizeActor(c.Request().Header.Get("X-Actor"))); err != nil {
+		if errors.Is(err, storage.ErrPathDenied) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusOK, map[string]string{"deleted": path})
