@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -44,8 +45,8 @@ func hidden(name string) bool {
 }
 
 func (l *Local) AbsPath(path string) string {
-	clean := filepath.Clean("/" + path)
-	return filepath.Join(l.root, clean)
+	clean := normalizeUserPath(path)
+	return filepath.Join(l.root, filepath.FromSlash(clean))
 }
 
 // GuardPath resolves userPath against root and rejects any result that
@@ -53,8 +54,8 @@ func (l *Local) AbsPath(path string) string {
 // internal directories (.git, .kiwi, and any other dot-prefixed dirs)
 // that must never be exposed through the API. Returns the absolute path.
 func GuardPath(root, userPath string) (string, error) {
-	clean := filepath.Clean("/" + userPath)
-	abs := filepath.Join(root, clean)
+	clean := normalizeUserPath(userPath)
+	abs := filepath.Join(root, filepath.FromSlash(clean))
 	rel, err := filepath.Rel(root, abs)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path traversal denied: %s", userPath)
@@ -75,6 +76,13 @@ func hasHiddenComponent(rel string) bool {
 		}
 	}
 	return false
+}
+
+// normalizeUserPath canonicalizes user-supplied paths to a safe relative form.
+func normalizeUserPath(userPath string) string {
+	slash := strings.ReplaceAll(userPath, "\\", "/")
+	clean := path.Clean("/" + slash)
+	return strings.TrimPrefix(clean, "/")
 }
 
 func (l *Local) guardPath(path string) (string, error) {

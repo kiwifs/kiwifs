@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -114,7 +113,6 @@ func (g *Git) run(ctx context.Context, name string, args ...string) error {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = g.root
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -150,7 +148,6 @@ func (g *Git) commit(ctx context.Context, actor, message string) error {
 	cmd := exec.CommandContext(ctx, "git", "commit", "-m", message)
 	cmd.Dir = g.root
 	cmd.Env = g.commitEnv(actor)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -169,7 +166,6 @@ func (g *Git) output(ctx context.Context, name string, args ...string) (string, 
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = g.root
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

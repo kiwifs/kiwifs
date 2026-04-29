@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -179,7 +178,6 @@ func (s *Syncer) cmd(name string, args ...string) error {
 	defer cancel()
 	c := exec.CommandContext(ctx, name, args...)
 	c.Dir = s.root
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
 	if err := c.Run(); err != nil {
@@ -193,7 +191,6 @@ func (s *Syncer) output(name string, args ...string) (string, error) {
 	defer cancel()
 	c := exec.CommandContext(ctx, name, args...)
 	c.Dir = s.root
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var stdout, stderr bytes.Buffer
 	c.Stdout = &stdout
 	c.Stderr = &stderr

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -46,6 +47,9 @@ func TestGitCommitAndLog(t *testing.T) {
 // ctx is the worst-case scenario for tail latency on a busy server —
 // the cancel must take effect before the 30s ceiling.
 func TestGitCallerContextCancellationPropagates(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix shell shim test")
+	}
 	requireGit(t)
 	dir := t.TempDir()
 	g, err := NewGit(dir)
@@ -79,6 +83,9 @@ func TestGitCallerContextCancellationPropagates(t *testing.T) {
 // git command name pointing to a shim script that sleeps forever, with
 // gitCmdTimeout dropped to 100ms so the test stays fast.
 func TestGitSubprocessTimeoutKillsHangingChild(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix shell shim test")
+	}
 	requireGit(t)
 	dir := t.TempDir()
 	g, err := NewGit(dir)

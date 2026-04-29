@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -25,10 +26,7 @@ func NewExcel(filePath, sheetName string) (*ExcelSource, error) {
 }
 
 func (s *ExcelSource) Name() string {
-	base := s.filePath
-	if idx := strings.LastIndex(base, "/"); idx >= 0 {
-		base = base[idx+1:]
-	}
+	base := filepath.Base(s.filePath)
 	return strings.TrimSuffix(base, ".xlsx")
 }
 
