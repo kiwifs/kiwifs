@@ -718,6 +718,12 @@ If you want to offer KiwiFS as a managed service or need a commercial license, [
 
 ## Contributors
 
+| | |
+|---|---|
+| [<img src="https://github.com/anhlam.png" width="40"> **anhlam**](https://github.com/anhlam) | Creator & maintainer |
+| [<img src="https://github.com/SAY-5.png" width="40"> **SAY-5**](https://github.com/SAY-5) | Memory report & episodic merge |
+| [<img src="https://github.com/Avuru02.png" width="40"> **Avuru02**](https://github.com/Avuru02) | Windows & Docker deploy fixes |
+
 <a href="https://github.com/kiwifs/kiwifs/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=kiwifs/kiwifs&columns=6&max=20" width="200" />
 </a>
