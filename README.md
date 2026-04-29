@@ -719,5 +719,5 @@ If you want to offer KiwiFS as a managed service or need a commercial license, [
 ## Contributors
 
 <a href="https://github.com/kiwifs/kiwifs/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=kiwifs/kiwifs&columns=6&max=20" width="200" />
+  <img src="https://contrib.rocks/image?repo=kiwifs/kiwifs&columns=6&max=20&v=2" width="200" />
 </a>
