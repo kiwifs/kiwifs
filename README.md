@@ -441,6 +441,12 @@ All commands support `--help` for full flag reference.
 curl -fsSL https://raw.githubusercontent.com/kiwifs/kiwifs/main/install.sh | sh
 ```
 
+Or run with Docker:
+
+```bash
+docker run -v ./knowledge:/data -p 3333:3333 ameliaanhlam/kiwifs
+```
+
 Or build from source (requires Go 1.25+ and Node.js 20+):
 
 ```bash
