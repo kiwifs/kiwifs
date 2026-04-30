@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Ollama calls a local Ollama /api/embed endpoint.
@@ -22,17 +23,26 @@ type Ollama struct {
 // lazily on the first Embed call (Ollama doesn't advertise them); pass dims>0
 // to skip discovery when the model's width is already known.
 func NewOllama(baseURL, model string, dims int) (*Ollama, error) {
+	return NewOllamaWithTimeout(baseURL, model, dims, 0)
+}
+
+// NewOllamaWithTimeout creates an embedder backed by Ollama with a configurable
+// HTTP client timeout. timeout <= 0 keeps the package default.
+func NewOllamaWithTimeout(baseURL, model string, dims int, timeout time.Duration) (*Ollama, error) {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
 	if model == "" {
 		model = "nomic-embed-text"
 	}
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
 	return &Ollama{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		model:   model,
 		dims:    dims,
-		client:  &http.Client{Timeout: defaultTimeout},
+		client:  &http.Client{Timeout: timeout},
 	}, nil
 }
 

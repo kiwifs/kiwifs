@@ -105,7 +105,7 @@ Three tiers, configurable at startup:
 
 ### Can I run vector search without an API key?
 
-Yes. Use Ollama (`provider = "ollama"`) with sqlite-vec as the vector store. Ollama runs locally on your machine, and sqlite-vec is embedded in the binary — no external API calls, fully offline.
+Yes. Use Ollama (`provider = "ollama"`) with sqlite-vec as the vector store. Ollama runs locally on your machine, and sqlite-vec is embedded in the binary — no external API calls, fully offline. On small CPU-only machines, set `[search.vector].worker_count` lower and `[search.vector.embedder].timeout` higher to avoid local embedding requests timing out.
 
 ### How do I rebuild the search index?
 

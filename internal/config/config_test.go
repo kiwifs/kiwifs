@@ -165,3 +165,36 @@ max_versions = 25
 		t.Fatalf("want 25, got %d", cfg.Versioning.MaxVersions)
 	}
 }
+
+func TestVectorTuningTOML(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[search.vector]
+enabled = true
+worker_count = 1
+
+[search.vector.embedder]
+provider = "ollama"
+timeout = "120s"
+
+[search.vector.chunk]
+size = 800
+overlap = 80
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Search.Vector.WorkerCount != 1 {
+		t.Fatalf("worker_count = %d, want 1", cfg.Search.Vector.WorkerCount)
+	}
+	if cfg.Search.Vector.Embedder.Timeout != "120s" {
+		t.Fatalf("embedder timeout = %q, want 120s", cfg.Search.Vector.Embedder.Timeout)
+	}
+	if cfg.Search.Vector.Chunk.Size != 800 || cfg.Search.Vector.Chunk.Overlap != 80 {
+		t.Fatalf("chunk = %d/%d, want 800/80", cfg.Search.Vector.Chunk.Size, cfg.Search.Vector.Chunk.Overlap)
+	}
+}

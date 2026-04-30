@@ -3,6 +3,7 @@ package vectorstore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/embed"
@@ -30,6 +31,7 @@ func Build(root string, source storage.Storage, cfg config.VectorConfig) (*Servi
 	return NewService(root, source, embedder, store, Options{
 		ChunkSize:    cfg.Chunk.Size,
 		ChunkOverlap: cfg.Chunk.Overlap,
+		WorkerCount:  cfg.WorkerCount,
 	}), nil
 }
 
@@ -38,7 +40,15 @@ func buildEmbedder(ctx context.Context, cfg config.EmbedderConfig) (embed.Embedd
 	case "", "openai", "azure-openai":
 		return embed.NewOpenAI(cfg.APIKey, cfg.Model, cfg.BaseURL, cfg.Dimensions)
 	case "ollama":
-		return embed.NewOllama(cfg.BaseURL, cfg.Model, cfg.Dimensions)
+		timeout := time.Duration(0)
+		if cfg.Timeout != "" {
+			parsed, err := time.ParseDuration(cfg.Timeout)
+			if err != nil {
+				return nil, fmt.Errorf("embedder timeout: %w", err)
+			}
+			timeout = parsed
+		}
+		return embed.NewOllamaWithTimeout(cfg.BaseURL, cfg.Model, cfg.Dimensions, timeout)
 	case "http":
 		return embed.NewHTTP(cfg.URL, cfg.Headers, cfg.Dimensions)
 	case "cohere":
