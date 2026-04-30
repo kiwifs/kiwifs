@@ -499,11 +499,14 @@ engine = "sqlite"                # grep | sqlite | vector
 
 [search.vector]
 enabled = true
+# Optional: lower for small CPUs/local embedders, default is 5.
+worker_count = 1
 
 [search.vector.embedder]
-provider = "openai"              # openai | ollama | cohere | bedrock | vertex | http
-model = "text-embedding-3-small"
-api_key = "${OPENAI_API_KEY}"
+provider = "ollama"              # openai | ollama | cohere | bedrock | vertex | http
+model = "nomic-embed-text"
+# Optional for Ollama: Go duration string, default is 30s.
+timeout = "120s"
 
 [search.vector.store]
 provider = "sqlite-vec"          # sqlite-vec | qdrant | pgvector | pinecone | weaviate | milvus

@@ -91,39 +91,41 @@ type StorageConfig struct {
 }
 
 type SearchConfig struct {
-	Engine         string       `toml:"engine"` // grep | sqlite
-	AsyncIndex     *bool        `toml:"async_index"`      // default true for sqlite
-	IndexWindowMs  int          `toml:"index_window_ms"`  // default 200
-	IndexBatchMax  int          `toml:"index_batch_max"`  // default 100
-	Vector         VectorConfig `toml:"vector"`
+	Engine        string       `toml:"engine"`          // grep | sqlite
+	AsyncIndex    *bool        `toml:"async_index"`     // default true for sqlite
+	IndexWindowMs int          `toml:"index_window_ms"` // default 200
+	IndexBatchMax int          `toml:"index_batch_max"` // default 100
+	Vector        VectorConfig `toml:"vector"`
 }
 
 // VectorConfig turns on semantic search and wires an embedder to a store.
 // Both [search.vector.embedder] and [search.vector.store] are required when
 // enabled = true.
 type VectorConfig struct {
-	Enabled  bool                `toml:"enabled"`
-	Embedder EmbedderConfig      `toml:"embedder"`
-	Store    VectorStoreConfig   `toml:"store"`
-	Chunk    VectorChunkConfig   `toml:"chunk"`
+	Enabled     bool              `toml:"enabled"`
+	Embedder    EmbedderConfig    `toml:"embedder"`
+	Store       VectorStoreConfig `toml:"store"`
+	Chunk       VectorChunkConfig `toml:"chunk"`
+	WorkerCount int               `toml:"worker_count"`
 }
 
 type EmbedderConfig struct {
-	Provider   string            `toml:"provider"`    // openai | ollama | http | cohere | bedrock | vertex
+	Provider   string            `toml:"provider"` // openai | ollama | http | cohere | bedrock | vertex
 	Model      string            `toml:"model"`
-	APIKey     string            `toml:"api_key"`     // ${ENV} expansion supported
+	APIKey     string            `toml:"api_key"` // ${ENV} expansion supported
 	BaseURL    string            `toml:"base_url"`
-	URL        string            `toml:"url"`         // provider=http
+	URL        string            `toml:"url"` // provider=http
 	Dimensions int               `toml:"dimensions"`
-	Headers    map[string]string `toml:"headers"`     // provider=http
+	Headers    map[string]string `toml:"headers"` // provider=http
+	Timeout    string            `toml:"timeout"` // duration string, e.g. "120s"
 
 	// provider=bedrock
 	Region string `toml:"region"`
 
 	// provider=vertex
-	Project          string `toml:"project"`           // GCP project id
-	Location         string `toml:"location"`          // e.g. "us-central1"
-	CredentialsFile  string `toml:"credentials_file"`  // path to service account JSON (optional; falls back to ADC)
+	Project         string `toml:"project"`          // GCP project id
+	Location        string `toml:"location"`         // e.g. "us-central1"
+	CredentialsFile string `toml:"credentials_file"` // path to service account JSON (optional; falls back to ADC)
 }
 
 type VectorStoreConfig struct {
@@ -158,10 +160,10 @@ type VersioningConfig struct {
 }
 
 type AuthConfig struct {
-	Type    string       `toml:"type"`    // none | apikey | perspace | oidc
-	APIKey  string       `toml:"api_key"` // single global key for type=apikey
+	Type    string        `toml:"type"`     // none | apikey | perspace | oidc
+	APIKey  string        `toml:"api_key"`  // single global key for type=apikey
 	APIKeys []APIKeyEntry `toml:"api_keys"` // per-space keys for type=perspace
-	OIDC    OIDCConfig   `toml:"oidc"`
+	OIDC    OIDCConfig    `toml:"oidc"`
 }
 
 type APIKeyEntry struct {
