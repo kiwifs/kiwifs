@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useRef } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { KiwiComments } from "./KiwiComments";
 import { MockApiProvider } from "./__mocks__/apiMock";
-import { mockMarkdownRich, mockComments } from "./__mocks__/data";
+import { StoryMarkdown } from "./__mocks__/StoryMarkdown";
+import { mockMarkdownRichBody, mockComments } from "./__mocks__/data";
 
 function CommentsWrapper({
   comments,
@@ -16,13 +15,13 @@ function CommentsWrapper({
   return (
     <MockApiProvider overrides={{ comments }}>
       <div className="max-w-4xl mx-auto p-8 bg-background text-foreground">
-        <div ref={containerRef} className="kiwi-prose mb-8">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{mockMarkdownRich}</ReactMarkdown>
-        </div>
+        <StoryMarkdown innerRef={containerRef} className="kiwi-prose mb-8">
+          {mockMarkdownRichBody}
+        </StoryMarkdown>
         <KiwiComments
           path="concepts/frontmatter.md"
           containerRef={containerRef as React.RefObject<HTMLElement>}
-          renderKey={mockMarkdownRich}
+          renderKey={mockMarkdownRichBody}
         />
       </div>
     </MockApiProvider>

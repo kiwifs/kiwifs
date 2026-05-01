@@ -220,6 +220,16 @@ tags:
 \`\`\`
 `;
 
+/**
+ * Body-only versions (frontmatter stripped) for stories that render
+ * markdown with bare ReactMarkdown and don't have gray-matter.
+ */
+export const mockMarkdownRichBody = mockMarkdownRich
+  .replace(/^---[\s\S]*?---\n*/, "");
+
+export const mockMarkdownSimpleBody = mockMarkdownSimple
+  .replace(/^---[\s\S]*?---\n*/, "");
+
 export const mockSearchResults: SearchResult[] = [
   {
     path: "concepts/frontmatter.md",
