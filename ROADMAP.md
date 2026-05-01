@@ -6,7 +6,7 @@ This is a living document — not a promise. If you want to work on something he
 
 ---
 
-## v0.1 — "It works" (current)
+## v0.1 — "It works"
 
 The foundation. A single Go binary that serves markdown files with a web UI, git versioning, full-text + vector search, and multi-protocol access.
 
@@ -23,15 +23,14 @@ The foundation. A single Go binary that serves markdown files with a web UI, git
 
 ---
 
-## v0.2 — Embeddable
+## v0.2 — Embeddable (current)
 
 Make KiwiFS easy to plug into other apps. This is what turns it from a tool into a platform.
 
 - [x] **Permalinks** — `public_url` config, HTML5 history routing (`/page/{path}`), permalink field in API responses, wiki link → real URL resolution for external contexts (PR comments, Slack, exports)
 - [ ] **React component library** (`kiwifs-ui` on npm) — `<KiwiProvider>`, `<KiwiTree>`, `<KiwiPage>`, `<KiwiEditor>`, `<KiwiSearch>`, `<KiwiGraph>` as standalone components
 - [x] **MCP server** (`kiwifs mcp`) — Model Context Protocol for AI agents (Claude, Cursor, etc.)
-- [x] **Permalinks** — shareable page URLs with SPA deep linking, `X-Permalink` header, wiki-link resolution
-- [ ] **Dataview** — computed views over frontmatter (Obsidian Dataview as a server). Hand-written Pratt parser for DQL, `json_extract`-based SQLite queries, TABLE/LIST/COUNT output, aggregation, GROUP BY. REST `GET /api/kiwi/query`, MCP `kiwi_query`, CLI `kiwifs query`. Computed view files with `kiwi-view: true` frontmatter.
+- [x] **Dataview** — computed views over frontmatter (Obsidian Dataview as a server). Hand-written Pratt parser for DQL, `json_extract`-based SQLite queries, TABLE/LIST/COUNT output, aggregation, GROUP BY. REST `GET /api/kiwi/query`, MCP `kiwi_query`, CLI `kiwifs query`. Computed view files with `kiwi-view: true` frontmatter.
 - [x] **Episodic vs semantic memory** — `merged-from` frontmatter, `memory_kind`, `[memory]` config, `kiwifs memory report`, REST `GET /api/kiwi/memory/report`, MCP `kiwi_memory_report`, `internal/memory` helpers (`docs/MEMORY.md`), default `knowledge` init template includes `episodes/`
 - [ ] **Pipeline hooks** (Go) — `OnBeforeWrite`, `OnAfterWrite` callbacks for custom validation/notifications
 - [ ] **JS hooks** — `.kiwi/hooks/*.js` scripts via embedded runtime, no recompile needed
@@ -40,7 +39,7 @@ Make KiwiFS easy to plug into other apps. This is what turns it from a tool into
 
 Your data must survive anything — process crash, container kill, host failure. KiwiFS is Obsidian-model (files are the truth, everything else rebuilds), and now ships with built-in backup.
 
-- [ ] **Atomic file writes** — temp-file-then-rename in storage layer, eliminates torn writes on crash
+- [x] **Atomic file writes** — temp-file-then-rename in storage layer, eliminates torn writes on crash
 - [ ] **Track `.kiwi/` user data in git** — comments, config, templates are user-created data that must not be silently lost
 - [x] **`[backup]` config** — `remote = "git@github.com:user/kb.git"`, `interval = "5m"`, background goroutine pushes to any git remote
 - [x] **`kiwifs backup`** — one-shot CLI command for manual push, cron jobs, pre-maintenance scripts
@@ -53,9 +52,11 @@ Your data must survive anything — process crash, container kill, host failure.
 
 You can't replace Confluence if you can't migrate from it.
 
-- [ ] `kiwifs import --from obsidian` — copy vault, rewrite `![[image]]` paths
-- [ ] `kiwifs import --from notion` — parse exported markdown + CSV, fix internal links
-- [ ] `kiwifs import --from confluence` — convert XHTML storage format to markdown
+- [x] `kiwifs import --from obsidian` — copy vault, rewrite `![[image]]` paths
+- [x] `kiwifs import --from notion` — parse exported markdown + CSV, fix internal links
+- [x] `kiwifs import --from confluence` — convert XHTML storage format to markdown
+- [x] `kiwifs import` — 18 total sources (PostgreSQL, MySQL, SQLite, MongoDB, DynamoDB, Redis, Elasticsearch, CSV, JSON, JSONL, YAML, Excel, Notion, Airtable, Google Sheets, Confluence, Obsidian, Firestore)
+- [x] `kiwifs export --format jsonl` / `--format csv` — export with optional embeddings, content, and link graph
 - [ ] `kiwifs export --format mkdocs` / `--format docusaurus` — generate static doc sites
 
 ## v0.4 — Webhooks & analytics
@@ -63,7 +64,8 @@ You can't replace Confluence if you can't migrate from it.
 Outbound integration and content health signals.
 
 - [ ] **Webhooks** — POST to Slack/CI/custom URLs on write/delete events, HMAC signing, retry with backoff
-- [ ] **Content analytics** — page views, stale page detection, failed search queries, orphan pages
+- [x] **Content analytics** — stale page detection, orphan pages, broken links, empty pages, link coverage, health checks (`kiwifs analytics`, `kiwifs janitor`, `GET /api/kiwi/analytics`)
+- [ ] **Page view tracking** — view counts, failed search queries
 
 ## v0.5 — Access control & governance
 
@@ -86,4 +88,4 @@ Items labeled [`good first issue`](https://github.com/kiwifs/kiwifs/labels/good%
 
 ---
 
-*Last updated: April 2026*
+*Last updated: May 2026*

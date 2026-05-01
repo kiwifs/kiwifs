@@ -20,7 +20,7 @@ No. Git runs under the hood — every write is an atomic commit — but users ne
 
 ### Is KiwiFS production-ready?
 
-KiwiFS is in active development (v0.3). The core is stable — file CRUD, search, versioning, web UI, MCP, data import/export, DQL queries, and all access protocols work. We use it in production internally. That said, APIs may evolve before v1.0.
+KiwiFS is in active development (v0.2). The core is stable — file CRUD, search, versioning, web UI, MCP, data import/export, DQL queries, and all access protocols work. We use it in production internally. That said, APIs may evolve before v1.0.
 
 ---
 
@@ -79,7 +79,7 @@ Three ways, depending on what your agent has access to:
 
 ### What is MCP and why does KiwiFS support it?
 
-[Model Context Protocol](https://modelcontextprotocol.io) is a standard for connecting AI agents to external tools. KiwiFS's MCP server exposes 7 tools and 3 resources, so any MCP-compatible agent can read, write, search, and query your knowledge base without custom integration code.
+[Model Context Protocol](https://modelcontextprotocol.io) is a standard for connecting AI agents to external tools. KiwiFS's MCP server exposes 16 tools and 3 resources, so any MCP-compatible agent can read, write, search, and query your knowledge base without custom integration code.
 
 ### Can agents use KiwiFS without a running server?
 

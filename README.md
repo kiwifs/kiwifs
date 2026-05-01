@@ -30,6 +30,12 @@ kiwifs init ./knowledge && kiwifs serve --root ./knowledge
 # Open http://localhost:3333
 ```
 
+**Or with Docker:**
+
+```bash
+docker run -p 3333:3333 -v ./knowledge:/data ameliaanhlam/kiwifs
+```
+
 ---
 
 ## The problem
@@ -163,7 +169,7 @@ kiwifs mcp --root ~/knowledge          # in-process, no server needed
 kiwifs mcp --remote http://host:3333   # proxy to a running KiwiFS server
 ```
 
-13 tools: `kiwi_read`, `kiwi_write`, `kiwi_search`, `kiwi_tree`, `kiwi_query_meta`, `kiwi_delete`, `kiwi_bulk_write`, `kiwi_rename`, `kiwi_query`, `kiwi_aggregate`, `kiwi_import`, `kiwi_export`, `kiwi_analytics`, `kiwi_memory_report`. Plus resources (`kiwi://schema`, `kiwi://file/{path}`, `kiwi://tree/{path}`).
+16 tools: `kiwi_read`, `kiwi_write`, `kiwi_search`, `kiwi_tree`, `kiwi_query_meta`, `kiwi_delete`, `kiwi_bulk_write`, `kiwi_rename`, `kiwi_query`, `kiwi_aggregate`, `kiwi_import`, `kiwi_export`, `kiwi_analytics`, `kiwi_memory_report`, `kiwi_view_refresh`, `kiwi_health_check`. Plus resources (`kiwi://schema`, `kiwi://file/{path}`, `kiwi://tree/{path}`).
 
 **Claude Desktop / Cursor:**
 ```json

@@ -33,23 +33,30 @@ go build -o kiwifs .
 
 ```
 kiwifs/
-├── cmd/              CLI commands (serve, init, reindex, mcp, mount, lint, backup, restore)
+├── cmd/              CLI commands (serve, init, reindex, mcp, mount, lint, backup, restore,
+│                       query, import, export, aggregate, view, memory, analytics, janitor)
 ├── internal/
 │   ├── api/          REST API handlers
 │   ├── bootstrap/    Dependency wiring
 │   ├── pipeline/     Write pipeline (git + index + SSE)
 │   ├── search/       grep + SQLite FTS5 + metadata index
 │   ├── storage/      Filesystem abstraction
-│   ├── vectorstore/  Vector search backends
+│   ├── vectorstore/  Vector search backends (sqlite-vec, Qdrant, pgvector, Pinecone, Weaviate, Milvus)
 │   ├── versioning/   Git, copy-on-write, noop
-│   ├── mcpserver/    MCP server (local + remote backends)
+│   ├── mcpserver/    MCP server (local + remote backends, 16 tools)
 │   ├── nfs/          NFS server
 │   ├── s3/           S3-compatible API (gofakes3)
 │   ├── webdav/       WebDAV server
 │   ├── fuse/         FUSE client
 │   ├── spaces/       Multi-space manager
 │   ├── backup/       Git remote sync
-│   └── ...
+│   ├── dataview/     DQL parser and query engine
+│   ├── importer/     Data import from 18 sources
+│   ├── exporter/     Export to JSONL/CSV
+│   ├── janitor/      Scheduled knowledge hygiene scans
+│   ├── memory/       Episodic vs semantic memory helpers
+│   ├── comments/     Inline comment annotations
+│   └── links/        Wiki link extraction and backlink index
 ├── pkg/kiwi/         Public Go library (embed KiwiFS in your app)
 ├── ui/               React + TypeScript + shadcn/ui
 └── main.go
