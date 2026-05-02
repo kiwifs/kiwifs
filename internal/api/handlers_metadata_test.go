@@ -107,3 +107,35 @@ func TestReadFile_MetadataOnly_WithIfNoneMatch(t *testing.T) {
 		t.Fatalf("expected 304 on metadata_only with matching etag, got %d", rec.Code)
 	}
 }
+
+func TestReadFile_MetadataOnly_NestedYAML(t *testing.T) {
+	s := buildTestServer(t)
+	content := "---\ntitle: \"Test\"\nderived-from:\n  - type: ingest\n    id: test-123\n    date: \"2026-01-01T00:00:00Z\"\n    actor: agent\n---\n# Test\n\nBody.\n"
+	mustPutFile(t, s, "nested.md", content)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/kiwi/file?path=nested.md&metadata_only=true", nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET metadata_only with nested YAML: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var fm map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &fm); err != nil {
+		t.Fatalf("unmarshal nested YAML metadata: %v (body=%s)", err, rec.Body.String())
+	}
+	if fm["title"] != "Test" {
+		t.Fatalf("title = %v, want Test", fm["title"])
+	}
+	df, ok := fm["derived-from"].([]any)
+	if !ok || len(df) == 0 {
+		t.Fatalf("derived-from missing or wrong type: %v (%T)", fm["derived-from"], fm["derived-from"])
+	}
+	entry, ok := df[0].(map[string]any)
+	if !ok {
+		t.Fatalf("derived-from[0] should be map[string]any, got %T", df[0])
+	}
+	if entry["id"] != "test-123" {
+		t.Fatalf("derived-from[0].id = %v, want test-123", entry["id"])
+	}
+}

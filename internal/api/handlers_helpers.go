@@ -80,7 +80,37 @@ func extractFrontmatter(content []byte) map[string]any {
 	if err != nil || fm == nil {
 		return map[string]any{}
 	}
-	return fm
+	return sanitizeMapForJSON(fm)
+}
+
+// sanitizeMapForJSON recursively converts map[interface{}]interface{} (produced
+// by yaml.v2 / goldmark-meta) into map[string]any so encoding/json can handle it.
+func sanitizeMapForJSON(m map[string]any) map[string]any {
+	for k, v := range m {
+		m[k] = sanitizeValueForJSON(v)
+	}
+	return m
+}
+
+func sanitizeValueForJSON(v any) any {
+	switch val := v.(type) {
+	case map[interface{}]interface{}:
+		clean := make(map[string]any, len(val))
+		for mk, mv := range val {
+			key, _ := mk.(string)
+			clean[key] = sanitizeValueForJSON(mv)
+		}
+		return clean
+	case map[string]interface{}:
+		return sanitizeMapForJSON(val)
+	case []interface{}:
+		for i, item := range val {
+			val[i] = sanitizeValueForJSON(item)
+		}
+		return val
+	default:
+		return v
+	}
 }
 
 func buildSearchEntries(results []search.Result, publicURL string) []searchResultEntry {
