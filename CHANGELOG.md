@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/kiwifs/kiwifs/compare/v0.4.0...v0.4.1) (2026-05-02)
+
+
+### Bug Fixes
+
+* sanitize yaml.v2 map types for JSON serialization in metadata_only ([fc5cb5a](https://github.com/kiwifs/kiwifs/commit/fc5cb5a3d143199bb9680ecded0bb8b0e3997cbf))
+
 ## [0.4.0](https://github.com/kiwifs/kiwifs/compare/v0.3.0...v0.4.0) (2026-05-02)
 
 
