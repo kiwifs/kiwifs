@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.4.0)'
+        required: true
 
 permissions:
   contents: write
@@ -58,7 +63,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${{ inputs.tag || github.ref_name }}
           OUTPUT="kiwifs-${{ matrix.os }}-${{ matrix.arch }}"
           if [ "${{ matrix.os }}" = "windows" ]; then
             OUTPUT="${OUTPUT}.exe"

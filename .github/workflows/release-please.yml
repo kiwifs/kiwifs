@@ -8,11 +8,205 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  statuses: write
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           release-type: go
+
+  # ── Phase A: CI on the release-please PR ──────────────────────────
+  # GITHUB_TOKEN pushes don't trigger pull_request events, so ci.yml
+  # never runs on the release PR. We run CI here and report a commit
+  # status named "test" on the PR head so branch protection passes.
+  release-pr-ci:
+    needs: release-please
+    if: ${{ !needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find open release PR
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${context.repo.owner}:release-please--branches--main`,
+            });
+            if (prs.length === 0) {
+              core.setOutput('found', 'false');
+              return;
+            }
+            core.setOutput('found', 'true');
+            core.setOutput('sha', prs[0].head.sha);
+
+      - uses: actions/checkout@v4
+        if: steps.pr.outputs.found == 'true'
+        with:
+          ref: release-please--branches--main
+
+      - uses: actions/setup-node@v4
+        if: steps.pr.outputs.found == 'true'
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build frontend
+        if: steps.pr.outputs.found == 'true'
+        run: npm ci && npm run build
+        working-directory: ui
+
+      - uses: actions/setup-go@v5
+        if: steps.pr.outputs.found == 'true'
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        id: test
+        if: steps.pr.outputs.found == 'true'
+        run: |
+          go mod download
+          go vet ./...
+          go test ./... -race -count=1
+          go build -o /tmp/kiwifs .
+
+      - name: Report CI status on PR
+        if: always() && steps.pr.outputs.found == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const success = '${{ steps.test.outcome }}' === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ steps.pr.outputs.sha }}',
+              state: success ? 'success' : 'failure',
+              context: 'test',
+              description: 'Release PR CI',
+              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+  # ── Phase B: Build release binaries ───────────────────────────────
+  # When the release PR is merged, release-please creates the tag and
+  # GitHub Release. GITHUB_TOKEN tag pushes don't trigger release.yml,
+  # so we build binaries here and attach them to the release.
+  build:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          - os: darwin
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build UI
+        run: |
+          cd ui
+          npm install
+          npm run build
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          VERSION=${{ needs.release-please.outputs.tag_name }}
+          OUTPUT="kiwifs-${{ matrix.os }}-${{ matrix.arch }}"
+          go build -ldflags="-s -w -X main.version=$VERSION" -o "$OUTPUT" .
+          tar -czf "${OUTPUT}.tar.gz" "$OUTPUT"
+          sha256sum "${OUTPUT}.tar.gz" > "${OUTPUT}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kiwifs-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            kiwifs-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+            kiwifs-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sha256
+
+  upload-release:
+    needs: [release-please, build]
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach binaries to release
+        run: |
+          mkdir -p release
+          find artifacts -type f -name "*.tar.gz*" -exec cp {} release/ \;
+          ls -lh release/
+          gh release upload ${{ needs.release-please.outputs.tag_name }} release/* --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  docker:
+    needs: [release-please, build]
+    if: ${{ needs.release-please.outputs.release_created && vars.ENABLE_DOCKER_PUSH == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract version
+        id: version
+        run: |
+          TAG=${{ needs.release-please.outputs.tag_name }}
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/kiwifs:${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKER_USERNAME }}/kiwifs:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
