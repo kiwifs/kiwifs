@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -184,6 +185,24 @@ strategy = "none"
 
 	if s == nil {
 		t.Fatal("expected non-nil MCPServer")
+	}
+}
+
+func TestHTTPHandlerHealth(t *testing.T) {
+	s, backend, err := New(Options{Root: t.TempDir()})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer backend.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	newHTTPHandler(s, time.Now()).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("health status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), `"transport":"http"`) {
+		t.Fatalf("health body = %q, want transport http", rec.Body.String())
 	}
 }
 
