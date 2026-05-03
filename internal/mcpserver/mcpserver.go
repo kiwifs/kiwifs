@@ -82,8 +82,12 @@ func tracingMiddleware(em tracing.Emitter) server.ToolHandlerMiddleware {
 			if rec != nil {
 				em.Emit(*rec)
 			}
+			tid, tdur := "", ""
+			if rec != nil {
+				tid, tdur = rec.ID, rec.Duration
+			}
 			stderr.Printf("tool=%s trace=%s duration=%s error=%v",
-				req.Params.Name, rec.ID, rec.Duration, isErr)
+				req.Params.Name, tid, tdur, isErr)
 
 			return result, err
 		}
