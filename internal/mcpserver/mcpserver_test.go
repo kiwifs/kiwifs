@@ -232,12 +232,124 @@ func TestHTTPHandlerHealth(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
-	newHTTPHandler(s, time.Now()).ServeHTTP(rec, req)
+	newHTTPHandler(s, time.Now(), "").ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("health status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	if !strings.Contains(rec.Body.String(), `"transport":"http"`) {
 		t.Fatalf("health body = %q, want transport http", rec.Body.String())
+	}
+}
+
+func TestHTTPHandlerHealthBypassesBearerAuth(t *testing.T) {
+	s, backend, err := New(Options{Root: t.TempDir()})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer backend.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	newHTTPHandler(s, time.Now(), "secret").ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("health status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestBearerAuth(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	t.Run("disabled without token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		rec := httptest.NewRecorder()
+		bearerAuth("", next).ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+		}
+	})
+
+	t.Run("rejects missing token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		rec := httptest.NewRecorder()
+		bearerAuth("secret", next).ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("rejects wrong token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		req.Header.Set("Authorization", "Bearer wrong")
+		rec := httptest.NewRecorder()
+		bearerAuth("secret", next).ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("accepts matching bearer token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		req.Header.Set("Authorization", "Bearer secret")
+		rec := httptest.NewRecorder()
+		bearerAuth("secret", next).ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+		}
+	})
+}
+
+func TestHTTPAuthTokenFromRootConfig(t *testing.T) {
+	tmp := t.TempDir()
+	kiwiDir := filepath.Join(tmp, ".kiwi")
+	if err := os.MkdirAll(kiwiDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KIWI_MCP_TEST_KEY", "secret")
+	if err := os.WriteFile(filepath.Join(kiwiDir, "config.toml"), []byte(`
+[auth]
+type = "apikey"
+api_key = "${KIWI_MCP_TEST_KEY}"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := httpAuthToken(Options{Root: tmp})
+	if err != nil {
+		t.Fatalf("httpAuthToken: %v", err)
+	}
+	if got != "secret" {
+		t.Fatalf("token = %q, want %q", got, "secret")
+	}
+}
+
+func TestHTTPAuthTokenIgnoresMissingOrUnsupportedConfig(t *testing.T) {
+	got, err := httpAuthToken(Options{Root: t.TempDir()})
+	if err != nil {
+		t.Fatalf("httpAuthToken missing config: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("token = %q, want empty", got)
+	}
+
+	tmp := t.TempDir()
+	kiwiDir := filepath.Join(tmp, ".kiwi")
+	if err := os.MkdirAll(kiwiDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kiwiDir, "config.toml"), []byte(`
+[auth]
+type = "none"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err = httpAuthToken(Options{Root: tmp})
+	if err != nil {
+		t.Fatalf("httpAuthToken unsupported config: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("token = %q, want empty", got)
 	}
 }
 

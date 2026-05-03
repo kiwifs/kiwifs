@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1445,19 +1446,46 @@ func Serve(opts Options) error {
 	}
 
 	if opts.HTTP {
-		return serveHTTP(s, opts.Port)
+		return serveHTTP(s, opts)
 	}
 
 	return server.ServeStdio(s)
 }
 
-func serveHTTP(s *server.MCPServer, port int) error {
-	addr := fmt.Sprintf(":%d", port)
-	stderr.Printf("serving MCP Streamable HTTP on http://localhost:%d/mcp", port)
-	return http.ListenAndServe(addr, newHTTPHandler(s, time.Now()))
+func serveHTTP(s *server.MCPServer, opts Options) error {
+	addr := fmt.Sprintf(":%d", opts.Port)
+	authToken, err := httpAuthToken(opts)
+	if err != nil {
+		return err
+	}
+	stderr.Printf("serving MCP Streamable HTTP on http://localhost:%d/mcp", opts.Port)
+	return http.ListenAndServe(addr, newHTTPHandler(s, time.Now(), authToken))
 }
 
-func newHTTPHandler(s *server.MCPServer, started time.Time) http.Handler {
+func httpAuthToken(opts Options) (string, error) {
+	if opts.Root == "" {
+		return "", nil
+	}
+
+	cfgPath := filepath.Join(opts.Root, ".kiwi", "config.toml")
+	if _, err := os.Stat(cfgPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	cfg, err := config.Load(opts.Root)
+	if err != nil {
+		return "", fmt.Errorf("load MCP HTTP auth config: %w", err)
+	}
+	if cfg.Auth.Type == "apikey" && cfg.Auth.APIKey != "" {
+		return cfg.Auth.APIKey, nil
+	}
+	return "", nil
+}
+
+func newHTTPHandler(s *server.MCPServer, started time.Time, authToken string) http.Handler {
 	mcpHandler := server.NewStreamableHTTPServer(
 		s,
 		server.WithEndpointPath("/mcp"),
@@ -1465,7 +1493,7 @@ func newHTTPHandler(s *server.MCPServer, started time.Time) http.Handler {
 	)
 
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", mcpHandler)
+	mux.Handle("/mcp", bearerAuth(authToken, mcpHandler))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -1477,4 +1505,19 @@ func newHTTPHandler(s *server.MCPServer, started time.Time) http.Handler {
 	})
 
 	return mux
+}
+
+func bearerAuth(token string, next http.Handler) http.Handler {
+	if token == "" {
+		return next
+	}
+	expected := []byte("Bearer " + token)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := []byte(r.Header.Get("Authorization"))
+		if subtle.ConstantTimeCompare(got, expected) != 1 {
+			http.Error(w, "invalid API key", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
