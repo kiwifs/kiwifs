@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0](https://github.com/kiwifs/kiwifs/compare/v0.5.1...v0.6.0) (2026-05-08)
+
+
+### Features
+
+* **ui:** add [[wiki-link autocomplete to source editor ([#44](https://github.com/kiwifs/kiwifs/issues/44)) ([f8a68f3](https://github.com/kiwifs/kiwifs/commit/f8a68f37082c20c6be450ce0eb31e39f0b3bdd76))
+* **ui:** make Markdown source editing the default ([0c83832](https://github.com/kiwifs/kiwifs/commit/0c83832741d297513b4990984b90fc20469b9e2c))
+* **ui:** make Markdown source editing the default ([c855fc5](https://github.com/kiwifs/kiwifs/commit/c855fc5c3a404a8c83a84e8bce0907b1871bd487))
+
+
+### Bug Fixes
+
+* allow agents to read/write .kiwi/rules.md and playbook.md ([#41](https://github.com/kiwifs/kiwifs/issues/41)) ([4b01988](https://github.com/kiwifs/kiwifs/commit/4b019889535cff99666e2caefeb091f96da7d6c5))
+* **ui:** diversify graph community colors ([5506002](https://github.com/kiwifs/kiwifs/commit/5506002553f834a4c2b447cf8f5f77f5b452acf5))
+* **ui:** improve graph label contrast ([6666806](https://github.com/kiwifs/kiwifs/commit/66668066ef750885d736d24a33686e087aea6fb3))
+* **ui:** preserve graph colors while hovering ([0de79fa](https://github.com/kiwifs/kiwifs/commit/0de79fa5169569837e2ceb0ed09ebccb5bb97008))
+* **ui:** render knowledge graph node borders ([f174c76](https://github.com/kiwifs/kiwifs/commit/f174c76e847ea52b0fe1e353dbc8d2111adf8c4e))
+* **ui:** stabilize large knowledge graph rendering ([8309365](https://github.com/kiwifs/kiwifs/commit/830936571ea7c24462fe315d69728cad35710ba8))
+
 ## [0.5.0](https://github.com/kiwifs/kiwifs/compare/v0.4.1...v0.5.0) (2026-05-06)
 
 
