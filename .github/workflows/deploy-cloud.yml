@@ -1,10 +1,12 @@
-name: Deploy to Cloud
+name: Deploy to Cloud (manual)
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag or branch to build from (e.g. v0.6.0, main)'
+        required: false
+        default: 'main'
 
 jobs:
   deploy:
@@ -20,7 +22,7 @@ jobs:
           command_timeout: 15m
           script: |
             set -e
-            TAG="${GITHUB_REF_NAME:-latest}"
+            TAG="${{ inputs.tag }}"
 
             cd /tmp
             rm -rf kiwifs-build

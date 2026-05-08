@@ -210,3 +210,33 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/kiwifs:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ── Phase D: Deploy to EC2 ──────────────────────────────────────────
+  # After the Docker image is pushed, SSH into the EC2 instance and
+  # pull the new image. This replaces the separate deploy-cloud.yml
+  # workflow which couldn't be triggered by GITHUB_TOKEN tag pushes.
+  ec2-deploy:
+    needs: [release-please, docker]
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.KIWIFS_EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.KIWIFS_EC2_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -e
+            IMAGE="${{ secrets.DOCKER_USERNAME }}/kiwifs:latest"
+
+            docker pull "$IMAGE"
+
+            cd /opt/kiwifs
+            # Update compose to use the Docker Hub image instead of local build
+            sed -i "s|image: kiwifs:latest|image: $IMAGE|" docker-compose.yml 2>/dev/null || true
+            docker compose up -d kiwifs
+            docker image prune -f
+
+            echo "Deployed $IMAGE (${{ needs.release-please.outputs.tag_name }})"
