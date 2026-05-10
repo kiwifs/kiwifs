@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -63,6 +65,7 @@ type Stack struct {
 	WebhookDispatcher   *webhooks.Dispatcher
 	ClaimStore          *claims.Store
 	DraftMgr            *draft.Manager
+	AuditLogger         *api.AuditLogger // B.3
 	claimCancel         context.CancelFunc
 }
 
@@ -319,6 +322,18 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 		}
 	}
 
+	// B.3 — Audit logger: create when [audit] enabled = true.
+	var auditLogger *api.AuditLogger
+	if cfg.Audit.Enabled {
+		al, aerr := api.NewAuditLogger(root)
+		if aerr != nil {
+			log.Printf("%saudit logging disabled (%v)", prefix, aerr)
+		} else {
+			auditLogger = al
+			log.Printf("%saudit logging enabled", prefix)
+		}
+	}
+
 	var serverOpts []api.ServerOption
 	if webhookStore != nil {
 		serverOpts = append(serverOpts, api.WithWebhookStore(webhookStore))
@@ -332,6 +347,44 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 	if draftMgr != nil {
 		serverOpts = append(serverOpts, api.WithDraftManager(draftMgr))
 	}
+	if auditLogger != nil {
+		serverOpts = append(serverOpts, api.WithAuditLogger(auditLogger))
+	}
+
+	// B.5 — Auto-register config-driven [[webhook_entries]] at startup.
+	// Each entry is idempotent: if a webhook with the same URL already
+	// exists in the store, we skip it to avoid duplicates on restart.
+	if webhookStore != nil && len(cfg.WebhookEntries) > 0 {
+		for _, we := range cfg.WebhookEntries {
+			if we.URL == "" || len(we.Events) == 0 {
+				continue
+			}
+			existing, ferr := webhookStore.FindByURL(context.Background(), we.URL)
+			if ferr != nil {
+				log.Printf("%swebhook entry: lookup error for %s: %v", prefix, we.URL, ferr)
+				continue
+			}
+			if existing != nil {
+				// Already registered — skip.
+				continue
+			}
+			glob := we.PathGlob
+			if glob == "" {
+				glob = "**"
+			}
+			secret := we.Secret
+			if secret == "" {
+				secret = "whsec_" + generateBootstrapSecret()
+			}
+			_, rerr := webhookStore.RegisterWithSecret(context.Background(), we.URL, glob, secret, we.Events...)
+			if rerr != nil {
+				log.Printf("%swebhook entry: register %s failed: %v", prefix, we.URL, rerr)
+			} else {
+				log.Printf("%swebhook entry: auto-registered %s for events %v", prefix, we.URL, we.Events)
+			}
+		}
+	}
+
 	server := api.NewServer(cfg, pipe, vectors, cstore, shares, linkResolver, em, serverOpts...)
 
 	var janitorSched *janitor.Scheduler
@@ -369,6 +422,7 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 		WebhookDispatcher: webhookDispatcher,
 		ClaimStore:        claimStore,
 		DraftMgr:          draftMgr,
+		AuditLogger:       auditLogger,
 		claimCancel:       claimCancel,
 	}
 
@@ -401,6 +455,9 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 
 func (s *Stack) Close() error {
 	var firstErr error
+	if s.AuditLogger != nil {
+		s.AuditLogger.Close()
+	}
 	if s.DraftMgr != nil {
 		s.DraftMgr.Cleanup()
 	}
@@ -550,4 +607,12 @@ func logPrefix(name string) string {
 		return ""
 	}
 	return "[" + name + "] "
+}
+
+// generateBootstrapSecret creates a random hex secret for config-driven
+// webhooks that don't specify their own signing secret.
+func generateBootstrapSecret() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }

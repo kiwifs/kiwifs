@@ -161,6 +161,59 @@ func (s *Store) GetSecret(ctx context.Context, id string) (string, error) {
 	return secret, err
 }
 
+// RegisterWithSecret registers a webhook with a caller-provided secret.
+// Used by bootstrap to auto-register config-driven [[webhook_entries]].
+func (s *Store) RegisterWithSecret(ctx context.Context, url, pathGlob, secret string, eventTypes ...string) (*Webhook, error) {
+	id := generateID()
+
+	wh := &Webhook{
+		ID:         id,
+		URL:        url,
+		PathGlob:   pathGlob,
+		Secret:     secret,
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+		Enabled:    true,
+		EventTypes: eventTypes,
+	}
+
+	var etJSON *string
+	if len(eventTypes) > 0 {
+		data, _ := json.Marshal(eventTypes)
+		s := string(data)
+		etJSON = &s
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO webhooks(id, url, path_glob, secret, created_at, enabled, event_types) VALUES (?, ?, ?, ?, ?, 1, ?)`,
+		wh.ID, wh.URL, wh.PathGlob, wh.Secret, wh.CreatedAt, etJSON,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("register webhook: %w", err)
+	}
+	return wh, nil
+}
+
+// FindByURL checks if a webhook with the given URL already exists.
+func (s *Store) FindByURL(ctx context.Context, url string) (*Webhook, error) {
+	var wh Webhook
+	var enabled int
+	var etJSON sql.NullString
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, url, path_glob, created_at, enabled, event_types FROM webhooks WHERE url = ?`, url,
+	).Scan(&wh.ID, &wh.URL, &wh.PathGlob, &wh.CreatedAt, &enabled, &etJSON)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	wh.Enabled = enabled == 1
+	if etJSON.Valid && etJSON.String != "" {
+		_ = json.Unmarshal([]byte(etJSON.String), &wh.EventTypes)
+	}
+	return &wh, nil
+}
+
 func generateID() string {
 	b := make([]byte, 8)
 	rand.Read(b)

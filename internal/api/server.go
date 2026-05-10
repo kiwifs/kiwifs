@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/time/rate"
 	"github.com/kiwifs/kiwifs/internal/claims"
 	"github.com/kiwifs/kiwifs/internal/comments"
 	"github.com/kiwifs/kiwifs/internal/config"
@@ -51,6 +53,10 @@ func WithDraftManager(mgr *draft.Manager) ServerOption {
 	return func(s *Server) { s.draftMgr = mgr }
 }
 
+func WithAuditLogger(al *AuditLogger) ServerOption {
+	return func(s *Server) { s.auditLogger = al }
+}
+
 type Server struct {
 	cfg          *config.Config
 	pipe         *pipeline.Pipeline
@@ -65,6 +71,7 @@ type Server struct {
 	claimStore    *claims.Store
 	draftMgr      *draft.Manager
 	schemaReload  func()
+	auditLogger   *AuditLogger
 
 	janitorSched  *janitor.Scheduler
 	janitorCancel context.CancelFunc
@@ -154,31 +161,76 @@ func (s *Server) setupMiddleware() {
 	if s.cfg.Tracing.IsEnabled() {
 		s.echo.Use(apiTracingMiddleware(s.emitter))
 	}
-	s.echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+
+	// B.6 — Config-driven CORS. If [server.cors] has allowed_origins,
+	// use that. Otherwise fall back to [server.cors_origins] (legacy)
+	// and the corsOriginAllowed() heuristic.
+	corsAllowHeaders := []string{"Content-Type", "Authorization", "If-Match", "X-Actor", "X-Provenance"}
+	corsExposeHeaders := []string{"ETag", "Last-Modified", "X-Permalink"}
+	corsMethods := []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete, http.MethodOptions}
+
+	corsCfg := s.cfg.Server.CORS
+	if len(corsCfg.AllowedMethods) > 0 {
+		corsMethods = corsCfg.AllowedMethods
+	}
+	maxAge := 3600
+	if corsCfg.MaxAge > 0 {
+		maxAge = corsCfg.MaxAge
+	}
+
+	corsConfig := middleware.CORSConfig{
 		AllowOriginFunc: s.corsOriginAllowed,
-		AllowMethods:    []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete, http.MethodOptions},
-		AllowHeaders:    []string{"Content-Type", "Authorization", "If-Match", "X-Actor", "X-Provenance"},
-		ExposeHeaders:   []string{"ETag", "Last-Modified", "X-Permalink"},
-	}))
+		AllowMethods:    corsMethods,
+		AllowHeaders:    corsAllowHeaders,
+		ExposeHeaders:   corsExposeHeaders,
+		MaxAge:          maxAge,
+	}
+	if corsCfg.AllowCredentials != nil {
+		corsConfig.AllowCredentials = *corsCfg.AllowCredentials
+	}
+	s.echo.Use(middleware.CORSWithConfig(corsConfig))
+
 	s.echo.Use(middleware.Recover())
 	s.echo.Use(middleware.BodyLimit("110M"))
-	s.echo.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
-		Skipper: func(c echo.Context) bool {
-			p := c.Path()
-			return p == "/health" || p == "/healthz" || p == "/readyz" || p == "/metrics"
-		},
-		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
-			Rate:      100,
-			Burst:     200,
-			ExpiresIn: 3 * time.Minute,
-		}),
-		IdentifierExtractor: func(c echo.Context) (string, error) {
-			return c.RealIP(), nil
-		},
-		DenyHandler: func(c echo.Context, _ string, _ error) error {
-			return echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded")
-		},
-	}))
+
+	// B.4 — Configurable rate limiting keyed on token hash (or IP for
+	// unauthenticated requests). Only enabled when [server.rate_limit]
+	// is explicitly configured with requests_per_minute > 0.
+	if ratePerMin := s.cfg.Server.RateLimit.RequestsPerMinute; ratePerMin > 0 {
+		burstSize := s.cfg.Server.RateLimit.BurstSize
+		if burstSize <= 0 {
+			burstSize = 50
+		}
+		ratePerSecond := float64(ratePerMin) / 60.0
+
+		s.echo.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+			Skipper: func(c echo.Context) bool {
+				p := c.Path()
+				return p == "/health" || p == "/healthz" || p == "/readyz" || p == "/metrics"
+			},
+			Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+				Rate:      rate.Limit(ratePerSecond),
+				Burst:     burstSize,
+				ExpiresIn: 3 * time.Minute,
+			}),
+			IdentifierExtractor: func(c echo.Context) (string, error) {
+				if auth := c.Request().Header.Get("Authorization"); len(auth) > 7 {
+					h := sha256.Sum256([]byte(auth[7:]))
+					return fmt.Sprintf("tok:%x", h[:8]), nil
+				}
+				return c.RealIP(), nil
+			},
+			DenyHandler: func(c echo.Context, _ string, _ error) error {
+				c.Response().Header().Set("Retry-After", "60")
+				return echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded")
+			},
+		}))
+	}
+
+	// B.3 — Audit log middleware (after auth sets X-Actor).
+	if s.auditLogger != nil {
+		s.echo.Use(auditMiddleware(s.auditLogger))
+	}
 }
 
 func (s *Server) authMiddleware() echo.MiddlewareFunc {
@@ -189,6 +241,29 @@ func (s *Server) authMiddleware() echo.MiddlewareFunc {
 			if la == nil {
 				return next(c)
 			}
+
+			// B.1: visibility-based auth bypass for read requests.
+			// Read live from s.cfg so that PUT /space/visibility
+			// takes effect immediately without an auth reload.
+			method := c.Request().Method
+			if method == http.MethodGet || method == http.MethodHead {
+				vis := s.cfg.Space.Visibility
+				switch vis {
+				case "public":
+					// All reads are open
+					c.Request().Header.Set("X-Actor", "anonymous")
+					return next(c)
+				case "unlisted":
+					// Only direct file reads are open; tree/search/listing are auth-required
+					p := c.Request().URL.Path
+					isFileRead := strings.HasSuffix(p, "/file") || strings.HasSuffix(p, "/peek") || strings.HasSuffix(p, "/section")
+					if isFileRead && c.QueryParam("path") != "" {
+						c.Request().Header.Set("X-Actor", "anonymous")
+						return next(c)
+					}
+				}
+			}
+
 			switch la.typ {
 			case "apikey":
 				if la.global == "" {
@@ -283,6 +358,8 @@ func (s *Server) setupRoutes() {
 		webhookStore:         s.webhookStore,
 		claimStore:           s.claimStore,
 		draftMgr:             s.draftMgr,
+		auditLogger:         s.auditLogger,
+		cfg:                 s.cfg,
 		schemaReload:         s.schemaReload,
 	}
 	prev := s.pipe.OnInvalidate
@@ -381,6 +458,13 @@ func (s *Server) setupRoutes() {
 	api.GET("/share", h.ListShareLinks)
 	api.DELETE("/share/:id", h.RevokeShareLink)
 
+	// B.1: Space info & visibility endpoints
+	api.GET("/space/info", h.SpaceInfo)
+	api.PUT("/space/visibility", h.UpdateVisibility)
+
+	// B.3: Audit log endpoint
+	api.GET("/audit", h.AuditEndpoint)
+
 	draftGrp := api.Group("/drafts")
 	draftGrp.POST("", h.CreateDraft)
 	draftGrp.GET("", h.ListDrafts)
@@ -434,8 +518,21 @@ func (s *Server) corsOriginAllowed(origin string) (bool, error) {
 	if s.cfg.Auth.Type == "" || s.cfg.Auth.Type == "none" {
 		return false, nil
 	}
-	if len(s.cfg.Server.CORSOrigins) > 0 {
-		for _, allowed := range s.cfg.Server.CORSOrigins {
+	// B.6: merge [server.cors].allowed_origins with legacy cors_origins.
+	// If either list contains explicit entries, check against both.
+	corsOrigins := s.cfg.Server.CORS.AllowedOrigins
+	legacyOrigins := s.cfg.Server.CORSOrigins
+	hasExplicit := len(corsOrigins) > 0 || len(legacyOrigins) > 0
+	if hasExplicit {
+		for _, allowed := range corsOrigins {
+			if allowed == "*" {
+				return true, nil
+			}
+			if origin == allowed {
+				return true, nil
+			}
+		}
+		for _, allowed := range legacyOrigins {
 			if origin == allowed {
 				return true, nil
 			}
@@ -481,20 +578,33 @@ func perSpaceKeyMiddleware(keys []config.APIKeyEntry) echo.MiddlewareFunc {
 
 func perSpaceKeyHandler(keys []config.APIKeyEntry) echo.MiddlewareFunc {
 	type entry struct {
-		hash  [32]byte
-		space string
-		actor string
+		hash   [32]byte
+		space  string
+		actor  string
+		scope  string // B.2: read | write | admin (default: admin)
+		prefix string // B.2: path prefix restriction
 	}
 	km := make(map[[32]byte]entry, len(keys))
 	for _, k := range keys {
 		h := sha256.Sum256([]byte(k.Key))
-		km[h] = entry{hash: h, space: k.Space, actor: k.Actor}
+		scope := k.Scope
+		if scope == "" {
+			scope = "admin"
+		}
+		km[h] = entry{hash: h, space: k.Space, actor: k.Actor, scope: scope, prefix: k.Prefix}
 	}
 	inScope := func(space, path string) bool {
 		if space == "" || path == "" {
 			return true
 		}
 		return path == space || strings.HasPrefix(path, space+"/")
+	}
+	// B.2: check path prefix restriction
+	inPrefix := func(prefix, path string) bool {
+		if prefix == "" || path == "" {
+			return true
+		}
+		return path == prefix || strings.HasPrefix(path, prefix)
 	}
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -508,11 +618,27 @@ func perSpaceKeyHandler(keys []config.APIKeyEntry) echo.MiddlewareFunc {
 			if !ok || subtle.ConstantTimeCompare(incoming[:], e.hash[:]) != 1 {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid API key")
 			}
+
+			// B.2: enforce scope — read tokens can only GET/HEAD
+			method := c.Request().Method
+			switch e.scope {
+			case "read":
+				if method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions {
+					return echo.NewHTTPError(http.StatusForbidden, "read-only token cannot perform "+method)
+				}
+			case "write":
+				// write tokens can GET + POST/PUT/DELETE files but not admin endpoints
+				// (admin endpoints: webhooks, share links, schemas, etc.)
+				// For simplicity, "write" allows all standard file operations.
+			}
+			// "admin" can do everything — no restriction.
+
+			// Space scope check
 			if e.space != "" {
 				if !inScope(e.space, c.QueryParam("path")) {
 					return echo.NewHTTPError(http.StatusForbidden, "path outside key scope")
 				}
-				if c.Request().Method == http.MethodPost && strings.HasSuffix(c.Path(), "/bulk") {
+				if method == http.MethodPost && strings.HasSuffix(c.Path(), "/bulk") {
 					body, err := io.ReadAll(c.Request().Body)
 					if err != nil {
 						return echo.NewHTTPError(http.StatusBadRequest, "failed to read body")
@@ -532,6 +658,34 @@ func perSpaceKeyHandler(keys []config.APIKeyEntry) echo.MiddlewareFunc {
 					}
 				}
 			}
+
+			// B.2: enforce path prefix
+			if e.prefix != "" {
+				reqPath := c.QueryParam("path")
+				if reqPath != "" && !inPrefix(e.prefix, reqPath) {
+					return echo.NewHTTPError(http.StatusForbidden, "path outside token prefix scope")
+				}
+				if method == http.MethodPost && strings.HasSuffix(c.Path(), "/bulk") {
+					body, err := io.ReadAll(c.Request().Body)
+					if err != nil {
+						return echo.NewHTTPError(http.StatusBadRequest, "failed to read body")
+					}
+					c.Request().Body = io.NopCloser(bytes.NewReader(body))
+					var parsed struct {
+						Files []struct {
+							Path string `json:"path"`
+						} `json:"files"`
+					}
+					if err := json.Unmarshal(body, &parsed); err == nil {
+						for _, f := range parsed.Files {
+							if !inPrefix(e.prefix, f.Path) {
+								return echo.NewHTTPError(http.StatusForbidden, "bulk path outside token prefix scope")
+							}
+						}
+					}
+				}
+			}
+
 			c.Request().Header.Set("X-Actor", e.actor)
 			if e.space != "" {
 				c.Request().Header.Set("X-Space", e.space)

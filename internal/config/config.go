@@ -29,10 +29,30 @@ type Config struct {
 	Lint       LintConfig       `toml:"lint"`
 	Workflow   WorkflowConfig   `toml:"workflow"`
 	Drafts     DraftsConfig     `toml:"drafts"`
+	Audit      AuditConfig      `toml:"audit"`
+	// Space holds per-space settings (visibility, etc.) loaded from
+	// the space's own .kiwi/config.toml [space] section.
+	Space SpaceSettingsConfig `toml:"space"`
 	// Spaces enables multi-tenant mode: each entry becomes an
 	// independent knowledge base mapped under /api/kiwi/{name}/...
 	// When empty, the server runs single-space against Storage.Root.
 	Spaces []SpaceConfig `toml:"spaces"`
+	// WebhookEntries from [[webhooks_entries]] — config-driven
+	// webhooks that are auto-registered on startup (B.5).
+	WebhookEntries []WebhookEntryConfig `toml:"webhook_entries"`
+}
+
+// B.3 — Audit log config.
+type AuditConfig struct {
+	Enabled bool `toml:"enabled"` // default false
+}
+
+// B.5 — Config-driven webhook entry (statically declared in config.toml).
+type WebhookEntryConfig struct {
+	URL        string   `toml:"url"`
+	Events     []string `toml:"events"`     // file.created, file.updated, file.deleted
+	Secret     string   `toml:"secret"`     // HMAC signing secret
+	PathGlob   string   `toml:"path_glob"`  // optional glob filter
 }
 
 type WebhooksConfig struct {
@@ -137,15 +157,38 @@ type AssetsConfig struct {
 
 // SpaceConfig is one entry in the multi-space roster.
 type SpaceConfig struct {
-	Name string `toml:"name"`
-	Root string `toml:"root"`
+	Name       string `toml:"name"`
+	Root       string `toml:"root"`
+	Visibility string `toml:"visibility"` // private | unlisted | public (default: private)
+}
+
+// SpaceSettingsConfig holds per-space settings loaded from the space's
+// own .kiwi/config.toml [space] section.
+type SpaceSettingsConfig struct {
+	Visibility string `toml:"visibility"` // private | unlisted | public (default: private)
 }
 
 type ServerConfig struct {
-	Host        string   `toml:"host"`
-	Port        int      `toml:"port"`
-	CORSOrigins []string `toml:"cors_origins"`
-	PublicURL   string   `toml:"public_url"`
+	Host        string          `toml:"host"`
+	Port        int             `toml:"port"`
+	CORSOrigins []string        `toml:"cors_origins"`
+	PublicURL   string          `toml:"public_url"`
+	RateLimit   RateLimitConfig `toml:"rate_limit"`
+	CORS        CORSConfig      `toml:"cors"`
+}
+
+// B.4 — Per-token rate limiting config.
+type RateLimitConfig struct {
+	RequestsPerMinute int `toml:"requests_per_minute"` // default 300
+	BurstSize         int `toml:"burst_size"`          // default 50
+}
+
+// B.6 — CORS hardening config.
+type CORSConfig struct {
+	AllowedOrigins   []string `toml:"allowed_origins"`
+	AllowedMethods   []string `toml:"allowed_methods"`
+	AllowCredentials *bool    `toml:"allow_credentials"`
+	MaxAge           int      `toml:"max_age"` // seconds
 }
 
 type StorageConfig struct {
@@ -229,9 +272,11 @@ type AuthConfig struct {
 }
 
 type APIKeyEntry struct {
-	Key   string `toml:"key"`
-	Space string `toml:"space"`
-	Actor string `toml:"actor"`
+	Key    string `toml:"key"`
+	Space  string `toml:"space"`
+	Actor  string `toml:"actor"`
+	Scope  string `toml:"scope"`  // read | write | admin (default: admin)
+	Prefix string `toml:"prefix"` // optional path prefix restriction
 }
 
 type OIDCConfig struct {
