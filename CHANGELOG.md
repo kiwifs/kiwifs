@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/kiwifs/kiwifs/compare/v0.12.0...v0.13.0) (2026-05-12)
+
+
+### Features
+
+* **ui:** extend theme hooks and kiwiTheme export; tighten release workflow ([e9ccc0a](https://github.com/kiwifs/kiwifs/commit/e9ccc0aecb932ae2b949a10078971f2308aa7f09))
+
+
+### Bug Fixes
+
+* **ui:** use double-cast for window-to-Record assertions ([#59](https://github.com/kiwifs/kiwifs/issues/59)) ([4b4b82b](https://github.com/kiwifs/kiwifs/commit/4b4b82b0432b4f51a6dc282f8a40e2573ce15b5c))
+
 ## [0.12.0](https://github.com/kiwifs/kiwifs/compare/v0.11.0...v0.12.0) (2026-05-12)
 
 
