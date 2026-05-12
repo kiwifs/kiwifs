@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0](https://github.com/kiwifs/kiwifs/compare/v0.11.0...v0.12.0) (2026-05-12)
+
+
+### Features
+
+* **import:** connection browse API, KiwiImportWizard + KiwiData, handler wiring ([f0477ef](https://github.com/kiwifs/kiwifs/commit/f0477effd7dd8aedffcef8ec3ca08db2dd268385))
+
+
+### Bug Fixes
+
+* **ui:** cast credentials check to boolean for ReactNode compat ([#57](https://github.com/kiwifs/kiwifs/issues/57)) ([0474c41](https://github.com/kiwifs/kiwifs/commit/0474c41e7ee8677a1b261ade647ba9a3f340aa80))
+
 ## [0.10.0](https://github.com/kiwifs/kiwifs/compare/v0.9.0...v0.10.0) (2026-05-10)
 
 
