@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.0](https://github.com/kiwifs/kiwifs/compare/v0.13.0...v0.14.0) (2026-05-12)
+
+
+### Features
+
+* knowledge features v2 — graph analytics, web clipper, bases, canvas, timeline, kanban ([#61](https://github.com/kiwifs/kiwifs/issues/61)) ([d958d64](https://github.com/kiwifs/kiwifs/commit/d958d649f8a8c58ea338c7d0a6b82e0c3fd76586))
+
+
+### Bug Fixes
+
+* **ui:** hide SpaceSelector when embedded in cloud shell ([15e7f11](https://github.com/kiwifs/kiwifs/commit/15e7f1195ec5172c1ab4067ac922ac383635cb5c))
+
 ## [0.13.0](https://github.com/kiwifs/kiwifs/compare/v0.12.0...v0.13.0) (2026-05-12)
 
 
