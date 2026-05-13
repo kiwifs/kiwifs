@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/kiwifs/kiwifs/compare/v0.14.0...v0.14.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* canvas routing collision + MCP parity for canvas/views/timeline ([#62](https://github.com/kiwifs/kiwifs/issues/62)) ([788b3a6](https://github.com/kiwifs/kiwifs/commit/788b3a6776200bc293f1b401bef2a1f142a0b3a3))
+
 ## [0.14.0](https://github.com/kiwifs/kiwifs/compare/v0.13.0...v0.14.0) (2026-05-12)
 
 
