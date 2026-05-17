@@ -696,17 +696,14 @@ const handleSpaceSwitch = useCallback(() => {
 function WelcomeScreen({
   onNewPage,
   onSearch,
-  onGraph,
   onData,
-  onBases,
-  onTimeline,
 }: {
   onNewPage: () => void;
   onSearch: () => void;
-  onGraph: () => void;
+  onGraph?: () => void;
   onData: () => void;
-  onBases: () => void;
-  onTimeline: () => void;
+  onBases?: () => void;
+  onTimeline?: () => void;
 }) {
   return (
     <div className="grid place-items-center h-full text-muted-foreground">

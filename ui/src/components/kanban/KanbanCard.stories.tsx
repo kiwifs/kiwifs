@@ -28,7 +28,6 @@ type Story = StoryObj<typeof KanbanCard>;
 const basePage: WorkflowPage = {
   path: "page-1",
   title: "Implement search filtering",
-  status: "in-progress",
 };
 
 export const Simple: Story = {

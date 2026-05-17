@@ -9,14 +9,12 @@ const mockPages: WorkflowPage[] = [
   {
     path: "task-1",
     title: "Setup CI/CD pipeline",
-    status: "todo",
     tags: ["devops"],
     priority: "high",
   },
   {
     path: "task-2",
     title: "Write unit tests for auth module",
-    status: "todo",
     tags: ["testing"],
     author: "Alice",
     modified: "2026-05-14T10:00:00Z",
@@ -24,7 +22,6 @@ const mockPages: WorkflowPage[] = [
   {
     path: "task-3",
     title: "Design new landing page",
-    status: "todo",
     tags: ["design", "marketing"],
     due: "2026-05-22",
   },
