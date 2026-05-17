@@ -40,6 +40,7 @@
 
 import React, { useMemo, useState, useCallback } from "react";
 import { HexColorPicker } from "react-colorful";
+import yaml from "js-yaml";
 import {
   Select,
   SelectContent,
@@ -276,6 +277,8 @@ export function KiwiPlayground({ source }: { source: string }) {
       for (const [k, v] of Object.entries(values)) {
         text = text.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), String(v));
       }
+    } else if (format === "yaml") {
+      text = yaml.dump(values, { indent: 2, lineWidth: 120 });
     } else {
       text = JSON.stringify(values, null, 2);
     }

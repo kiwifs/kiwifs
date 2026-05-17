@@ -23,6 +23,9 @@ import { PageActions } from "./PageActions";
 import { ShikiCode } from "./ShikiCode";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { KiwiChart } from "./KiwiChart";
+import { KiwiApp } from "./KiwiApp";
+import { KiwiDiff } from "./KiwiDiff";
+import { KiwiKanbanBlock } from "./KiwiKanbanBlock";
 import { KiwiColor } from "./KiwiColor";
 import { KiwiProgress } from "./KiwiProgress";
 import { KiwiPlayground } from "./KiwiPlayground";
@@ -740,11 +743,20 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onToggleSt
                       if (lang === "kiwi-playground") {
                         return <KiwiPlayground source={raw} />;
                       }
+                      if (lang === "kiwi-kanban") {
+                        return <KiwiKanbanBlock source={raw} />;
+                      }
                       if (!lang || !raw.includes("\n")) {
                         return <code className={className} {...rest}>{children}</code>;
                       }
                       // Extract meta string from the code fence (node.data.meta)
                       const meta: string = node?.data?.meta || node?.properties?.metastring || "";
+                      if (lang === "kiwi-app") {
+                        return <KiwiApp source={raw} meta={meta} />;
+                      }
+                      if (lang === "kiwi-diff") {
+                        return <KiwiDiff source={raw} meta={meta} />;
+                      }
                       const titleMatch = meta.match(/title="([^"]+)"/);
                       const title = titleMatch ? titleMatch[1] : undefined;
                       const hlMatch = meta.match(/\{([\d,\s-]+)\}/);
