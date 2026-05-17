@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.3](https://github.com/kiwifs/kiwifs/compare/v0.17.2...v0.17.3) (2026-05-17)
+
+
+### Features
+
+* **ui:** add kiwi-app, kiwi-diff, kiwi-kanban blocks and fix playground YAML export ([#86](https://github.com/kiwifs/kiwifs/issues/86)) ([cd7d545](https://github.com/kiwifs/kiwifs/commit/cd7d5453d685aef5f4b72991930410959f47b7f5))
+
 ## [0.17.2](https://github.com/kiwifs/kiwifs/compare/v0.17.1...v0.17.2) (2026-05-17)
 
 
