@@ -128,10 +128,75 @@ function createMockFetch(overrides: MockOverrides = {}) {
         });
       }
 
+      if (url.includes("/query?") || url.endsWith("/query")) {
+        // Check if it's a CALENDAR query
+        const qMatch = url.match(/[?&]q=([^&]+)/);
+        const dql = qMatch ? decodeURIComponent(qMatch[1]) : "";
+        if (/^\s*CALENDAR\b/i.test(dql)) {
+          const today = new Date();
+          const yyyy = today.getFullYear();
+          const mm = String(today.getMonth() + 1).padStart(2, "0");
+          return jsonResponse({
+            columns: ["_path", "date"],
+            rows: [
+              { _path: "pages/frontmatter.md", date: `${yyyy}-${mm}-03` },
+              { _path: "pages/wikilinks.md", date: `${yyyy}-${mm}-07` },
+              { _path: "pages/use-sqlite-for-search.md", date: `${yyyy}-${mm}-12` },
+              { _path: "episodes/example-episode.md", date: `${yyyy}-${mm}-15` },
+              { _path: "welcome.md", date: `${yyyy}-${mm}-15` },
+            ],
+            total: 5,
+            has_more: false,
+          });
+        }
+        return jsonResponse({
+          columns: ["_path", "title", "status", "priority"],
+          rows: [
+            { _path: "pages/frontmatter.md", title: "Frontmatter Guide", status: "published", priority: "high" },
+            { _path: "pages/wikilinks.md", title: "Wiki Links", status: "published", priority: "medium" },
+            { _path: "pages/use-sqlite-for-search.md", title: "SQLite for Search", status: "draft", priority: "high" },
+            { _path: "episodes/example-episode.md", title: "Example Episode", status: "published", priority: "low" },
+          ],
+          total: 4,
+          has_more: false,
+        });
+      }
+
       if (url.includes("/graph")) {
         return jsonResponse({
           nodes: mockGraphNodes,
           edges: mockGraphEdges,
+        });
+      }
+
+      if (url.includes("/meta")) {
+        return jsonResponse({
+          count: 4,
+          limit: 1000,
+          offset: 0,
+          results: [
+            { path: "pages/frontmatter.md", frontmatter: { title: "Frontmatter Guide", tags: ["documentation", "guide", "metadata"], status: "published" } },
+            { path: "pages/wikilinks.md", frontmatter: { title: "Wiki Links", tags: ["documentation", "links"], status: "published" } },
+            { path: "pages/use-sqlite-for-search.md", frontmatter: { title: "SQLite for Search", tags: ["architecture", "search"], status: "draft" } },
+            { path: "episodes/example-episode.md", frontmatter: { title: "Example Episode", tags: ["episode", "guide"], status: "published" } },
+          ],
+        });
+      }
+
+      if (url.includes("/timeline/actors")) {
+        return jsonResponse({ actors: ["alice", "bob", "charlie"] });
+      }
+
+      if (url.includes("/timeline")) {
+        return jsonResponse({
+          events: [
+            { type: "write", path: "pages/frontmatter.md", title: "Frontmatter Guide", actor: "alice", timestamp: new Date(Date.now() - 3600000).toISOString(), message: "Update frontmatter documentation" },
+            { type: "write", path: "pages/wikilinks.md", title: "Wiki Links", actor: "bob", timestamp: new Date(Date.now() - 7200000).toISOString(), message: "Add cross-references section" },
+            { type: "delete", path: "old/deprecated.md", title: "Deprecated Page", actor: "charlie", timestamp: new Date(Date.now() - 86400000).toISOString(), message: "Remove outdated content" },
+            { type: "write", path: "pages/use-sqlite-for-search.md", title: "SQLite for Search", actor: "alice", timestamp: new Date(Date.now() - 86400000 * 2).toISOString(), message: "Initial draft" },
+            { type: "write", path: "episodes/example-episode.md", title: "Example Episode", actor: "bob", timestamp: new Date(Date.now() - 86400000 * 3).toISOString(), message: "Add example episode" },
+          ],
+          total: 5,
         });
       }
 

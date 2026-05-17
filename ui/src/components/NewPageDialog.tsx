@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, File, Sparkles } from "lucide-react";
+import { Eye, File, FilePenLine } from "lucide-react";
 import { api } from "@kw/lib/api";
 import { Button } from "@kw/components/ui/button";
 import {
@@ -113,7 +113,7 @@ export function NewPageDialog({ open, onOpenChange, onCreated, defaultFolder }: 
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
+            <FilePenLine className="h-4 w-4 text-primary" />
             New page
           </DialogTitle>
           <DialogDescription>

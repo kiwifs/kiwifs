@@ -22,6 +22,12 @@ import { KiwiQuery } from "./KiwiQuery";
 import { PageActions } from "./PageActions";
 import { ShikiCode } from "./ShikiCode";
 import { MermaidDiagram } from "./MermaidDiagram";
+import { KiwiChart } from "./KiwiChart";
+import { KiwiColor } from "./KiwiColor";
+import { KiwiProgress } from "./KiwiProgress";
+import { KiwiPlayground } from "./KiwiPlayground";
+import { KiwiTabs } from "./KiwiTabs";
+import { KiwiColumns } from "./KiwiColumns";
 import { ExcalidrawMarkdownPreview, isExcalidrawMarkdown } from "./ExcalidrawMarkdownPreview";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { PageSkeleton } from "./PageSkeleton";
@@ -33,6 +39,8 @@ import remarkSupersub from "remark-supersub";
 import remarkDefinitionList from "remark-definition-list";
 import { buildResolver, remarkWikiLinks } from "@kw/lib/wikiLinks";
 import { remarkMark, stripObsidianComments, remarkInlineTags, rehypeCodeMeta } from "@kw/lib/remarkPlugins";
+import remarkDirective from "remark-directive";
+import { remarkKiwiDirectives } from "@kw/lib/remarkDirectives";
 
 type Props = {
   path: string;
@@ -59,12 +67,27 @@ type FrontmatterProperty = {
 
 const sanitizeSchema = {
   ...defaultSchema,
-  tagNames: [...(defaultSchema.tagNames || []), "details", "summary", "kbd", "mark", "span", "div", "figure", "figcaption", "video", "audio", "source", "iframe", "section", "sup", "sub", "dl", "dt", "dd", "abbr"],
+  tagNames: [
+    ...(defaultSchema.tagNames || []),
+    "details", "summary", "kbd", "mark", "span", "div", "figure", "figcaption",
+    "video", "audio", "source", "iframe", "section", "sup", "sub", "dl", "dt", "dd", "abbr",
+    // SVG elements
+    "svg", "path", "circle", "rect", "ellipse", "line", "polyline", "polygon",
+    "g", "defs", "use", "text", "tspan", "clipPath", "mask", "pattern",
+    "linearGradient", "radialGradient", "stop", "filter",
+    "animate", "animateTransform", "animateMotion", "set",
+    "foreignObject", "marker", "symbol", "title", "desc", "metadata",
+    "feGaussianBlur", "feOffset", "feMerge", "feMergeNode", "feBlend",
+    "feColorMatrix", "feComposite", "feFlood", "feMorphology",
+    // Style element (for scoped @keyframes in SVG)
+    "style",
+  ],
   attributes: {
     ...defaultSchema.attributes,
     "*": [...(defaultSchema.attributes?.["*"] || []), "className", "style", "role", "id",
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
       "data-tag", "metastring",
+      "data-kiwi-directive", "data-label", "data-ratio", "data-cols",
       "aria-describedby", "aria-label"],
     iframe: ["src", "title", "className", "style"],
     video: ["controls", "preload", "className"],
@@ -72,6 +95,49 @@ const sanitizeSchema = {
     source: ["src", "type"],
     img: [...(defaultSchema.attributes?.img || []), "width", "height"],
     abbr: ["title"],
+    // SVG attributes
+    svg: ["viewBox", "xmlns", "xmlnsXlink", "width", "height", "fill", "stroke",
+      "className", "preserveAspectRatio", "overflow"],
+    path: ["d", "fill", "stroke", "strokeWidth", "strokeLinecap", "strokeLinejoin",
+      "opacity", "transform", "fillRule", "clipRule", "strokeDasharray", "strokeDashoffset"],
+    circle: ["cx", "cy", "r", "fill", "stroke", "strokeWidth", "opacity", "transform"],
+    rect: ["x", "y", "width", "height", "rx", "ry", "fill", "stroke", "strokeWidth", "opacity", "transform"],
+    ellipse: ["cx", "cy", "rx", "ry", "fill", "stroke", "strokeWidth", "opacity", "transform"],
+    line: ["x1", "y1", "x2", "y2", "stroke", "strokeWidth", "strokeLinecap", "opacity", "transform"],
+    polyline: ["points", "fill", "stroke", "strokeWidth", "strokeLinecap", "strokeLinejoin", "opacity", "transform"],
+    polygon: ["points", "fill", "stroke", "strokeWidth", "opacity", "transform"],
+    g: ["fill", "stroke", "strokeWidth", "opacity", "transform", "clipPath", "mask", "filter"],
+    defs: [],
+    use: ["href", "xlinkHref", "x", "y", "width", "height", "transform"],
+    text: ["x", "y", "dx", "dy", "textAnchor", "dominantBaseline", "fontSize",
+      "fontFamily", "fontWeight", "fill", "opacity", "transform"],
+    tspan: ["x", "y", "dx", "dy", "textAnchor", "dominantBaseline", "fontSize",
+      "fontFamily", "fontWeight", "fill"],
+    clipPath: ["id"],
+    mask: ["id", "x", "y", "width", "height", "maskUnits"],
+    pattern: ["id", "x", "y", "width", "height", "patternUnits", "patternTransform"],
+    linearGradient: ["id", "x1", "y1", "x2", "y2", "gradientUnits", "gradientTransform"],
+    radialGradient: ["id", "cx", "cy", "r", "fx", "fy", "gradientUnits", "gradientTransform"],
+    stop: ["offset", "stopColor", "stopOpacity"],
+    filter: ["id", "x", "y", "width", "height", "filterUnits"],
+    animate: ["attributeName", "from", "to", "values", "dur", "repeatCount",
+      "begin", "end", "fill", "keyTimes", "keySplines", "calcMode"],
+    animateTransform: ["attributeName", "type", "from", "to", "values", "dur",
+      "repeatCount", "begin", "end", "fill", "additive", "accumulate"],
+    animateMotion: ["path", "dur", "repeatCount", "begin", "end", "fill", "rotate", "keyPoints", "keyTimes"],
+    set: ["attributeName", "to", "begin", "dur", "end", "fill"],
+    foreignObject: ["x", "y", "width", "height"],
+    marker: ["id", "markerWidth", "markerHeight", "refX", "refY", "orient", "markerUnits"],
+    symbol: ["id", "viewBox", "preserveAspectRatio"],
+    feGaussianBlur: ["in", "stdDeviation", "result"],
+    feOffset: ["in", "dx", "dy", "result"],
+    feMerge: [],
+    feMergeNode: ["in"],
+    feBlend: ["in", "in2", "mode", "result"],
+    feColorMatrix: ["in", "type", "values", "result"],
+    feComposite: ["in", "in2", "operator", "k1", "k2", "k3", "k4", "result"],
+    feFlood: ["floodColor", "floodOpacity", "result"],
+    feMorphology: ["in", "operator", "radius", "result"],
   },
 };
 
@@ -580,6 +646,8 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onToggleSt
                     remarkEmoji,
                     remarkSupersub,
                     remarkDefinitionList,
+                    remarkDirective,
+                    remarkKiwiDirectives,
                     [remarkWikiLinks, { resolver }],
                   ]}
                   rehypePlugins={[
@@ -660,6 +728,18 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onToggleSt
                       if (lang === "mermaid") {
                         return <MermaidDiagram chart={raw} />;
                       }
+                      if (lang === "kiwi-chart") {
+                        return <KiwiChart source={raw} />;
+                      }
+                      if (lang === "kiwi-color") {
+                        return <KiwiColor source={raw} />;
+                      }
+                      if (lang === "kiwi-progress") {
+                        return <KiwiProgress source={raw} />;
+                      }
+                      if (lang === "kiwi-playground") {
+                        return <KiwiPlayground source={raw} />;
+                      }
                       if (!lang || !raw.includes("\n")) {
                         return <code className={className} {...rest}>{children}</code>;
                       }
@@ -672,6 +752,24 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onToggleSt
                       return <ShikiCode code={raw} lang={lang} title={title} highlightLines={highlightLines} />;
                     },
                     pre: ({ children }) => <>{children}</>,
+                    div: ({ children, node: _node, ...rest }: any) => {
+                      const props = rest as Record<string, unknown>;
+                      const directive = props["data-kiwi-directive"];
+                      if (directive === "tabs") {
+                        return <KiwiTabs>{children}</KiwiTabs>;
+                      }
+                      if (directive === "columns") {
+                        return (
+                          <KiwiColumns
+                            ratio={props["data-ratio"] as string | undefined}
+                            cols={props["data-cols"] as string | undefined}
+                          >
+                            {children}
+                          </KiwiColumns>
+                        );
+                      }
+                      return <div {...(rest as any)}>{children}</div>;
+                    },
                     img: ({ src, alt, node: _node, width, height, ...rest }) => {
                       let resolvedSrc = src as string;
                       if (resolvedSrc && !resolvedSrc.startsWith("http") && !resolvedSrc.startsWith("/raw/") && !resolvedSrc.startsWith("/api/")) {

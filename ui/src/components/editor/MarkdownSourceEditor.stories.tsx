@@ -137,9 +137,11 @@ export const SaveShortcutHarness: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // Wait for CodeMirror to mount
+    await new Promise((r) => setTimeout(r, 500));
     const editor = canvasElement.querySelector(".cm-content");
     if (!(editor instanceof HTMLElement)) {
-      throw new Error("CodeMirror content element not found");
+      throw new Error("CodeMirror content element not found — editor may not have mounted yet");
     }
     await userEvent.click(editor);
     await userEvent.keyboard("{Control>}s{/Control}");

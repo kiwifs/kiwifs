@@ -350,9 +350,7 @@ const handleSpaceSwitch = useCallback(() => {
                 : <PanelLeftOpen className="h-4 w-4" />}
             </ToolbarButton>
             <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-md bg-primary text-primary-foreground grid place-items-center font-bold text-sm shrink-0">
-                K
-              </div>
+              <img src="/kiwifs.png" alt="KiwiFS" className="h-7 w-7 shrink-0" />
               <span className="font-semibold text-sm hidden sm:inline">KiwiFS</span>
             </div>
           </div>
@@ -713,9 +711,7 @@ function WelcomeScreen({
   return (
     <div className="grid place-items-center h-full text-muted-foreground">
       <div className="text-center max-w-md">
-        <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-primary text-primary-foreground grid place-items-center font-bold text-3xl">
-          K
-        </div>
+        <img src="/kiwi-mascot.png" alt="KiwiFS" className="h-24 mx-auto mb-4" />
         <div className="text-2xl font-semibold mb-2 text-foreground">
           Welcome to KiwiFS
         </div>
@@ -733,18 +729,6 @@ function WelcomeScreen({
             <kbd className="ml-1 text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono">
               {navigator.platform?.includes("Mac") ? "⌘" : "Ctrl+"}K
             </kbd>
-          </Button>
-          <Button variant="ghost" onClick={onGraph} className="gap-2 text-muted-foreground">
-            <Network className="h-4 w-4" />
-            View knowledge graph
-          </Button>
-          <Button variant="ghost" onClick={onBases} className="gap-2 text-muted-foreground">
-            <LayoutGrid className="h-4 w-4" />
-            View as database
-          </Button>
-          <Button variant="ghost" onClick={onTimeline} className="gap-2 text-muted-foreground">
-            <Clock4 className="h-4 w-4" />
-            Activity timeline
           </Button>
           <Button variant="ghost" onClick={onData} className="gap-2 text-muted-foreground">
             <Database className="h-4 w-4" />

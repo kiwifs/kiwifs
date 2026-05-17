@@ -118,7 +118,7 @@ You can also link to pages that don't exist yet: [[future-page]].
 
 See also [[use-sqlite-for-search]] for how search indexing works.
 
-![Architecture diagram](/raw/assets/architecture.png)
+![Architecture diagram](data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YxZjVmOSIgcng9IjgiLz48dGV4dCB4PSIyMDAiIHk9IjEwNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NDc0OGIiPkFyY2hpdGVjdHVyZSBEaWFncmFtIFBsYWNlaG9sZGVyPC90ZXh0Pjwvc3ZnPg==)
 `;
 
 export const mockMarkdownExcalidraw = `---
@@ -444,7 +444,7 @@ Link to [[wikilinks]] and a link with anchor [[wikilinks#advanced-usage]].
 
 ## Image Caption from Alt
 
-![A beautiful sunset over the mountains](/raw/assets/landscape.png)
+![A beautiful sunset over the mountains](data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YxZjVmOSIgcng9IjgiLz48dGV4dCB4PSIyMDAiIHk9IjEwNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NDc0OGIiPkxhbmRzY2FwZSBJbWFnZSBQbGFjZWhvbGRlcjwvdGV4dD48L3N2Zz4=)
 `;
 
 export const mockSearchResults: SearchResult[] = [
