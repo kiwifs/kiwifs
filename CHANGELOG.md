@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.17.4](https://github.com/kiwifs/kiwifs/compare/v0.17.3...v0.17.4) (2026-05-18)
+
+
+### Features
+
+* Airbyte protocol importer, import API, and kanban Storybook stories ([1643f54](https://github.com/kiwifs/kiwifs/commit/1643f54de37c435d692a99f254225e94beff23eb))
+* per-page publish with public reader view ([9ba2a59](https://github.com/kiwifs/kiwifs/commit/9ba2a590b35a8b0c4ceaad1cf67ec98a1e4092b9))
+* **ui:** add 3D knowledge graph view ([94ab1aa](https://github.com/kiwifs/kiwifs/commit/94ab1aa9c1d5b2f62bf3460d0f34b00ba1acff57))
+* **ui:** add glow effects to 2D and 3D knowledge graph ([2e5907f](https://github.com/kiwifs/kiwifs/commit/2e5907f89798390af38b466ceccc9b2a9aca9755))
+* **ui:** add JSON/CSV/SQLite to import wizard and use SourceIcon SVGs ([5d36ee1](https://github.com/kiwifs/kiwifs/commit/5d36ee19af6d4589680afe7d685d1466c19bf195))
+* **ui:** dynamic Airbyte spec and stream discovery in import wizard ([0d5d27f](https://github.com/kiwifs/kiwifs/commit/0d5d27f2ecbdb91f8d5021b476ae3d52d75b1eb7))
+
+
+### Bug Fixes
+
+* address kanban refactor review feedback ([99a0b63](https://github.com/kiwifs/kiwifs/commit/99a0b635d8c9bf121c18e11e4aeb0be858db4b9e))
+* correct workflow transitions type in kanban stories ([6a273da](https://github.com/kiwifs/kiwifs/commit/6a273dae2745bc818428e30f1b3e67785431e651))
+* normalize Unicode MCP paths ([7298ee3](https://github.com/kiwifs/kiwifs/commit/7298ee3ec205544b8d177d2e9d58f001630209fe))
+* support CJK paths in MCP tools ([fd75675](https://github.com/kiwifs/kiwifs/commit/fd756755fce795472ae3d66e4a607f4a896e2383))
+* **ui:** make 3d graph links visible ([474d9dc](https://github.com/kiwifs/kiwifs/commit/474d9dc788ae707477d3de41280ac66ec13257ab))
+* **ui:** stabilize force graph hover updates ([a07ad78](https://github.com/kiwifs/kiwifs/commit/a07ad78ca862fba8012abf5d4fd082126433b36a))
+
 ## [0.17.3](https://github.com/kiwifs/kiwifs/compare/v0.17.2...v0.17.3) (2026-05-17)
 
 
