@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -345,6 +346,147 @@ func TestAirbyteRecordConversion(t *testing.T) {
 			}
 			if rec.Table != tt.wantTbl {
 				t.Errorf("Table = %q, want %q", rec.Table, tt.wantTbl)
+			}
+		})
+	}
+}
+
+func TestExplodeRTDBRecord(t *testing.T) {
+	src := &AirbyteSource{
+		image:      "airbyte/source-firebase-realtime-database:latest",
+		sourceName: "firebase-rtdb",
+	}
+	msg := &AirbyteRecordMessage{
+		Stream:    "rtdb",
+		EmittedAt: 1716000000000,
+	}
+
+	tests := []struct {
+		name     string
+		key      string
+		rawValue any
+		want     map[string]map[string]any
+	}{
+		{
+			name:     "basic nested collection explosion",
+			key:      "users",
+			rawValue: `{"user1":{"name":"Alice","age":30},"user2":{"name":"Bob","active":true}}`,
+			want: map[string]map[string]any{
+				"users/user1": {"_parent": "users", "name": "Alice", "age": float64(30)},
+				"users/user2": {"_parent": "users", "name": "Bob", "active": true},
+			},
+		},
+		{
+			name:     "empty map",
+			key:      "empty",
+			rawValue: map[string]any{},
+			want: map[string]map[string]any{
+				"empty": {},
+			},
+		},
+		{
+			name: "deeply nested values",
+			key:  "posts",
+			rawValue: map[string]any{
+				"post1": map[string]any{
+					"title": "Deep",
+					"metadata": map[string]any{
+						"author": map[string]any{
+							"id": "user1",
+							"profile": map[string]any{
+								"displayName": "Alice",
+							},
+						},
+					},
+				},
+			},
+			want: map[string]map[string]any{
+				"posts/post1": {
+					"_parent": "posts",
+					"title":   "Deep",
+					"metadata": map[string]any{
+						"author": map[string]any{
+							"id": "user1",
+							"profile": map[string]any{
+								"displayName": "Alice",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "arrays in values",
+			key:  "docs",
+			rawValue: map[string]any{
+				"doc1": map[string]any{
+					"tags": []any{"alpha", "beta"},
+					"items": []any{
+						map[string]any{"sku": "A", "qty": 2},
+						map[string]any{"sku": "B", "qty": 1},
+					},
+				},
+			},
+			want: map[string]map[string]any{
+				"docs/doc1": {
+					"_parent": "docs",
+					"tags":    []any{"alpha", "beta"},
+					"items": []any{
+						map[string]any{"sku": "A", "qty": 2},
+						map[string]any{"sku": "B", "qty": 1},
+					},
+				},
+			},
+		},
+		{
+			name: "single flat object",
+			key:  "profile",
+			rawValue: map[string]any{
+				"name":   "Alice",
+				"active": true,
+				"count":  2,
+			},
+			want: map[string]map[string]any{
+				"profile": {"name": "Alice", "active": true, "count": 2},
+			},
+		},
+		{
+			name:     "non-object leaf values",
+			key:      "metrics",
+			rawValue: `{"count":3,"last_seen":"today","enabled":false,"current":{"value":42}}`,
+			want: map[string]map[string]any{
+				"metrics/count":     {"_parent": "metrics", "value": float64(3)},
+				"metrics/last_seen": {"_parent": "metrics", "value": "today"},
+				"metrics/enabled":   {"_parent": "metrics", "value": false},
+				"metrics/current":   {"_parent": "metrics", "value": float64(42)},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := src.explodeRTDBRecord(msg, tt.key, tt.rawValue)
+			if len(got) != len(tt.want) {
+				t.Fatalf("records len = %d, want %d: %#v", len(got), len(tt.want), got)
+			}
+
+			for _, rec := range got {
+				wantFields, ok := tt.want[rec.PrimaryKey]
+				if !ok {
+					t.Fatalf("unexpected primary key %q in record %#v", rec.PrimaryKey, rec)
+				}
+				if rec.SourceID != fmt.Sprintf("airbyte:%s:%s:%s", src.sourceName, msg.Stream, rec.PrimaryKey) {
+					t.Errorf("SourceID = %q", rec.SourceID)
+				}
+				if rec.SourceDSN != src.image {
+					t.Errorf("SourceDSN = %q, want %q", rec.SourceDSN, src.image)
+				}
+				if rec.Table != msg.Stream {
+					t.Errorf("Table = %q, want %q", rec.Table, msg.Stream)
+				}
+				if !reflect.DeepEqual(rec.Fields, wantFields) {
+					t.Errorf("Fields = %#v, want %#v", rec.Fields, wantFields)
+				}
 			}
 		})
 	}
