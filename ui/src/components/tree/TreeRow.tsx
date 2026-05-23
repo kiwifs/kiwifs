@@ -33,10 +33,12 @@ function treeRowBgClass(opts: {
   isActive: boolean;
   isSelected: boolean;
   osDropHighlight: string;
+  isPublished?: boolean;
 }): string {
   return cn(
     "pointer-events-none absolute inset-0 transition-colors",
-    !opts.isActive && !opts.osDropHighlight && "group-hover:bg-accent/50",
+    !opts.isActive && !opts.osDropHighlight && opts.isPublished && "bg-primary/10 group-hover:bg-primary/20",
+    !opts.isActive && !opts.osDropHighlight && !opts.isPublished && "group-hover:bg-accent/50",
     opts.isActive && "bg-accent",
     opts.isSelected && !opts.isActive && "bg-accent/60",
     opts.osDropHighlight,
@@ -48,11 +50,13 @@ function treeRowContentClass(opts: {
   isExcluded: boolean;
   isDragging?: boolean;
   osDropHighlight: string;
+  isPublished?: boolean;
 }): string {
   return cn(
     "relative z-[1] flex h-full w-full min-w-0 items-center gap-1.5 pr-2 text-left",
     "text-foreground/90 group-hover:text-accent-foreground",
     opts.isActive && "text-accent-foreground font-medium",
+    !opts.isActive && opts.isPublished && "text-primary dark:text-primary",
     opts.osDropHighlight && "text-accent-foreground",
     opts.isExcluded && "opacity-40",
     opts.isDragging && "opacity-50",
@@ -65,6 +69,7 @@ type TreeRowShellProps = {
   isActive: boolean;
   osDropHighlight: string;
   className?: string;
+  isPublished?: boolean;
   onDragOver?: (e: React.DragEvent) => void;
   onDrop?: (e: React.DragEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
@@ -77,6 +82,7 @@ export function TreeRowShell({
   isActive,
   osDropHighlight,
   className,
+  isPublished,
   onDragOver,
   onDrop,
   onClick,
@@ -109,6 +115,7 @@ export function TreeRowShell({
               isActive,
               isSelected: node.isSelected,
               osDropHighlight,
+              isPublished,
             })}
           />
           <div
@@ -117,6 +124,7 @@ export function TreeRowShell({
               isExcluded: !!node.data.excluded,
               isDragging: node.isDragging,
               osDropHighlight,
+              isPublished,
             })}
             style={{ paddingLeft: contentPaddingLeft }}
           >

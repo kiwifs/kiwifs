@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -15,6 +15,7 @@ import {
   PanelLeftOpen,
   Pin,
   Plus,
+  Rss,
   PenTool,
   Presentation,
   Search as SearchIcon,
@@ -45,6 +46,7 @@ import { useRecentPages } from "./hooks/useRecentPages";
 import { useStarredPages } from "./hooks/useStarredPages";
 import { usePinnedPages } from "./hooks/usePinnedPages";
 import { titleize } from "./lib/paths";
+import { cn } from "./lib/cn";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import {
@@ -53,7 +55,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./components/ui/tooltip";
-import { api, getCurrentSpace, setCurrentSpace, sseUrl, type TreeEntry } from "./lib/api";
+import { api, getCurrentSpace, setCurrentSpace, sseUrl, type PublishedPage, type TreeEntry } from "./lib/api";
 import { useTheme } from "./hooks/useTheme";
 import { isMarkdown, isCanvasFile, isExcalidrawFile } from "./lib/paths";
 import { type TreeRevealRequest } from "./lib/treeReveal";
@@ -94,6 +96,11 @@ export default function App() {
   const treeRef = useRef<KiwiTreeHandle>(null);
   const treeFilterRef = useRef<HTMLInputElement>(null);
   const [treeFilter, setTreeFilter] = useState("");
+  const [publishedPages, setPublishedPages] = useState<PublishedPage[]>([]);
+  const [publishedRefreshKey, setPublishedRefreshKey] = useState(0);
+  const [showPublishedList, setShowPublishedList] = useState(() => {
+    try { return localStorage.getItem("kiwifs-show-published-list") !== "0"; } catch { return true; }
+  });
   const [treeSortMode, setTreeSortMode] = useState<TreeSortMode>(() => {
     try {
       const v = localStorage.getItem("kiwifs-tree-sort");
@@ -142,6 +149,8 @@ export default function App() {
   const { starred, toggle: toggleStar, isStarred } = useStarredPages(currentSpace);
   const { pinned, toggle: togglePin, isPinned } = usePinnedPages(currentSpace);
   const editorRef = useRef<{ save: () => Promise<void> } | null>(null);
+  const [spaceKey, setSpaceKey] = useState(0);
+  const publishedPathSet = useMemo(() => new Set(publishedPages.map((page) => page.path)), [publishedPages]);
   const stateRef = useRef({ editing, activePath, graphOpen, historyOpen, dataOpen, basesOpen, canvasOpen, whiteboardOpen, timelineOpen, kanbanOpen });
   stateRef.current = { editing, activePath, graphOpen, historyOpen, dataOpen, basesOpen, canvasOpen, whiteboardOpen, timelineOpen, kanbanOpen };
 
@@ -177,6 +186,21 @@ export default function App() {
       .catch(() => setTree(null))
       .finally(() => setTreeLoading(false));
   }, [refreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .publishedPages()
+      .then((resp) => {
+        if (!cancelled) setPublishedPages(resp.pages || []);
+      })
+      .catch(() => {
+        if (!cancelled) setPublishedPages([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey, publishedRefreshKey, spaceKey]);
 
   useEffect(() => {
     if (!tree || activePath) return;
@@ -235,8 +259,6 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  const [spaceKey, setSpaceKey] = useState(0);
 
 const handleSpaceSwitch = useCallback(() => {
     setActivePath(null);
@@ -500,7 +522,7 @@ const handleSpaceSwitch = useCallback(() => {
 
               {/* Sidebar sections */}
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                {(starred.length > 0 || pinned.length > 0 || recent.length > 0) && (
+                {(starred.length > 0 || pinned.length > 0 || recent.length > 0 || (showPublishedList && publishedPages.length > 0)) && (
                   <div className="shrink-0 overflow-auto kiwi-scroll max-h-[40vh]">
                 {starred.length > 0 && (
                   <SidebarSection icon={<Star className="h-3.5 w-3.5" />} title="Starred" storageKey="starred">
@@ -509,6 +531,7 @@ const handleSpaceSwitch = useCallback(() => {
                         key={p}
                         path={p}
                         active={activePath === p}
+                        published={publishedPathSet.has(p)}
                         onSelect={navigate}
                         trailing={
                           <button
@@ -530,6 +553,7 @@ const handleSpaceSwitch = useCallback(() => {
                         key={p}
                         path={p}
                         active={activePath === p}
+                        published={publishedPathSet.has(p)}
                         onSelect={navigate}
                         trailing={
                           <button
@@ -544,6 +568,19 @@ const handleSpaceSwitch = useCallback(() => {
                     ))}
                   </SidebarSection>
                 )}
+                {showPublishedList && publishedPages.length > 0 && (
+                  <SidebarSection icon={<Rss className="h-3.5 w-3.5" />} title={`Published (${publishedPages.length})`} storageKey="published">
+                    {publishedPages.map((page) => (
+                      <SidebarPageItem
+                        key={page.path}
+                        path={page.path}
+                        active={activePath === page.path}
+                        published
+                        onSelect={navigate}
+                      />
+                    ))}
+                  </SidebarSection>
+                )}
                 {recent.length > 0 && (
                   <SidebarSection icon={<Clock className="h-3.5 w-3.5" />} title="Recent" storageKey="recent">
                     {recent.slice(0, 5).map((r) => (
@@ -551,6 +588,7 @@ const handleSpaceSwitch = useCallback(() => {
                         key={r.path}
                         path={r.path}
                         active={activePath === r.path}
+                        published={publishedPathSet.has(r.path)}
                         onSelect={navigate}
                       />
                     ))}
@@ -575,6 +613,19 @@ const handleSpaceSwitch = useCallback(() => {
                         }}
                       >
                         <Plus className="h-3.5 w-3.5" />
+                      </SidebarIconButton>
+                      <SidebarIconButton
+                        label={showPublishedList ? "Hide published list" : "Show published list"}
+                        active={showPublishedList}
+                        onClick={() => {
+                          setShowPublishedList((current) => {
+                            const next = !current;
+                            try { localStorage.setItem("kiwifs-show-published-list", next ? "1" : "0"); } catch {}
+                            return next;
+                          });
+                        }}
+                      >
+                        <Rss className="h-3.5 w-3.5" />
                       </SidebarIconButton>
                       <SidebarIconButton
                         label="Collapse all folders"
@@ -617,6 +668,8 @@ const handleSpaceSwitch = useCallback(() => {
                     refreshKey={refreshKey}
                     filterQuery={treeFilter}
                     sortMode={treeSortMode}
+                    publishedPaths={publishedPathSet}
+                    onPublishedChanged={() => setPublishedRefreshKey((k) => k + 1)}
                     compactFolders
                     enableFileNesting
                     onCreateChild={(folder) => {
@@ -758,6 +811,7 @@ const handleSpaceSwitch = useCallback(() => {
                   setSearchOpen(true);
                 }}
                 refreshKey={refreshKey}
+                onPublishedChanged={() => setPublishedRefreshKey((k) => k + 1)}
               />
             ) : treeLoading ? (
               <div className="flex h-full items-center justify-center">
@@ -963,10 +1017,12 @@ function SidebarIconButton({
   children,
   label,
   onClick,
+  active,
 }: {
   children: React.ReactNode;
   label: string;
   onClick: () => void;
+  active?: boolean;
 }) {
   return (
     <Tooltip>
@@ -978,7 +1034,7 @@ function SidebarIconButton({
             e.stopPropagation();
             onClick();
           }}
-          className="h-6 w-6 grid place-items-center rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+          className={cn("h-6 w-6 grid place-items-center rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors", active && "border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20")}
         >
           {children}
         </button>
@@ -995,24 +1051,37 @@ function SidebarPageItem({
   active,
   onSelect,
   trailing,
+  published,
 }: {
   path: string;
   active: boolean;
   onSelect: (path: string) => void;
   trailing?: React.ReactNode;
+  published?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={() => onSelect(path)}
-      className={
-        "group w-full flex items-center gap-1.5 px-3 py-1 text-left text-sm transition-colors " +
-        "hover:bg-accent hover:text-accent-foreground " +
-        (active ? "bg-accent text-accent-foreground font-medium" : "")
-      }
+      className={cn(
+        "group w-full flex items-center gap-1.5 px-3 py-1 text-left text-sm transition-colors",
+        "hover:bg-accent hover:text-accent-foreground",
+        published && "border-l-2 border-primary/60 bg-primary/10 text-primary-foreground hover:bg-primary/20 dark:text-primary",
+        active && (published ? "ring-1 ring-primary/40 font-medium" : "bg-accent text-accent-foreground font-medium"),
+      )}
     >
-      <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      {published ? (
+        <Rss className="h-3.5 w-3.5 text-primary shrink-0" />
+      ) : (
+        <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      )}
       <span className="truncate flex-1">{titleize(path)}</span>
+      {published && (
+        <span className="relative flex h-1.5 w-1.5 shrink-0" aria-label="Published">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-40" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+        </span>
+      )}
       {trailing}
     </button>
   );

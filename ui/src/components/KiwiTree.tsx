@@ -33,6 +33,8 @@ import {
   Plus,
   Trash2,
   Upload,
+  ExternalLink,
+  Rss,
 } from "lucide-react";
 import { cn } from "@kw/lib/cn";
 import { api, type TreeEntry } from "@kw/lib/api";
@@ -75,6 +77,8 @@ type Props = {
   enableFileNesting?: boolean;
   excludePatterns?: string[];
   autoReveal?: boolean;
+  publishedPaths?: Set<string>;
+  onPublishedChanged?: () => void;
 };
 
 export type KiwiTreeHandle = {
@@ -210,6 +214,8 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
     enableFileNesting = true,
     excludePatterns = DEFAULT_TREE_EXCLUDE_PATTERNS,
     autoReveal = true,
+    publishedPaths,
+    onPublishedChanged,
   },
   ref,
 ) {
@@ -787,6 +793,8 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
             onNodeDragOver={handleNodeDragOver}
             onNodeDrop={handleNodeDrop}
             onFolderAltClick={(data) => openFolderRecursive(treeRef.current, data)}
+            publishedPaths={publishedPaths}
+            onPublishedChanged={onPublishedChanged}
           />
         )}
       </Tree>
@@ -944,6 +952,8 @@ type TreeNodeProps = NodeRendererProps<FlatNode> & {
   ) => void;
   onNodeDrop: (e: React.DragEvent, nodePath: string, isDir: boolean) => void;
   onFolderAltClick: (data: FlatNode) => void;
+  publishedPaths?: Set<string>;
+  onPublishedChanged?: () => void;
 };
 
 function TreeNode({
@@ -965,6 +975,8 @@ function TreeNode({
   onNodeDragOver,
   onNodeDrop,
   onFolderAltClick,
+  publishedPaths,
+  onPublishedChanged,
 }: TreeNodeProps) {
   const path = node.id;
   const isActive = activePath === path;
@@ -980,6 +992,9 @@ function TreeNode({
   };
   const label = nodeLabel(node.data);
   const showChevron = node.data.isDir && (node.data.children?.length ?? 0) > 0;
+  const isPublished = !node.data.isDir && isMarkdown(path) && (publishedPaths?.has(path) ?? false);
+  const folderMarkdownFiles = node.data.isDir ? collectFlatMarkdownFiles(node.data) : [];
+  const folderPublishedCount = node.data.isDir ? folderMarkdownFiles.filter((p) => publishedPaths?.has(p)).length : 0;
 
   // kanban draggable (separate from tree DnD)
   const kanbanDraggable = useDraggable({
@@ -1110,6 +1125,29 @@ function TreeNode({
           <ContextMenuItem onClick={() => onSelect(path)}>
             <File className="h-3.5 w-3.5" />
             Open folder
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            disabled={folderMarkdownFiles.length === 0 || folderPublishedCount === folderMarkdownFiles.length}
+            onClick={() => {
+              publishMany(folderMarkdownFiles, true)
+                .then(() => onPublishedChanged?.())
+                .catch((e) => console.error("Failed to publish folder:", e));
+            }}
+          >
+            <Rss className="h-3.5 w-3.5" />
+            Publish folder ({folderMarkdownFiles.length})
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={folderPublishedCount === 0}
+            onClick={() => {
+              publishMany(folderMarkdownFiles.filter((p) => publishedPaths?.has(p)), false)
+                .then(() => onPublishedChanged?.())
+                .catch((e) => console.error("Failed to unpublish folder:", e));
+            }}
+          >
+            <Rss className="h-3.5 w-3.5" />
+            Unpublish folder ({folderPublishedCount})
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => node.edit()}>
@@ -1427,15 +1465,26 @@ function TreeNode({
             revealRequest={revealRequest}
             isActive={isActive}
             osDropHighlight={osDropHighlight}
+            isPublished={isPublished}
             onClick={() => onSelect(path)}
             {...osDropHandlers}
           >
             <span className="w-3.5 shrink-0" />
-            <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            {isPublished ? (
+              <Rss className="h-3.5 w-3.5 text-primary shrink-0" />
+            ) : (
+              <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            )}
             {node.isEditing ? (
               <RenameInput node={node} />
             ) : (
-              <span className="truncate">{label}</span>
+              <span className="truncate flex-1">{label}</span>
+            )}
+            {isPublished && !node.isEditing && (
+              <span className="ml-auto relative flex h-1.5 w-1.5 shrink-0" title="Published">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-40" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+              </span>
             )}
           </TreeRowShell>
         </div>
@@ -1445,6 +1494,47 @@ function TreeNode({
           <File className="h-3.5 w-3.5" />
           Open
         </ContextMenuItem>
+        <ContextMenuSeparator />
+        {isPublished ? (
+          <>
+            <ContextMenuItem
+              onClick={() => {
+                navigator.clipboard
+                  .writeText(window.location.origin + "/p/" + path)
+                  .catch((e) => console.error("Failed to copy public link:", e));
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy public link
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => window.open("/p/" + path, "_blank")}>
+              <ExternalLink className="h-3.5 w-3.5" />
+              View published page
+            </ContextMenuItem>
+            <ContextMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => {
+                api.unpublish(path)
+                  .then(() => onPublishedChanged?.())
+                  .catch((e) => console.error("Failed to unpublish page:", e));
+              }}
+            >
+              <Rss className="h-3.5 w-3.5" />
+              Unpublish
+            </ContextMenuItem>
+          </>
+        ) : (
+          <ContextMenuItem
+            onClick={() => {
+              api.publish(path)
+                .then(() => onPublishedChanged?.())
+                .catch((e) => console.error("Failed to publish page:", e));
+            }}
+          >
+            <Rss className="h-3.5 w-3.5" />
+            Publish
+          </ContextMenuItem>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => openDupDialog(path)}>
           <Copy className="h-3.5 w-3.5" />
@@ -1504,6 +1594,31 @@ function TreeNode({
       </ContextMenuContent>
     </ContextMenu>
   );
+}
+
+function collectFlatMarkdownFiles(entry: FlatNode): string[] {
+  const out: string[] = [];
+  const walk = (node: FlatNode) => {
+    for (const child of node.children || []) {
+      if (child.isDir) walk(child);
+      else if (isMarkdown(child.id)) out.push(child.id);
+    }
+  };
+  walk(entry);
+  return out;
+}
+
+async function publishMany(paths: string[], publish: boolean): Promise<void> {
+  if (paths.length === 0) return;
+  const result = publish ? await api.publishBulk(paths) : await api.unpublishBulk(paths);
+  if (result.errors?.length) {
+    const preview = result.errors.slice(0, 5).map((e) => `- ${e.path}: ${e.error}`).join("\n");
+    const more = result.errors.length > 5 ? `\n...and ${result.errors.length - 5} more` : "";
+    window.alert(
+      `${publish ? "Publish" : "Unpublish"} completed with ${result.errors.length} skipped file(s).\n` +
+        `Changed: ${result.changed}, skipped: ${result.skipped}.\n\n${preview}${more}`,
+    );
+  }
 }
 
 // ─── Drop cursor (drag indicator line) ──────────────────────────────────────

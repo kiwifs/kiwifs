@@ -10,9 +10,10 @@ import {
 
 type Props = {
   path: string;
+  onPublishedChanged?: () => void;
 };
 
-export function PublishButton({ path }: Props) {
+export function PublishButton({ path, onPublishedChanged }: Props) {
   const [status, setStatus] = useState<PublishStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -46,6 +47,7 @@ export function PublishButton({ path }: Props) {
         public_url: res.public_url,
         view_count: status?.view_count ?? 0,
       });
+      onPublishedChanged?.();
     } catch (e) {
       console.error("Publish failed:", e);
     } finally {
@@ -61,6 +63,7 @@ export function PublishButton({ path }: Props) {
         prev ? { ...prev, published: false, public_url: undefined } : null
       );
       setMenuOpen(false);
+      onPublishedChanged?.();
     } catch (e) {
       console.error("Unpublish failed:", e);
     } finally {

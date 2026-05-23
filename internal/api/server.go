@@ -585,8 +585,11 @@ func (s *Server) setupRoutes() {
 
 	// Publish lifecycle endpoints
 	api.POST("/publish", h.Publish)
+	api.POST("/publish/bulk", h.PublishBulk)
 	api.POST("/unpublish", h.Unpublish)
+	api.POST("/unpublish/bulk", h.UnpublishBulk)
 	api.GET("/publish/status", h.PublishStatus)
+	api.GET("/publish/list", h.PublishedPages)
 
 	// B.1: Space info & visibility endpoints
 	api.GET("/space/info", h.SpaceInfo)

@@ -63,6 +63,7 @@ type Props = {
   onMoved?: (newPath: string) => void;
   onTagClick?: (tag: string) => void;
   refreshKey?: number;
+  onPublishedChanged?: () => void;
 };
 
 type FrontmatterProperty = {
@@ -360,7 +361,7 @@ function classifyMedia(src: string): "image" | "video" | "audio" | "pdf" | "unkn
   return "unknown";
 }
 
-export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealInTree, onToggleStar, isStarred, onTogglePin, isPinned, onDeleted, onDuplicated, onMoved, onTagClick, refreshKey }: Props) {
+export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealInTree, onToggleStar, isStarred, onTogglePin, isPinned, onDeleted, onDuplicated, onMoved, onTagClick, refreshKey, onPublishedChanged }: Props) {
   const treeEntry = useMemo(() => findEntry(tree, path), [tree, path]);
   const isDir = treeEntry?.isDir ?? false;
 
@@ -604,7 +605,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                 <Button variant="outline" size="sm" onClick={onEdit}>
                   <Edit className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Edit</span>
                 </Button>
-                <PublishButton path={path} />
+                <PublishButton path={path} onPublishedChanged={onPublishedChanged} />
                 <PageActions
                   path={path}
                   onDeleted={onDeleted}
