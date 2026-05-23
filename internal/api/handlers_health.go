@@ -22,10 +22,24 @@ func SetBuildVersion(v string) {
 	buildVersion = v
 }
 
+// Health godoc
+//
+//	@Summary		Health check
+//	@Description	Returns simple health status
+//	@Tags			health
+//	@Success		200	{object}	map[string]string
+//	@Router			/health [get]
 func (h *Handlers) Health(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// Healthz godoc
+//
+//	@Summary		Detailed health check
+//	@Description	Returns health status with uptime and version
+//	@Tags			health
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/healthz [get]
 func (h *Handlers) Healthz(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{
 		"status":  "ok",
@@ -34,19 +48,29 @@ func (h *Handlers) Healthz(c echo.Context) error {
 	})
 }
 
+type protocolStatus struct {
+	Enabled  bool   `json:"enabled"`
+	Healthy  bool   `json:"healthy,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+type readyResponse struct {
+	Status    string                    `json:"status"`
+	Error     string                    `json:"error,omitempty"`
+	Protocols map[string]protocolStatus `json:"protocols,omitempty"`
+}
+
+// Readyz godoc
+//
+//	@Summary		Readiness check
+//	@Description	Returns readiness status including storage and protocol health
+//	@Tags			health
+//	@Success		200	{object}	readyResponse
+//	@Failure		503	{object}	readyResponse
+//	@Router			/readyz [get]
 func (h *Handlers) Readyz(c echo.Context) error {
-	type protocolStatus struct {
-		Enabled  bool   `json:"enabled"`
-		Healthy  bool   `json:"healthy,omitempty"`
-		Port     int    `json:"port,omitempty"`
-		Endpoint string `json:"endpoint,omitempty"`
-		Error    string `json:"error,omitempty"`
-	}
-	type readyResponse struct {
-		Status    string                    `json:"status"`
-		Error     string                    `json:"error,omitempty"`
-		Protocols map[string]protocolStatus `json:"protocols,omitempty"`
-	}
 	if h.store == nil {
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "no-store"})
 	}
@@ -98,6 +122,14 @@ func (h *Handlers) Readyz(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// Metrics godoc
+//
+//	@Summary		Prometheus metrics
+//	@Description	Returns Prometheus-formatted metrics
+//	@Tags			metrics
+//	@Produce		plain
+//	@Success		200	{string}	string
+//	@Router			/metrics [get]
 func (h *Handlers) Metrics(c echo.Context) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# HELP kiwi_build_info Static build metadata.\n")

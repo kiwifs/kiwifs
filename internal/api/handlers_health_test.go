@@ -138,3 +138,30 @@ func closedTCPAddr(t *testing.T) (string, int) {
 	}
 	return addr, port
 }
+
+func TestSwaggerRedirects(t *testing.T) {
+	s := buildTestServer(t)
+
+	// Test GET /api/docs redirects to /api/docs/index.html
+	req := httptest.NewRequest(http.MethodGet, "/api/docs", nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMovedPermanently {
+		t.Fatalf("GET /api/docs status = %d, want 301", rec.Code)
+	}
+	if loc := rec.Result().Header.Get("Location"); loc != "/api/docs/index.html" {
+		t.Fatalf("GET /api/docs Location = %q, want /api/docs/index.html", loc)
+	}
+
+	// Test GET /api/docs/ redirects to /api/docs/index.html
+	req2 := httptest.NewRequest(http.MethodGet, "/api/docs/", nil)
+	rec2 := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusMovedPermanently {
+		t.Fatalf("GET /api/docs/ status = %d, want 301", rec2.Code)
+	}
+	if loc := rec2.Result().Header.Get("Location"); loc != "/api/docs/index.html" {
+		t.Fatalf("GET /api/docs/ Location = %q, want /api/docs/index.html", loc)
+	}
+}
+
