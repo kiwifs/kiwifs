@@ -36,6 +36,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/time/rate"
+
+	_ "github.com/kiwifs/kiwifs/docs"
+	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
 type ServerOption func(*Server)
@@ -469,6 +472,13 @@ func (s *Server) setupRoutes() {
 	s.echo.GET("/healthz", h.Healthz)
 	s.echo.GET("/readyz", h.Readyz)
 	s.echo.GET("/metrics", h.Metrics)
+	s.echo.GET("/api/docs", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, "/api/docs/index.html")
+	})
+	s.echo.GET("/api/docs/", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, "/api/docs/index.html")
+	})
+	s.echo.GET("/api/docs/*", echoSwagger.WrapHandler)
 
 	api := s.echo.Group("/api/kiwi")
 	if mw := s.authMiddleware(); mw != nil {

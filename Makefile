@@ -3,7 +3,12 @@ ROOT    := ./knowledge
 PORT    := 3333
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-.PHONY: build run test clean tidy ui ui-install dev-ui
+.PHONY: build run test clean tidy ui ui-install dev-ui swagger
+
+# Run swag init to generate REST API documentation
+swagger:
+	swag init
+
 
 # Full build: bundle the UI first, then compile the Go binary so
 # `//go:embed ui/dist` picks up the latest assets.
