@@ -1,0 +1,101 @@
+basePath: /
+definitions:
+  api.protocolStatus:
+    properties:
+      enabled:
+        type: boolean
+      endpoint:
+        type: string
+      error:
+        type: string
+      healthy:
+        type: boolean
+      port:
+        type: integer
+    type: object
+  api.readyResponse:
+    properties:
+      error:
+        type: string
+      protocols:
+        additionalProperties:
+          $ref: '#/definitions/api.protocolStatus'
+        type: object
+      status:
+        type: string
+    type: object
+host: localhost:3333
+info:
+  contact:
+    name: KiwiFS Support
+    url: https://github.com/kiwifs/kiwifs
+  description: KiwiFS is a content-addressable file system with an API.
+  license:
+    name: Business Source License 1.1
+    url: https://github.com/kiwifs/kiwifs/blob/main/LICENSE
+  title: KiwiFS API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      description: Returns simple health status
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+  /healthz:
+    get:
+      description: Returns health status with uptime and version
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Detailed health check
+      tags:
+      - health
+  /metrics:
+    get:
+      description: Returns Prometheus-formatted metrics
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Prometheus metrics
+      tags:
+      - metrics
+  /readyz:
+    get:
+      description: Returns readiness status including storage and protocol health
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.readyResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/api.readyResponse'
+      summary: Readiness check
+      tags:
+      - health
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer " followed by your API key.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
