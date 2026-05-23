@@ -96,7 +96,7 @@ jobs:
 
       - name: upload coverage artifact
         if: ${{ needs.changes.outputs.go == 'true' || needs.changes.outputs.infra == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage.out
