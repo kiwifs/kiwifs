@@ -85,7 +85,7 @@
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
     "remark-supersub": "^1.0.0",
-    "shiki": "^1.24.0",
+    "shiki": "^4.1.0",
     "simple-icons": "^16.20.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss": "^4",
