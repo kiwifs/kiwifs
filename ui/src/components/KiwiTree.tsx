@@ -777,7 +777,6 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
             enableKanbanDrag={enableKanbanDrag}
             pushOp={pushOp}
             root={root}
-            dragTarget={dragTarget}
             fileDragActive={fileDragActive}
             onNodeDragOver={handleNodeDragOver}
             onNodeDrop={handleNodeDrop}
@@ -930,7 +929,6 @@ type TreeNodeProps = NodeRendererProps<FlatNode> & {
   enableKanbanDrag: boolean;
   pushOp: (op: import("@kw/stores/fileOpsStore").FileOp) => void;
   root: TreeEntry;
-  dragTarget: OsDragTarget | null;
   fileDragActive: boolean;
   onNodeDragOver: (
     e: React.DragEvent,
@@ -957,7 +955,6 @@ function TreeNode({
   enableKanbanDrag,
   pushOp,
   root,
-  dragTarget,
   fileDragActive,
   onNodeDragOver,
   onNodeDrop,
