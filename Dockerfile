@@ -1,9 +1,12 @@
+# syntax=docker/dockerfile:1
+
 # Stage 1: Build the web UI on the build host (arch-independent output).
 FROM --platform=$BUILDPLATFORM node:22-alpine AS ui
 
 WORKDIR /ui
 COPY ui/package.json ui/package-lock.json* ui/.npmrc* ./
-RUN npm ci --no-audit --no-fund --loglevel=error
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund --loglevel=error
 COPY ui ./
 ENV NODE_OPTIONS=--max-old-space-size=3072
 RUN npm run build
@@ -17,38 +20,38 @@ RUN apk add --no-cache git
 
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 COPY . .
 RUN rm -rf ui/dist
 COPY --from=ui /ui/dist ./ui/dist
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /kiwifs .
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /kiwifs .
 
-# Stage 3: Minimal runtime with document export dependencies.
-FROM alpine:3.20
+# Stage 3: Runtime dependencies (builds in parallel with stages 1 & 2).
+FROM alpine:3.20 AS runtime
 
-# Core system packages.
 RUN apk add --no-cache git ca-certificates docker-cli \
-    # Pandoc for PDF/HTML export.
     pandoc \
-    # Node.js runtime for Marp CLI.
     nodejs npm \
-    # Python for MkDocs.
     python3 py3-pip \
-    # Chromium for Marp PDF/PPTX export (headless).
     chromium \
     && addgroup -S kiwi && adduser -S kiwi -G kiwi
 
-# Install Marp CLI globally.
-RUN npm install -g @marp-team/marp-cli --no-audit --no-fund 2>/dev/null || true
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g @marp-team/marp-cli --no-audit --no-fund 2>/dev/null || true
 
-# Install MkDocs with Material theme.
-RUN pip3 install --break-system-packages --no-cache-dir \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --break-system-packages --no-cache-dir \
     mkdocs mkdocs-material 2>/dev/null || true
 
-# Set Chromium path for Marp's headless PDF/PPTX export.
 ENV CHROME_PATH=/usr/bin/chromium-browser
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Stage 4: Final assembly — only adds the compiled binary to the runtime.
+FROM runtime
 
 COPY --from=builder /kiwifs /usr/local/bin/kiwifs
 
