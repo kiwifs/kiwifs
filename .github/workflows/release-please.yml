@@ -10,18 +10,36 @@ permissions:
   pull-requests: write
   statuses: write
 
+# Serialize release-please runs so concurrent pushes (e.g. dependabot storms)
+# don't race the same release PR and trip transient GitHub API 401s.
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
 jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_created: ${{ steps.release.outputs.release_created || steps.release_retry.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name || steps.release_retry.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
+        continue-on-error: true
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - uses: googleapis/release-please-action@v4
+        id: release_retry
+        if: steps.release.outcome == 'failure'
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Require release-please success
+        if: steps.release.outcome == 'failure' && steps.release_retry.outcome == 'failure'
+        run: exit 1
 
   # ── Phase A: CI on the release-please PR ──────────────────────────
   # GITHUB_TOKEN pushes don't trigger pull_request events, so ci.yml
