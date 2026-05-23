@@ -25,7 +25,6 @@ import {
 import {
   parseExcalidrawMarkdown,
   serializeExcalidrawMarkdown,
-  isExcalidrawMarkdown,
 } from "./ExcalidrawMarkdownPreview";
 import "@excalidraw/excalidraw/index.css";
 
@@ -87,7 +86,7 @@ function sanitizeAppState(appState: Record<string, any> = {}): Record<string, an
   return rest;
 }
 
-export function KiwiWhiteboardScreen({ initialPath, onClose, onNavigate, onTreeRefresh }: Props) {
+export function KiwiWhiteboardScreen({ initialPath, onClose, onNavigate: _onNavigate, onTreeRefresh }: Props) {
   const [boards, setBoards] = useState<WhiteboardEntry[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [activePath, setActivePath] = useState<string | null>(initialPath ?? null);

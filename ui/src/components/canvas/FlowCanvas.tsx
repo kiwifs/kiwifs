@@ -613,7 +613,7 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
   // ── Context menu handlers ──────────────────────────────────────────────
 
   const onPaneContextMenu = useCallback(
-    (event: React.MouseEvent) => {
+    (event: MouseEvent | React.MouseEvent) => {
       event.preventDefault();
       const flowPos = reactFlow.screenToFlowPosition({
         x: event.clientX,
@@ -852,7 +852,6 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
           menu={ctxMenu}
           onClose={closeContextMenu}
           createNode={createNode}
-          deleteSelected={deleteSelected}
           duplicateSelected={duplicateSelected}
           setNodeColor={setNodeColor}
           deleteEdge={(edgeId: string) => {
@@ -878,7 +877,6 @@ function ContextMenuOverlay({
   menu,
   onClose,
   createNode,
-  deleteSelected,
   duplicateSelected,
   setNodeColor,
   deleteEdge,
@@ -894,7 +892,6 @@ function ContextMenuOverlay({
   };
   onClose: () => void;
   createNode: (type: "text" | "file" | "link" | "group", pos: XYPosition, extra?: Record<string, unknown>) => void;
-  deleteSelected: () => void;
   duplicateSelected: () => void;
   setNodeColor: (nodeId: string, color: string | undefined) => void;
   deleteEdge: (edgeId: string) => void;
