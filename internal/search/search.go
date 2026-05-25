@@ -174,6 +174,12 @@ type SearchRecorder interface {
 	FailedSearches(ctx context.Context, limit int, since int64) ([]FailedSearchStat, error)
 }
 
+// QuerySuggester is implemented by search backends that can suggest
+// fuzzy title matches when a query returns zero results.
+type QuerySuggester interface {
+	SuggestTitles(ctx context.Context, query, pathPrefix string, maxDistance, limit int) ([]TitleSuggestion, error)
+}
+
 // PageViewRecorder is implemented by search backends that can persist read
 // analytics for knowledge pages.
 type PageViewRecorder interface {

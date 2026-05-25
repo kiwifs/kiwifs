@@ -29,6 +29,13 @@ type Hit = {
   score?: number;
 };
 
+type SearchSuggestion = {
+  query: string;
+  path: string;
+  title: string;
+  distance: number;
+};
+
 function topDirs(tree: TreeEntry | null): string[] {
   if (!tree?.children) return [];
   return tree.children
@@ -65,6 +72,7 @@ function clearRecentSearches() {
 export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }: Props) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [dirFilter, setDirFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
@@ -94,6 +102,7 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
     if (debounce.current) window.clearTimeout(debounce.current);
     if (!query.trim()) {
       setHits([]);
+      setSuggestions([]);
       setLoading(false);
       return;
     }
@@ -186,9 +195,19 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
           results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
           setHits(results);
+          setSuggestions(
+            results.length === 0 && ftsRes?.suggestions?.length
+              ? ftsRes.suggestions
+              : []
+          );
         },
       )
-        .catch(() => { if (thisRequest === requestId.current) setHits([]); })
+        .catch(() => {
+          if (thisRequest === requestId.current) {
+            setHits([]);
+            setSuggestions([]);
+          }
+        })
         .finally(() => { if (thisRequest === requestId.current) setLoading(false); });
     }, 150);
     return () => {
@@ -309,9 +328,28 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
         )}
         {query && filtered.length === 0 && !loading ? (
           <CommandEmpty>
-            <div className="text-center py-6">
+            <div className="text-center py-6 px-4">
               <p className="text-sm text-muted-foreground">No results found.</p>
-              <p className="text-xs text-muted-foreground mt-1">Try broader terms or check spelling.</p>
+              {suggestions.length > 0 ? (
+                <div className="mt-3 text-sm">
+                  <span className="text-muted-foreground">Did you mean: </span>
+                  {suggestions.map((s, i) => (
+                    <span key={s.path}>
+                      {i > 0 && <span className="text-muted-foreground">, </span>}
+                      <button
+                        type="button"
+                        className="text-primary hover:underline font-medium"
+                        onClick={() => handleSelect(s.path)}
+                      >
+                        {s.title}
+                      </button>
+                    </span>
+                  ))}
+                  <span className="text-muted-foreground">?</span>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">Try broader terms or check spelling.</p>
+              )}
             </div>
           </CommandEmpty>
         ) : null}

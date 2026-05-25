@@ -20,11 +20,19 @@ type searchResultEntry struct {
 	Permalink string         `json:"permalink,omitempty"`
 }
 
+type searchSuggestionEntry struct {
+	Query    string `json:"query"`
+	Path     string `json:"path"`
+	Title    string `json:"title"`
+	Distance int    `json:"distance"`
+}
+
 type searchResponse struct {
-	Query   string              `json:"query"`
-	Limit   int                 `json:"limit"`
-	Offset  int                 `json:"offset"`
-	Results []searchResultEntry `json:"results"`
+	Query        string                  `json:"query"`
+	Limit        int                     `json:"limit"`
+	Offset       int                     `json:"offset"`
+	Results      []searchResultEntry     `json:"results"`
+	Suggestions  []searchSuggestionEntry `json:"suggestions,omitempty"`
 }
 
 func (h *Handlers) Search(c echo.Context) error {
@@ -105,12 +113,40 @@ func (h *Handlers) Search(c echo.Context) error {
 		}
 	}
 	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindSearch, Query: q, HitCount: len(results)})
-	return c.JSON(http.StatusOK, searchResponse{
+	return c.JSON(http.StatusOK, h.buildSearchResponse(c, q, limit, offset, "", results))
+}
+
+func (h *Handlers) buildSearchResponse(c echo.Context, q string, limit, offset int, pathPrefix string, results []search.Result) searchResponse {
+	resp := searchResponse{
 		Query:   q,
 		Limit:   limit,
 		Offset:  offset,
 		Results: buildSearchEntries(results, h.publicURL),
-	})
+	}
+	if len(results) == 0 && offset == 0 {
+		maxDist := parseIntParam(c, "suggest_threshold", search.DefaultSuggestMaxDistance)
+		if maxDist <= 0 {
+			maxDist = search.DefaultSuggestMaxDistance
+		}
+		if maxDist > search.MaxSuggestMaxDistance {
+			maxDist = search.MaxSuggestMaxDistance
+		}
+		if sg, ok := h.searcher.(search.QuerySuggester); ok {
+			suggestions, err := sg.SuggestTitles(c.Request().Context(), q, pathPrefix, maxDist, search.DefaultSuggestLimit)
+			if err == nil && len(suggestions) > 0 {
+				resp.Suggestions = make([]searchSuggestionEntry, len(suggestions))
+				for i, s := range suggestions {
+					resp.Suggestions[i] = searchSuggestionEntry{
+						Query:    s.Query,
+						Path:     s.Path,
+						Title:    s.Title,
+						Distance: s.Distance,
+					}
+				}
+			}
+		}
+	}
+	return resp
 }
 
 func (h *Handlers) VerifiedSearch(c echo.Context) error {
@@ -140,12 +176,7 @@ func (h *Handlers) VerifiedSearch(c echo.Context) error {
 		}
 	}
 	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindSearch, Query: q, HitCount: len(results)})
-	return c.JSON(http.StatusOK, searchResponse{
-		Query:   q,
-		Limit:   limit,
-		Offset:  offset,
-		Results: buildSearchEntries(results, h.publicURL),
-	})
+	return c.JSON(http.StatusOK, h.buildSearchResponse(c, q, limit, offset, "", results))
 }
 
 type staleResponse struct {

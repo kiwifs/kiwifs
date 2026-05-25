@@ -22,7 +22,18 @@ export type SearchResult = {
   matches?: SearchMatch[];
 };
 
-export type SearchResponse = { query: string; results: SearchResult[] };
+export type SearchSuggestion = {
+  query: string;
+  path: string;
+  title: string;
+  distance: number;
+};
+
+export type SearchResponse = {
+  query: string;
+  results: SearchResult[];
+  suggestions?: SearchSuggestion[];
+};
 
 export type Version = {
   hash: string;
