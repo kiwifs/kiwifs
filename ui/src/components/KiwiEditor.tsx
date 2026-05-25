@@ -10,7 +10,7 @@ import {
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { Check, ChevronDown, ChevronRight, Circle, Info, Link as LinkIcon, ListTree, Loader2, Save, TriangleAlert, User, X, XCircle } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Circle, Code, Info, Link as LinkIcon, ListTree, Loader2, PenLine, Save, TriangleAlert, User, X, XCircle } from "lucide-react";
 import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import matter from "gray-matter";
@@ -21,7 +21,25 @@ import { dirOf, stem, titleize } from "@kw/lib/paths";
 import { KiwiBreadcrumb } from "./KiwiBreadcrumb";
 import { ExcalidrawMarkdownEditor, isExcalidrawMarkdown } from "./ExcalidrawMarkdownPreview";
 import { frontmatterToText, joinFrontmatter, splitFrontmatter } from "@kw/lib/frontmatter";
+import {
+  type EditorMode,
+  loadEditorModePreference,
+  saveEditorModePreference,
+  sourceToVisualParts,
+  visualToSource,
+  wikiPagesFromTree,
+} from "@kw/lib/editorMode";
 import { formatDistanceToNow } from "date-fns";
+import { MarkdownSourceEditor } from "./editor/MarkdownSourceEditor";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@kw/components/ui/dialog";
+import { cn } from "@kw/lib/cn";
 
 const wikiLinkPluginKey = new PluginKey("kiwi-wiki-links");
 
@@ -65,7 +83,10 @@ function buildWikiDecos(doc: any): DecorationSet {
 
 type SaveStatus = "clean" | "dirty" | "saving" | "saved" | "error";
 
-type SaveHandle = { save: () => Promise<void> };
+type SaveHandle = {
+  save: () => Promise<void>;
+  toggleMode?: () => void;
+};
 
 type Props = {
   path: string;
@@ -306,31 +327,41 @@ function EditorInner({
   onNavigate?: (path: string) => void;
   saveRef?: React.MutableRefObject<SaveHandle | null>;
 }) {
+  const [editorMode, setEditorMode] = useState<EditorMode>(() => loadEditorModePreference());
+  const [sourceText, setSourceText] = useState(initialMd);
+  const syncedMdRef = useRef(initialMd);
+  const editorModeRef = useRef(editorMode);
+  editorModeRef.current = editorMode;
+
   const [ready, setReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("clean");
   const autoSaveTimer = useRef<number | null>(null);
   const savedFlashTimer = useRef<number | null>(null);
   const [fmOpen, setFmOpen] = useState(false);
+  const [modeSwitchOpen, setModeSwitchOpen] = useState(false);
+  const [pendingSwitchTarget, setPendingSwitchTarget] = useState<EditorMode | null>(null);
+  const [visualParseError, setVisualParseError] = useState<string | null>(null);
+
   const frontmatterSplit = useMemo(() => splitFrontmatter(initialMd), [initialMd]);
   const [fmText, setFmText] = useState<string>(() => frontmatterToText(frontmatterSplit.frontmatter));
-  const bodyOnly = useMemo(() => {
-    let body = frontmatterSplit.body;
-    try {
-      const parsed = matter(initialMd);
-      if (typeof parsed.data?.title === "string") {
-        const h1Match = body.match(/^\s*#\s+(.+)\n?/);
-        if (h1Match && h1Match[1].trim() === parsed.data.title.trim()) {
-          body = body.replace(/^\s*#\s+.+\n?/, "");
-        }
-      }
-    } catch {}
-    return body;
-  }, [frontmatterSplit.body, initialMd]);
+  const initialVisualBody = useMemo(
+    () => sourceToVisualParts(initialMd).body,
+    [initialMd],
+  );
+  const [visualParseBody, setVisualParseBody] = useState(initialVisualBody);
   const [lastEdit, setLastEdit] = useState<{ author: string; date: string } | null>(null);
 
+  const wikiPages = useMemo(() => wikiPagesFromTree(tree), [tree]);
+
   useEffect(() => {
+    syncedMdRef.current = initialMd;
+    setSourceText(initialMd);
+    setEditorMode(loadEditorModePreference());
     setFmText(frontmatterToText(frontmatterSplit.frontmatter));
-  }, [frontmatterSplit.frontmatter]);
+    setVisualParseBody(initialVisualBody);
+    setSaveStatus("clean");
+    setVisualParseError(null);
+  }, [path, initialMd, frontmatterSplit.frontmatter, initialVisualBody]);
 
   useEffect(() => {
     let cancelled = false;
@@ -374,53 +405,137 @@ function EditorInner({
   }, [editor]);
 
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editorMode !== "visual") return;
     let cancelled = false;
+    setReady(false);
+    setVisualParseError(null);
     (async () => {
-      const blocks = await editor.tryParseMarkdownToBlocks(bodyOnly);
-      if (cancelled) return;
-      if (blocks && blocks.length > 0) {
-        editor.replaceBlocks(editor.document, blocks);
+      try {
+        const blocks = await editor.tryParseMarkdownToBlocks(visualParseBody);
+        if (cancelled) return;
+        if (blocks && blocks.length > 0) {
+          editor.replaceBlocks(editor.document, blocks);
+        }
+        setReady(true);
+      } catch (e) {
+        if (!cancelled) {
+          setVisualParseError(String(e));
+          setReady(false);
+        }
       }
-      setReady(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [editor, initialMd]);
+  }, [editor, editorMode, visualParseBody]);
 
-  const onSaveRef = useRef<(opts?: { close?: boolean }) => Promise<void>>(async () => {});
+  const onSaveRef = useRef<(opts?: { close?: boolean }) => Promise<boolean>>(async () => false);
   onSaveRef.current = async (opts) => {
-    if (!editor) return;
+    if (editorMode === "visual" && !editor) return false;
     setSaving(true);
     setSaveStatus("saving");
     setError(null);
     try {
-      let md = await editor.blocksToMarkdownLossy(editor.document);
-      md = joinFrontmatter(fmText, md);
+      let md: string;
+      if (editorMode === "source") {
+        md = sourceText;
+      } else {
+        const body = await editor!.blocksToMarkdownLossy(editor!.document);
+        md = joinFrontmatter(fmText, body);
+      }
       const res = await api.writeFile(path, md, etagRef.current || undefined);
       etagRef.current = res.etag ? `"${res.etag}"` : null;
+      syncedMdRef.current = md;
+      setSourceText(md);
+      const { fmText: nextFm, body: nextBody } = sourceToVisualParts(md);
+      setFmText(nextFm);
+      setVisualParseBody(nextBody);
       setSaveStatus("saved");
       setLastEdit({ author: "you", date: new Date().toISOString() });
       if (savedFlashTimer.current) window.clearTimeout(savedFlashTimer.current);
       savedFlashTimer.current = window.setTimeout(() => setSaveStatus("clean"), 2000);
       if (opts?.close) onSaved(path);
+      return true;
     } catch (e) {
       setSaveStatus("error");
       setError(String(e));
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const markDirty = useCallback(() => {
-    if (!ready) return;
+    if (editorMode === "visual" && !ready) return;
     setSaveStatus("dirty");
     if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = window.setTimeout(() => {
       onSaveRef.current();
     }, 2000);
-  }, [ready]);
+  }, [ready, editorMode]);
+
+  const performModeSwitch = useCallback(
+    async (target: EditorMode, opts?: { discard?: boolean }) => {
+      setVisualParseError(null);
+      if (target === "source") {
+        if (!opts?.discard && editor) {
+          const full = await visualToSource(fmText, async () =>
+            editor.blocksToMarkdownLossy(editor.document),
+          );
+          setSourceText(full);
+        } else {
+          setSourceText(syncedMdRef.current);
+        }
+        setEditorMode("source");
+        saveEditorModePreference("source");
+        setReady(true);
+      } else {
+        const text = opts?.discard ? syncedMdRef.current : sourceText;
+        if (opts?.discard) setSourceText(text);
+        const { fmText: nextFm, body } = sourceToVisualParts(text);
+        setFmText(nextFm);
+        setVisualParseBody(body);
+        setEditorMode("visual");
+        saveEditorModePreference("visual");
+      }
+      setSaveStatus("clean");
+      if (autoSaveTimer.current) {
+        window.clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = null;
+      }
+    },
+    [editor, fmText, sourceText],
+  );
+
+  const requestModeSwitch = useCallback(
+    (target: EditorMode) => {
+      if (target === editorMode) return;
+      if (saveStatus === "dirty") {
+        setPendingSwitchTarget(target);
+        setModeSwitchOpen(true);
+        return;
+      }
+      void performModeSwitch(target);
+    },
+    [editorMode, saveStatus, performModeSwitch],
+  );
+
+  const handleModeSwitchSave = useCallback(async () => {
+    const target = pendingSwitchTarget;
+    if (!target) return;
+    setModeSwitchOpen(false);
+    setPendingSwitchTarget(null);
+    const ok = await onSaveRef.current();
+    if (ok) await performModeSwitch(target);
+  }, [pendingSwitchTarget, performModeSwitch]);
+
+  const handleModeSwitchDiscard = useCallback(() => {
+    const target = pendingSwitchTarget;
+    if (!target) return;
+    setModeSwitchOpen(false);
+    setPendingSwitchTarget(null);
+    void performModeSwitch(target, { discard: true });
+  }, [pendingSwitchTarget, performModeSwitch]);
 
   useEffect(() => {
     return () => {
@@ -431,21 +546,31 @@ function EditorInner({
 
   useEffect(() => {
     if (!saveRef) return;
-    saveRef.current = { save: () => onSaveRef.current({ close: true }) };
+    saveRef.current = {
+      save: async () => {
+        await onSaveRef.current({ close: true });
+      },
+      toggleMode: () =>
+        requestModeSwitch(editorModeRef.current === "visual" ? "source" : "visual"),
+    };
     return () => { saveRef.current = null; };
-  }, [saveRef]);
+  }, [saveRef, requestModeSwitch]);
 
   const fmTitle = useMemo(() => {
     try {
-      const parsed = matter(initialMd);
+      const parsed = matter(editorMode === "source" ? sourceText : initialMd);
       if (typeof parsed.data?.title === "string") return parsed.data.title;
     } catch {}
     return null;
-  }, [initialMd]);
+  }, [initialMd, editorMode, sourceText]);
+
+  const canSave =
+    saveStatus !== "clean" &&
+    !saving &&
+    (editorMode === "source" || ready);
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Sticky breadcrumb — matches KiwiPage structure ── */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border shrink-0">
         <div className="px-4 sm:px-8 py-2 max-w-6xl mx-auto">
           {onNavigate
@@ -454,24 +579,31 @@ function EditorInner({
         </div>
       </div>
 
-      {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-auto kiwi-scroll">
         <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6">
-          {/* ── Page header zone — matches KiwiPage structure ── */}
           <div className="mb-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground leading-tight">
                   {fmTitle || titleize(path)}
                 </h1>
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <SaveIndicator status={saveStatus} />
+                  {editorMode === "visual" && (
+                    <span className="text-[10px] text-muted-foreground">
+                      Visual mode may reformat some markdown on save
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                <EditorModeToggle
+                  mode={editorMode}
+                  onSelect={requestModeSwitch}
+                />
                 <Button
                   onClick={() => onSaveRef.current({ close: true })}
-                  disabled={saving || !ready || saveStatus === "clean"}
+                  disabled={!canSave}
                   size="sm"
                   variant={saveStatus === "dirty" ? "default" : "outline"}
                 >
@@ -485,7 +617,6 @@ function EditorInner({
               </div>
             </div>
 
-            {/* ── Metadata bar ── */}
             {lastEdit && (
               <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
@@ -496,101 +627,232 @@ function EditorInner({
             )}
           </div>
 
-          {/* ── Frontmatter section ── */}
-          <div className="max-w-3xl mb-4">
-            <button
-              type="button"
-              onClick={() => setFmOpen((v) => !v)}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {fmOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              Frontmatter
-              {fmText.trim() && <span className="ml-1 text-[10px] opacity-60">(has data)</span>}
-            </button>
-            {fmOpen && (
-              <Textarea
-                value={fmText}
-                onChange={(e) => { setFmText(e.target.value); markDirty(); }}
-                placeholder={"title: My Page\ntags:\n  - draft"}
-                className="mt-2 font-mono text-xs min-h-[80px] resize-y"
-                rows={Math.max(3, fmText.split("\n").length)}
-              />
-            )}
-          </div>
-
-          {/* ── Editor content zone ── */}
-          <div className="max-w-3xl kiwi-blocknote min-h-[50vh]">
-            <ErrorBoundary>
-            {editor && (
-              <BlockNoteView
-                editor={editor as BlockNoteEditor}
-                theme={isDark ? "dark" : "light"}
-                slashMenu={false}
-                formattingToolbar={false}
-                onChange={markDirty}
+          {editorMode === "visual" && (
+            <div className="max-w-3xl mb-4">
+              <button
+                type="button"
+                onClick={() => setFmOpen((v) => !v)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                <FormattingToolbarController />
-                <SuggestionMenuController
-                  triggerCharacter="/"
-                  getItems={async (query) =>
-                    filterSuggestionItems(
-                      [
-                        ...getDefaultReactSlashMenuItems(editor as BlockNoteEditor),
-                        ...kiwiSlashItems(editor as BlockNoteEditor),
-                      ],
-                      query
-                    )
-                  }
+                {fmOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                Frontmatter
+                {fmText.trim() && <span className="ml-1 text-[10px] opacity-60">(has data)</span>}
+              </button>
+              {fmOpen && (
+                <Textarea
+                  value={fmText}
+                  onChange={(e) => { setFmText(e.target.value); markDirty(); }}
+                  placeholder={"title: My Page\ntags:\n  - draft"}
+                  className="mt-2 font-mono text-xs min-h-[80px] resize-y"
+                  rows={Math.max(3, fmText.split("\n").length)}
                 />
-                <SuggestionMenuController
-                  triggerCharacter="["
-                  getItems={async (query) => {
-                    const pm = (editor as any)._tiptapEditor;
-                    if (pm?.view) {
-                      const { state } = pm.view;
-                      const pos = state.selection.from;
-                      const checkPos = pos - query.length - 2;
-                      if (checkPos < 0 || state.doc.textBetween(checkPos, checkPos + 1) !== "[") {
-                        return [];
-                      }
-                    }
-                    return filterSuggestionItems(
-                      collectPages(tree).map((p) => {
-                        const pageName = p.replace(/\.md$/i, "");
-                        return {
-                          title: titleize(p),
-                          subtext: p,
-                          aliases: [stem(p), p],
-                          group: "Page link",
-                          icon: <LinkIcon size={18} />,
-                          onItemClick: () => {
-                            queueMicrotask(() => {
-                              const ttp = (editor as any)._tiptapEditor;
-                              if (!ttp?.view) return;
-                              const { state } = ttp.view;
-                              const pos = state.selection.from;
-                              if (pos > 0 && state.doc.textBetween(pos - 1, pos) === "[") {
-                                ttp.view.dispatch(
-                                  state.tr.delete(pos - 1, pos).insertText(`[[${pageName}]]`, pos - 1)
-                                );
-                              } else {
-                                ttp.view.dispatch(state.tr.insertText(`[[${pageName}]]`, pos));
-                              }
-                            });
-                          },
-                        };
-                      }),
-                      query
-                    );
-                  }}
-                />
-              </BlockNoteView>
+              )}
+            </div>
+          )}
+
+          <div className="max-w-3xl min-h-[50vh]">
+            {editorMode === "source" ? (
+              <MarkdownSourceEditor
+                value={sourceText}
+                onChange={(next) => {
+                  setSourceText(next);
+                  markDirty();
+                }}
+                dark={isDark}
+                onSaveShortcut={() => onSaveRef.current()}
+                pages={wikiPages}
+                minHeight="60vh"
+              />
+            ) : visualParseError ? (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                <p className="font-medium">Could not open in Visual mode</p>
+                <p className="mt-1 text-xs opacity-90">{visualParseError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => requestModeSwitch("source")}
+                >
+                  Back to Source
+                </Button>
+              </div>
+            ) : (
+              <div className="kiwi-blocknote">
+                <ErrorBoundary>
+                  {editor && (
+                    <BlockNoteView
+                      editor={editor as BlockNoteEditor}
+                      theme={isDark ? "dark" : "light"}
+                      slashMenu={false}
+                      formattingToolbar={false}
+                      onChange={markDirty}
+                    >
+                      <FormattingToolbarController />
+                      <SuggestionMenuController
+                        triggerCharacter="/"
+                        getItems={async (query) =>
+                          filterSuggestionItems(
+                            [
+                              ...getDefaultReactSlashMenuItems(editor as BlockNoteEditor),
+                              ...kiwiSlashItems(editor as BlockNoteEditor),
+                            ],
+                            query,
+                          )
+                        }
+                      />
+                      <SuggestionMenuController
+                        triggerCharacter="["
+                        getItems={async (query) => {
+                          const pm = (editor as any)._tiptapEditor;
+                          if (pm?.view) {
+                            const { state } = pm.view;
+                            const pos = state.selection.from;
+                            const checkPos = pos - query.length - 2;
+                            if (checkPos < 0 || state.doc.textBetween(checkPos, checkPos + 1) !== "[") {
+                              return [];
+                            }
+                          }
+                          return filterSuggestionItems(
+                            collectPages(tree).map((p) => {
+                              const pageName = p.replace(/\.md$/i, "");
+                              return {
+                                title: titleize(p),
+                                subtext: p,
+                                aliases: [stem(p), p],
+                                group: "Page link",
+                                icon: <LinkIcon size={18} />,
+                                onItemClick: () => {
+                                  queueMicrotask(() => {
+                                    const ttp = (editor as any)._tiptapEditor;
+                                    if (!ttp?.view) return;
+                                    const { state } = ttp.view;
+                                    const pos = state.selection.from;
+                                    if (pos > 0 && state.doc.textBetween(pos - 1, pos) === "[") {
+                                      ttp.view.dispatch(
+                                        state.tr.delete(pos - 1, pos).insertText(`[[${pageName}]]`, pos - 1),
+                                      );
+                                    } else {
+                                      ttp.view.dispatch(state.tr.insertText(`[[${pageName}]]`, pos));
+                                    }
+                                  });
+                                },
+                              };
+                            }),
+                            query,
+                          );
+                        }}
+                      />
+                    </BlockNoteView>
+                  )}
+                </ErrorBoundary>
+              </div>
             )}
-            </ErrorBoundary>
           </div>
         </div>
       </div>
+
+      <EditorModeSwitchDialog
+        open={modeSwitchOpen}
+        onOpenChange={(open) => {
+          setModeSwitchOpen(open);
+          if (!open) setPendingSwitchTarget(null);
+        }}
+        onSaveAndSwitch={() => void handleModeSwitchSave()}
+        onDiscardAndSwitch={handleModeSwitchDiscard}
+        busy={saving}
+      />
     </div>
+  );
+}
+
+function EditorModeToggle({
+  mode,
+  onSelect,
+}: {
+  mode: EditorMode;
+  onSelect: (mode: EditorMode) => void;
+}) {
+  return (
+    <div
+      className="inline-flex rounded-md border border-border p-0.5 bg-muted/40"
+      role="group"
+      aria-label="Editor mode"
+    >
+      <button
+        type="button"
+        aria-pressed={mode === "visual"}
+        className={cn(
+          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+          mode === "visual"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+        onClick={() => onSelect("visual")}
+      >
+        <PenLine className="h-3 w-3" />
+        <span className="hidden sm:inline">Visual</span>
+      </button>
+      <button
+        type="button"
+        aria-pressed={mode === "source"}
+        className={cn(
+          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+          mode === "source"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+        onClick={() => onSelect("source")}
+      >
+        <Code className="h-3 w-3" />
+        <span className="hidden sm:inline">Source</span>
+      </button>
+    </div>
+  );
+}
+
+function EditorModeSwitchDialog({
+  open,
+  onOpenChange,
+  onSaveAndSwitch,
+  onDiscardAndSwitch,
+  busy,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaveAndSwitch: () => void;
+  onDiscardAndSwitch: () => void;
+  busy: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Save before switching?</DialogTitle>
+          <DialogDescription>
+            You have unsaved changes. Save them before switching editor mode, or discard
+            changes and switch.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant="outline" onClick={onDiscardAndSwitch} disabled={busy}>
+            Switch without saving
+          </Button>
+          <Button onClick={onSaveAndSwitch} disabled={busy}>
+            {busy ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save & switch"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

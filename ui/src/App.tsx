@@ -131,7 +131,7 @@ export default function App() {
   const { recent, recordVisit } = useRecentPages(currentSpace);
   const { starred, toggle: toggleStar, isStarred } = useStarredPages(currentSpace);
   const { pinned, toggle: togglePin, isPinned } = usePinnedPages(currentSpace);
-  const editorRef = useRef<{ save: () => Promise<void> } | null>(null);
+  const editorRef = useRef<{ save: () => Promise<void>; toggleMode?: () => void } | null>(null);
   const [spaceKey, setSpaceKey] = useState(0);
   const refreshPublishedPages = usePublishedPagesStore((state) => state.refresh);
   const stateRef = useRef({ editing, activePath, graphOpen, historyOpen, dataOpen, basesOpen, canvasOpen, whiteboardOpen, timelineOpen, kanbanOpen });
@@ -200,6 +200,10 @@ export default function App() {
         if (!stateRef.current.editing) return;
         e.preventDefault();
         editorRef.current?.save().catch(() => {});
+      } else if (mod && e.shiftKey && key === "e") {
+        if (!stateRef.current.editing) return;
+        e.preventDefault();
+        editorRef.current?.toggleMode?.();
       } else if (mod && e.shiftKey && key === "b") {
         e.preventDefault();
         setBasesOpen((v) => !v);

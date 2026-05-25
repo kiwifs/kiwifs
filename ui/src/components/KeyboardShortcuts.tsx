@@ -36,6 +36,7 @@ const shortcuts: { section: string; items: { keys: string; label: string }[] }[]
     section: "Editor",
     items: [
       { keys: `${MOD}S`, label: "Save (also auto-saves after 2s)" },
+      { keys: `${MOD}Shift+E`, label: "Toggle Visual / Source (while editing)" },
       { keys: "/", label: "Slash commands (in editor)" },
       { keys: "Esc", label: "Close overlay / cancel" },
     ],
