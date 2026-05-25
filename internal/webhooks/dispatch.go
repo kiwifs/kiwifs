@@ -1,7 +1,6 @@
 package webhooks
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -12,7 +11,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -146,45 +144,12 @@ func (d *Dispatcher) deliver(job dispatchJob) {
 			deliveryID = delivery.ID
 		}
 	}
-	msgID := generateMsgID()
-	now := time.Now().UTC()
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, job.webhook.URL, bytes.NewReader(payload))
+	statusCode, err := postBody(ctx, job.webhook.URL, job.webhook.Secret, payload, d.client)
 	if err != nil {
-		log.Printf("webhooks: build request: %v", err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("webhook-id", msgID)
-	req.Header.Set("webhook-timestamp", strconv.FormatInt(now.Unix(), 10))
-
-	sig, err := signPayload(job.webhook.Secret, msgID, now, payload)
-	if err != nil {
-		log.Printf("webhooks: sign payload: %v", err)
-		d.updateDelivery(deliveryID, "failed", 0, err.Error())
-		return
-	}
-	req.Header.Set("webhook-signature", sig)
-	req.Header.Set("X-Kiwi-Signature-256", bodySignature(job.webhook.Secret, payload))
-
-	resp, err := d.client.Do(req)
-	statusCode := 0
-	if resp != nil {
-		statusCode = resp.StatusCode
-	}
-	if err != nil || statusCode < 200 || statusCode >= 300 {
-		if resp != nil {
-			resp.Body.Close()
-		}
-		errMsg := ""
-		if err != nil {
-			errMsg = err.Error()
-		} else {
-			errMsg = fmt.Sprintf("unexpected status %d", statusCode)
-		}
+		errMsg := err.Error()
 		d.updateDelivery(deliveryID, "failed", statusCode, errMsg)
 		if job.attempt < d.maxRetries {
 			delay := d.retryDelay(job.attempt)
@@ -199,9 +164,6 @@ func (d *Dispatcher) deliver(job dispatchJob) {
 			log.Printf("webhooks: max retries exhausted for %s", job.webhook.URL)
 		}
 		return
-	}
-	if resp != nil {
-		resp.Body.Close()
 	}
 	d.updateDelivery(deliveryID, "delivered", statusCode, "")
 }

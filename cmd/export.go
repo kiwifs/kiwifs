@@ -12,6 +12,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/docexport"
 	"github.com/kiwifs/kiwifs/internal/exporter"
+	"github.com/kiwifs/kiwifs/internal/webhooks"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +27,7 @@ Document formats render markdown into typeset output using external tools
 (Pandoc for PDF/HTML, Marp for slides, MkDocs for static sites).`,
 	Example: `  # Data export
   kiwifs export --format jsonl --output data.jsonl
+  kiwifs export --format jsonl --output data.jsonl --webhook https://api.vercel.com/v1/integrations/deploy/xxx
   kiwifs export --format csv --columns name,status --output data.csv
 
   # Document export
@@ -63,6 +65,9 @@ func init() {
 	exportCmd.Flags().String("site-name", "", "site name for MkDocs export")
 	exportCmd.Flags().String("site-url", "", "site URL for MkDocs export")
 	exportCmd.Flags().String("repo-url", "", "repository URL for MkDocs export")
+
+	exportCmd.Flags().String("webhook", "", "POST export metadata to this URL after a successful export")
+	exportCmd.Flags().String("webhook-secret", "", "HMAC signing secret for the export webhook (overrides config)")
 }
 
 // isDocumentFormat returns true if the format is a document rendering format.
@@ -162,6 +167,14 @@ func runDataExport(cmd *cobra.Command) error {
 	if output != "" {
 		fmt.Fprintf(os.Stderr, "Exported %d files to %s\n", count, output)
 	}
+
+	webhookURL, _ := cmd.Flags().GetString("webhook")
+	if webhookURL != "" {
+		webhookSecret, _ := cmd.Flags().GetString("webhook-secret")
+		if err := notifyExportWebhook(cmd.Context(), webhookURL, resolveWebhookSecret(cfg, webhookURL, webhookSecret), format, count, output); err != nil {
+			return fmt.Errorf("webhook: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -245,5 +258,36 @@ func runDocumentExport(cmd *cobra.Command) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "Exported %s to %s (%d bytes)\n", format, output, len(result.Data))
+
+	webhookURL, _ := cmd.Flags().GetString("webhook")
+	if webhookURL != "" {
+		webhookSecret, _ := cmd.Flags().GetString("webhook-secret")
+		if err := notifyExportWebhook(cmd.Context(), webhookURL, resolveWebhookSecret(cfg, webhookURL, webhookSecret), format, 1, output); err != nil {
+			return fmt.Errorf("webhook: %w", err)
+		}
+	}
 	return nil
+}
+
+func resolveWebhookSecret(cfg *config.Config, webhookURL, flagSecret string) string {
+	if flagSecret != "" {
+		return flagSecret
+	}
+	for _, we := range cfg.WebhookEntries {
+		if we.URL == webhookURL && we.Secret != "" {
+			return we.Secret
+		}
+	}
+	return ""
+}
+
+func notifyExportWebhook(ctx context.Context, url, secret, format string, fileCount int, output string) error {
+	_, err := webhooks.Post(ctx, url, secret, webhooks.ExportNotification{
+		Type:      webhooks.ExportCompletedType,
+		Format:    format,
+		FileCount: fileCount,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Output:    output,
+	}, nil)
+	return err
 }
