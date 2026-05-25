@@ -37,7 +37,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/time/rate"
 
-	_ "github.com/kiwifs/kiwifs/docs"
+	"github.com/kiwifs/kiwifs/docs"
 	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
@@ -479,6 +479,10 @@ func (s *Server) setupRoutes() {
 		return c.Redirect(http.StatusMovedPermanently, "/api/docs/index.html")
 	})
 	s.echo.GET("/api/docs/*", echoSwagger.WrapHandler)
+	s.echo.GET("/api/openapi.json", func(c echo.Context) error {
+		doc := docs.SwaggerInfo.ReadDoc()
+		return c.JSONBlob(http.StatusOK, []byte(doc))
+	})
 
 	api := s.echo.Group("/api/kiwi")
 	if mw := s.authMiddleware(); mw != nil {
