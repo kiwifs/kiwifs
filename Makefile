@@ -34,6 +34,9 @@ run: build
 dev:
 	go run . serve --root $(ROOT) --port $(PORT)
 
+dev-docker:
+	docker compose -f docker-compose.dev.yml up --build
+
 # Run the UI dev server against a running kiwifs on :3333. Useful when
 # iterating on the UI without rebuilding the Go binary between edits.
 dev-ui:

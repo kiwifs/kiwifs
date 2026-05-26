@@ -1,0 +1,65 @@
+# docker-compose.dev.yml — one-command dev setup with hot-reload
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up
+#
+# Backend: Go with air (hot-reload on .go file changes)
+# Frontend: Vite dev server with HMR on port 5173
+# KiwiFS accessible at http://localhost:3333 (API) and http://localhost:5173 (UI with HMR)
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3333:3333"
+    volumes:
+      - .:/app
+      - go-mod:/go/pkg/mod
+      - go-build:/root/.cache/go-build
+    working_dir: /app
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    command: >
+      air -c .air.toml
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3333/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    image: node:22-alpine
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./ui:/app
+      - node-modules:/app/node_modules
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_URL: http://backend:3333
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kiwi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kiwi}
+      POSTGRES_DB: ${POSTGRES_DB:-kiwi}
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kiwi}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  go-mod:
+  go-build:
+  node-modules:
+  pgdata-dev:

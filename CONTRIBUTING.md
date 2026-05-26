@@ -29,6 +29,17 @@ go test ./... -race
 go build -o kiwifs .
 ```
 
+### Docker dev setup (alternative)
+
+If you prefer Docker, one command gets everything running with hot-reload:
+
+```bash
+make dev-docker
+# or: docker compose -f docker-compose.dev.yml up
+```
+
+This starts the Go backend with [air](https://github.com/air-verse/air) (auto-rebuilds on `.go` changes) and the Vite frontend with HMR. Access the UI at `http://localhost:5173` and the API at `http://localhost:3333`.
+
 ### Project structure
 
 ```

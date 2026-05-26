@@ -24,6 +24,9 @@ secrets/
 # AI agent local configs
 .antigravitycli/
 
+# Air hot-reload temp
+tmp/
+
 # IDE / editor
 .vscode/
 .idea/

@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+# Dockerfile.dev — development image with air for hot-reload
+
+FROM golang:1.26-alpine
+
+RUN apk add --no-cache git gcc musl-dev
+
+# Install air for hot-reload
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+
+# Pre-download Go modules for faster restarts
+COPY go.mod go.sum ./
+RUN go mod download
+
+EXPOSE 3333
+
+CMD ["air", "-c", ".air.toml"]

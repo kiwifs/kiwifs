@@ -1,0 +1,25 @@
+# air configuration for hot-reload development
+# https://github.com/air-verse/air
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "./tmp/kiwifs"
+  cmd = "go build -o ./tmp/kiwifs ."
+  delay = 1000
+  exclude_dir = ["tmp", "ui", "node_modules", "knowledge", ".git", ".kiwi"]
+  exclude_regex = ["_test\\.go$"]
+  include_ext = ["go", "toml"]
+  kill_delay = "2s"
+  send_interrupt = true
+  stop_on_error = true
+
+[build.args_bin]
+  serve = ["serve", "--root", "./knowledge", "--port", "3333", "--host", "0.0.0.0", "--search", "sqlite"]
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true
