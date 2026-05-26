@@ -64,9 +64,12 @@ func (h *Handlers) buildFeed(ctx context.Context, filter string) (*feeds.Feed, e
 
 	// Convert timeline events to feed items
 	for _, event := range events {
+		var content []byte
+
 		// When filter=published, skip events for non-published files.
 		if filter == "published" && event.Type != "delete" {
-			content, err := h.store.Read(ctx, event.Path)
+			var err error
+			content, err = h.store.Read(ctx, event.Path)
 			if err != nil {
 				continue
 			}
@@ -78,6 +81,13 @@ func (h *Handlers) buildFeed(ctx context.Context, filter string) (*feeds.Feed, e
 		timestamp, err := time.Parse(time.RFC3339, event.Timestamp)
 		if err != nil {
 			timestamp = now
+		}
+
+		// Use published_at from frontmatter when available.
+		if content != nil {
+			if pubAt := rbac.PagePublishedAt(content); pubAt != nil {
+				timestamp = *pubAt
+			}
 		}
 
 		// Build item title
