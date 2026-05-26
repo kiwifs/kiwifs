@@ -460,6 +460,7 @@ func (s *Server) setupRoutes() {
 			prev()
 		}
 		h.invalidateGraphCache()
+		h.invalidateMemoryCache()
 	}
 
 	if viewReg != nil {

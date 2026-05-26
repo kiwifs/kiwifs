@@ -73,6 +73,9 @@ type Handlers struct {
 
 	graphCache atomic.Pointer[graphResponse]
 	graphGroup singleflight.Group
+
+	memoryCache atomic.Value // *memoryCacheEntry
+	memoryGroup singleflight.Group
 }
 
 func (h *Handlers) invalidateGraphCache() {
