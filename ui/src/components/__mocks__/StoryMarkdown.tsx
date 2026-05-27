@@ -37,8 +37,8 @@ export function StoryMarkdown({
         components={{
           a: ({ href, children: kids, ...rest }) => {
             const h = href ?? "";
-            if (h.startsWith("kiwi:")) {
-              const target = h.slice("kiwi:".length);
+            if (h.startsWith("#kiwi:")) {
+              const target = h.slice("#kiwi:".length);
               const exists = resolver(target) !== null;
               return (
                 <a

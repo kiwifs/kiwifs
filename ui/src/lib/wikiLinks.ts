@@ -1,8 +1,10 @@
 // Remark plugin + resolver for [[wiki-link]] and ![[embed]] syntax.
 //
 // Parses `[[target]]` or `[[target|label]]` inside text nodes and replaces
-// them with link nodes whose URL is a `kiwi:` pseudo-protocol. React-markdown
-// then renders those as clickable spans via a custom <a> component.
+// them with link nodes whose URL uses a `#kiwi:` hash-prefixed scheme.
+// The hash prefix ensures rehype-sanitize never strips the URL (hash
+// fragments bypass protocol checking). React-markdown then renders those
+// as clickable spans via a custom <a> component.
 //
 // `![[target]]` is the Obsidian-style embed syntax: it emits an image node
 // instead of a link, so the media-aware img override renders it as
@@ -133,7 +135,7 @@ export function remarkWikiLinks(opts: { resolver: LinkResolver }) {
           if (resolved && resolved.endsWith(".md")) {
             parts.push({
               type: "link",
-              url: `kiwi:${resolved}`,
+              url: `#kiwi:${resolved}`,
               title: "Embedded page (click to open)",
               children: [{ type: "text", value: label }],
               data: {
@@ -162,8 +164,8 @@ export function remarkWikiLinks(opts: { resolver: LinkResolver }) {
           const url = isSamePageAnchor
             ? resolved
             : resolved
-              ? `kiwi:${resolved}`
-              : `kiwi-missing:${target}`;
+              ? `#kiwi:${resolved}`
+              : `#kiwi-missing:${target}`;
           parts.push({
             type: "link",
             url,

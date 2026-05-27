@@ -89,6 +89,10 @@ const sanitizeSchema = {
     // Style element (for scoped @keyframes in SVG)
     "style",
   ],
+  protocols: {
+    ...defaultSchema.protocols,
+    href: ["http", "https", "irc", "ircs", "mailto", "xmpp", "kiwi", "kiwi-missing"],
+  },
   attributes: {
     ...defaultSchema.attributes,
     "*": [...(defaultSchema.attributes?.["*"] || []), "className", "style", "role", "id",
@@ -96,6 +100,7 @@ const sanitizeSchema = {
       "data-tag", "metastring",
       "data-kiwi-directive", "data-label", "data-ratio", "data-cols",
       "aria-describedby", "aria-label"],
+    a: [...(defaultSchema.attributes?.a || []), "className", "data-kiwi-target", "data-kiwi-missing"],
     iframe: ["src", "title", "className", "style"],
     video: ["controls", "preload", "className"],
     audio: ["controls", "preload", "className"],
@@ -734,9 +739,8 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                   components={{
                     a: ({ href, children, node: _node, ...rest }) => {
                       const h = href ?? "";
-                      if (h.startsWith("kiwi:")) {
-                        const raw = h.slice("kiwi:".length);
-                        // Split path and heading anchor: "page.md#heading" → navigate + scroll
+                      if (h.startsWith("#kiwi:")) {
+                        const raw = h.slice("#kiwi:".length);
                         const hashIdx = raw.indexOf("#");
                         const pagePath = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
                         const anchor = hashIdx >= 0 ? raw.slice(hashIdx) : "";
@@ -747,7 +751,6 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                               e.preventDefault();
                               onNavigate(pagePath);
                               if (anchor) {
-                                // Scroll to heading after navigation settles
                                 requestAnimationFrame(() => {
                                   setTimeout(() => {
                                     const el = document.getElementById(anchor.slice(1));
@@ -763,8 +766,8 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                           </a>
                         );
                       }
-                      if (h.startsWith("kiwi-missing:")) {
-                        const target = h.slice("kiwi-missing:".length);
+                      if (h.startsWith("#kiwi-missing:")) {
+                        const target = h.slice("#kiwi-missing:".length);
                         return (
                           <a
                             href="#"
