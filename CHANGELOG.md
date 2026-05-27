@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.19.3](https://github.com/kiwifs/kiwifs/compare/v0.19.2...v0.19.3) (2026-05-27)
+
+
+### Features
+
+* add published page visibility and management ([#161](https://github.com/kiwifs/kiwifs/issues/161)) ([cb12bf2](https://github.com/kiwifs/kiwifs/commit/cb12bf228136f6cbd9d61caf650408f15d032f03))
+* enhanced canvas API, React Flow renderer, and IDE-like file tree ([2c99913](https://github.com/kiwifs/kiwifs/commit/2c9991353a21a9cdf3902d8e36d895bd19e40876))
+* **export:** add --webhook flag for post-export notifications ([#179](https://github.com/kiwifs/kiwifs/issues/179)) ([cee3429](https://github.com/kiwifs/kiwifs/commit/cee34290ce6a575e5ba219c411585c228a84b68b))
+* **search:** add "did you mean" suggestions on zero results ([#175](https://github.com/kiwifs/kiwifs/issues/175)) ([de803bf](https://github.com/kiwifs/kiwifs/commit/de803bfac7aec411e484a18a3ac1ebe617464428))
+* **ui:** add whiteboard view and expand Flow canvas ([016794b](https://github.com/kiwifs/kiwifs/commit/016794b9e78b672d31b8c9e226c58466a24d0a3e))
+
+
+### Bug Fixes
+
+* **ci:** add infra filter to trigger full CI on Dockerfile/workflow changes ([5a3ee5e](https://github.com/kiwifs/kiwifs/commit/5a3ee5ed9269327cee69aefa456804f85e47ce43))
+* **ci:** always build UI when Go changes (needed for //go:embed ui/dist) ([b3f4663](https://github.com/kiwifs/kiwifs/commit/b3f4663004b692991c21001e202a77bcdbf3bdc4))
+* **ci:** auto-merge Cursor agent fix ([#172](https://github.com/kiwifs/kiwifs/issues/172)) ([dbdb905](https://github.com/kiwifs/kiwifs/commit/dbdb905c5c647797fb08b9ddba12930a2183b3b6))
+* **editor:** block mode toggle while save is in progress ([617d056](https://github.com/kiwifs/kiwifs/commit/617d056024510d8f3e078f5fc7373641d9aba870))
+* published page highlight for virtualDir nodes and bulk response consistency ([63ffb2d](https://github.com/kiwifs/kiwifs/commit/63ffb2d166b20150686d8b192dcc235ccb8435d4))
+* resolve good-first-issues [#11](https://github.com/kiwifs/kiwifs/issues/11), [#127](https://github.com/kiwifs/kiwifs/issues/127), [#128](https://github.com/kiwifs/kiwifs/issues/128), [#136](https://github.com/kiwifs/kiwifs/issues/136), [#158](https://github.com/kiwifs/kiwifs/issues/158) ([#180](https://github.com/kiwifs/kiwifs/issues/180)) ([866c8f2](https://github.com/kiwifs/kiwifs/commit/866c8f2be0cc053166f3c8ae943c67121332bfb0))
+* **ui:** clean up dead code from Mermaid Shadow DOM migration ([5010860](https://github.com/kiwifs/kiwifs/commit/5010860daecbb47aff8df44df6aadc09e4ec7f76))
+* **ui:** clean up dead code from Mermaid Shadow DOM migration ([1276790](https://github.com/kiwifs/kiwifs/commit/12767901d7fbda564e93de8f2641858ca8d75734))
+* **ui:** improve OS file drag-and-drop in file tree ([98f087f](https://github.com/kiwifs/kiwifs/commit/98f087faec8e07b6a2abae6f9077c254967bc857))
+* **ui:** preserve Mermaid diagram themes ([c8c28ec](https://github.com/kiwifs/kiwifs/commit/c8c28ec96737a9be104c7c102a8f01a686399730))
+* **ui:** preserve Mermaid diagram themes ([8eddd5b](https://github.com/kiwifs/kiwifs/commit/8eddd5bf8636bc0967e2332e309b353977da051a))
+* **ui:** remove unused dragTarget prop from TreeNode ([#135](https://github.com/kiwifs/kiwifs/issues/135)) ([30344ec](https://github.com/kiwifs/kiwifs/commit/30344eced04021dc83a448cebb4ddae8549d206a))
+* **ui:** resolve TypeScript errors breaking CI build ([#144](https://github.com/kiwifs/kiwifs/issues/144)) ([ac883fe](https://github.com/kiwifs/kiwifs/commit/ac883fe0ed5a8eb203ad31763c41ddc37d85e7ab))
+* **ui:** use [@kw](https://github.com/kw) import for cn in MarkdownSourceEditor ([2d237cc](https://github.com/kiwifs/kiwifs/commit/2d237ccf196921ee4984a81f9a99c71c56e3da4d))
+* **ui:** wiki-links navigate to correct page instead of reloading ([#182](https://github.com/kiwifs/kiwifs/issues/182)) ([57afb54](https://github.com/kiwifs/kiwifs/commit/57afb54a8caf86b5fc45c2084b51172c4ee9ad2b)), closes [#181](https://github.com/kiwifs/kiwifs/issues/181)
+* wrap Storybook stories in TooltipProvider ([c310749](https://github.com/kiwifs/kiwifs/commit/c3107499fd3a887d499bc5ccd21d70321b8d5e7c))
+
 ## [0.19.2](https://github.com/kiwifs/kiwifs/compare/v0.19.1...v0.19.2) (2026-05-20)
 
 
