@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-let mermaidInitTheme: "dark" | "default" | null = null;
+let mermaidReady = false;
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
@@ -11,15 +11,15 @@ async function getMermaid() {
   return mermaid;
 }
 
-async function ensureInit(theme: "dark" | "default") {
+async function ensureInit() {
   const mermaid = await getMermaid();
-  if (mermaidInitTheme !== theme) {
+  if (!mermaidReady) {
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: "strict",
-      theme,
+      theme: "default",
     });
-    mermaidInitTheme = theme;
+    mermaidReady = true;
   }
   return mermaid;
 }
@@ -36,24 +36,8 @@ export function MermaidDiagram({ chart }: { chart: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const renderIdRef = useRef(`kiwi-mermaid-${Math.random().toString(36).slice(2)}`);
+  const bindFunctionsRef = useRef<((element: Element) => void) | undefined>(undefined);
   const dragRef = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null);
-
-  const [isDark, setIsDark] = useState<boolean>(
-    () =>
-      typeof document !== "undefined" &&
-      document.documentElement.classList.contains("dark"),
-  );
-
-  useEffect(() => {
-    const obs = new MutationObserver(() =>
-      setIsDark(document.documentElement.classList.contains("dark")),
-    );
-    obs.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => obs.disconnect();
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,14 +49,12 @@ export function MermaidDiagram({ chart }: { chart: string }) {
       setPan({ x: 0, y: 0 });
 
       try {
-        const mermaid = await ensureInit(isDark ? "dark" : "default");
+        const mermaid = await ensureInit();
         const rendered = await mermaid.render(renderIdRef.current, chart);
         if (cancelled) return;
 
+        bindFunctionsRef.current = rendered.bindFunctions;
         setSvg(rendered.svg);
-        queueMicrotask(() => {
-          if (containerRef.current) rendered.bindFunctions?.(containerRef.current);
-        });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -82,7 +64,20 @@ export function MermaidDiagram({ chart }: { chart: string }) {
     return () => {
       cancelled = true;
     };
-  }, [chart, isDark]);
+  }, [chart]);
+
+  useEffect(() => {
+    const host = containerRef.current;
+    if (!host || !svg) return;
+
+    const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
+    root.innerHTML = `<style>
+      :host { display: block; }
+      svg { display: block; width: 100%; max-width: 100%; height: auto; }
+    </style>${svg}`;
+    const svgEl = root.querySelector("svg");
+    if (svgEl) bindFunctionsRef.current?.(svgEl);
+  }, [svg]);
 
   // Scroll-wheel zoom (also handles trackpad pinch via ctrlKey)
   useEffect(() => {
@@ -203,12 +198,11 @@ export function MermaidDiagram({ chart }: { chart: string }) {
           >
             <div
               ref={containerRef}
-              className="mx-auto origin-center [&_svg]:h-auto [&_svg]:w-full"
+              className="mx-auto origin-center"
               style={{
                 width: `${zoom * 100}%`,
                 transform: `translate(${pan.x}px, ${pan.y}px)`,
               }}
-              dangerouslySetInnerHTML={{ __html: svg }}
             />
           </div>
           {!isDefaultView && (

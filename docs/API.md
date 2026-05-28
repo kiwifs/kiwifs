@@ -69,6 +69,46 @@ POST   /api/kiwi/resolve-links             → resolve [[wiki-links]] to permali
 | `"connection reset" AND ws` | Boolean operators (AND, OR, NOT) |
 | `auth*` | Prefix matching |
 
+### Spelling suggestions ("did you mean")
+
+When full-text search returns **no results** and `offset` is `0`, `GET /api/kiwi/search` and `GET /api/kiwi/search/verified` may include a `suggestions` array. Each entry is a page title close to the query (Levenshtein edit distance), taken from indexed titles in the SQLite search backend (`--search sqlite`).
+
+| Query param | Default | Max | Description |
+|-------------|---------|-----|-------------|
+| `suggest_threshold` | `3` | `10` | Maximum edit distance between query and suggested title |
+
+Suggestions are omitted when FTS finds hits, when `offset > 0`, or when using the `grep` search backend. At most **3** unique titles are returned (deduplicated by title; closest match wins).
+
+**Example** — misspelled query with no FTS hits:
+
+```
+GET /api/kiwi/search?q=Authentcation
+```
+
+```json
+{
+  "query": "Authentcation",
+  "limit": 50,
+  "offset": 0,
+  "results": [],
+  "suggestions": [
+    {
+      "query": "Authentication",
+      "path": "concepts/authentication.md",
+      "title": "Authentication",
+      "distance": 1
+    }
+  ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `query` | Suggested search term (the matched page title) |
+| `path` | Page path in the knowledge root |
+| `title` | Display title |
+| `distance` | Edit distance from the original query (1–`suggest_threshold`) |
+
 ---
 
 ## Versioning

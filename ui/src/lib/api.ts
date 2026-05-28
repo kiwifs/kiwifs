@@ -22,7 +22,18 @@ export type SearchResult = {
   matches?: SearchMatch[];
 };
 
-export type SearchResponse = { query: string; results: SearchResult[] };
+export type SearchSuggestion = {
+  query: string;
+  path: string;
+  title: string;
+  distance: number;
+};
+
+export type SearchResponse = {
+  query: string;
+  results: SearchResult[];
+  suggestions?: SearchSuggestion[];
+};
 
 export type Version = {
   hash: string;
@@ -762,8 +773,28 @@ export const api = {
     });
   },
 
+  async publishBulk(paths: string[]): Promise<PublishBulkResponse> {
+    return request(`${kiwiBase()}/publish/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }),
+    });
+  },
+
+  async unpublishBulk(paths: string[]): Promise<PublishBulkResponse> {
+    return request(`${kiwiBase()}/unpublish/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }),
+    });
+  },
+
   async publishStatus(path: string): Promise<PublishStatusResponse> {
     return request(`${kiwiBase()}/publish/status?path=${encodeURIComponent(path)}`);
+  },
+
+  async publishedPages(): Promise<PublishedPagesResponse> {
+    return request(`${kiwiBase()}/publish/list`);
   },
 
   // --- Import pipeline ---
@@ -1203,4 +1234,29 @@ export type PublishStatusResponse = {
   published_at?: string;
   public_url?: string;
   view_count: number;
+};
+
+export type PublishBulkError = {
+  path: string;
+  error: string;
+};
+
+export type PublishBulkResponse = {
+  published: boolean;
+  requested: number;
+  changed: number;
+  skipped: number;
+  paths: PublishResponse[];
+  errors?: PublishBulkError[];
+};
+
+export type PublishedPage = {
+  path: string;
+  published_at?: string;
+  public_url: string;
+};
+
+export type PublishedPagesResponse = {
+  count: number;
+  pages: PublishedPage[];
 };

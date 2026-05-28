@@ -1,31 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ChevronDown,
-  ChevronRight,
-  Clock,
   Clock4,
   Columns3,
   Database,
-  File,
-  FileAxis3D,
   LayoutGrid,
   Moon,
   Network,
   PanelLeftClose,
   PanelLeftOpen,
-  Pin,
   Plus,
   PenTool,
   Presentation,
   Search as SearchIcon,
-  Star,
   Sun,
-  ChevronsDownUp,
-  ArrowDownAZ,
 } from "lucide-react";
 import { undoFileOp } from "@kw/stores/fileOpsStore";
-import { KiwiTree, type KiwiTreeHandle } from "./components/KiwiTree";
+import type { KiwiTreeHandle } from "./components/KiwiTree";
+import { AppSidebar } from "./components/AppSidebar";
 import type { TreeSortMode } from "./lib/treeTransform";
+import { usePublishedPagesStore } from "./stores/publishedPagesStore";
 import { KiwiPage } from "./components/KiwiPage";
 import { KiwiEditor } from "./components/KiwiEditor";
 import { KiwiSearch } from "./components/KiwiSearch";
@@ -40,13 +33,10 @@ import { KiwiKanban } from "./components/KiwiKanban";
 import { KanbanDragProvider } from "./components/kanban/KanbanDragProvider";
 import { NewPageDialog } from "./components/NewPageDialog";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
-import { SpaceSelector } from "./components/SpaceSelector";
 import { useRecentPages } from "./hooks/useRecentPages";
 import { useStarredPages } from "./hooks/useStarredPages";
 import { usePinnedPages } from "./hooks/usePinnedPages";
-import { titleize } from "./lib/paths";
 import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
 import {
   Tooltip,
   TooltipContent,
@@ -141,7 +131,9 @@ export default function App() {
   const { recent, recordVisit } = useRecentPages(currentSpace);
   const { starred, toggle: toggleStar, isStarred } = useStarredPages(currentSpace);
   const { pinned, toggle: togglePin, isPinned } = usePinnedPages(currentSpace);
-  const editorRef = useRef<{ save: () => Promise<void> } | null>(null);
+  const editorRef = useRef<{ save: () => Promise<void>; toggleMode?: () => void } | null>(null);
+  const [spaceKey, setSpaceKey] = useState(0);
+  const refreshPublishedPages = usePublishedPagesStore((state) => state.refresh);
   const stateRef = useRef({ editing, activePath, graphOpen, historyOpen, dataOpen, basesOpen, canvasOpen, whiteboardOpen, timelineOpen, kanbanOpen });
   stateRef.current = { editing, activePath, graphOpen, historyOpen, dataOpen, basesOpen, canvasOpen, whiteboardOpen, timelineOpen, kanbanOpen };
 
@@ -179,6 +171,10 @@ export default function App() {
   }, [refreshKey]);
 
   useEffect(() => {
+    void refreshPublishedPages();
+  }, [refreshKey, spaceKey, refreshPublishedPages]);
+
+  useEffect(() => {
     if (!tree || activePath) return;
     const firstMd = firstMarkdown(tree);
     if (firstMd) setActivePath(firstMd);
@@ -204,6 +200,10 @@ export default function App() {
         if (!stateRef.current.editing) return;
         e.preventDefault();
         editorRef.current?.save().catch(() => {});
+      } else if (mod && e.shiftKey && key === "e") {
+        if (!stateRef.current.editing) return;
+        e.preventDefault();
+        editorRef.current?.toggleMode?.();
       } else if (mod && e.shiftKey && key === "b") {
         e.preventDefault();
         setBasesOpen((v) => !v);
@@ -235,8 +235,6 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  const [spaceKey, setSpaceKey] = useState(0);
 
 const handleSpaceSwitch = useCallback(() => {
     setActivePath(null);
@@ -486,161 +484,35 @@ const handleSpaceSwitch = useCallback(() => {
           )}
 
           {/* Sidebar */}
-          <aside
-            className={
-              isMobile
-                ? "kiwi-tree-sidebar absolute inset-y-0 left-0 z-30 border-r border-border bg-card flex flex-col overflow-hidden transition-transform duration-200 " + (sidebarOpen ? "translate-x-0" : "-translate-x-full")
-                : "kiwi-tree-sidebar shrink-0 border-r border-border bg-card flex flex-col overflow-hidden" + (resizing.current ? "" : " transition-[width] duration-200")
-            }
-            style={isMobile ? { width: Math.min(sidebarWidth, 300) } : { width: sidebarOpen ? sidebarWidth : 0 }}
-          >
-            <div className="flex flex-col h-full min-h-0" style={{ minWidth: isMobile ? Math.min(sidebarWidth, 300) : sidebarWidth }}>
-              {/* Space selector */}
-              <SpaceSelector onSwitch={handleSpaceSwitch} />
-
-              {/* Sidebar sections */}
-              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                {(starred.length > 0 || pinned.length > 0 || recent.length > 0) && (
-                  <div className="shrink-0 overflow-auto kiwi-scroll max-h-[40vh]">
-                {starred.length > 0 && (
-                  <SidebarSection icon={<Star className="h-3.5 w-3.5" />} title="Starred" storageKey="starred">
-                    {starred.map((p) => (
-                      <SidebarPageItem
-                        key={p}
-                        path={p}
-                        active={activePath === p}
-                        onSelect={navigate}
-                        trailing={
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); toggleStar(p); }}
-                            className="opacity-0 group-hover:opacity-100 text-amber-500"
-                          >
-                            <Star className="h-3 w-3 fill-current" />
-                          </button>
-                        }
-                      />
-                    ))}
-                  </SidebarSection>
-                )}
-                {pinned.length > 0 && (
-                  <SidebarSection icon={<Pin className="h-3.5 w-3.5" />} title="Pinned" storageKey="pinned">
-                    {pinned.map((p) => (
-                      <SidebarPageItem
-                        key={p}
-                        path={p}
-                        active={activePath === p}
-                        onSelect={navigate}
-                        trailing={
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); togglePin(p); }}
-                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"
-                          >
-                            <Pin className="h-3 w-3 fill-current" />
-                          </button>
-                        }
-                      />
-                    ))}
-                  </SidebarSection>
-                )}
-                {recent.length > 0 && (
-                  <SidebarSection icon={<Clock className="h-3.5 w-3.5" />} title="Recent" storageKey="recent">
-                    {recent.slice(0, 5).map((r) => (
-                      <SidebarPageItem
-                        key={r.path}
-                        path={r.path}
-                        active={activePath === r.path}
-                        onSelect={navigate}
-                      />
-                    ))}
-                  </SidebarSection>
-                )}
-                  </div>
-                )}
-                <SidebarSection
-                  icon={<FileAxis3D className="h-3.5 w-3.5" />}
-                  title="Pages"
-                  storageKey="pages"
-                  defaultOpen
-                  fill
-                  expandSignal={treeRevealRequest?.nonce}
-                  headerActions={
-                    <>
-                      <SidebarIconButton
-                        label="New page"
-                        onClick={() => {
-                          setNewFolder(undefined);
-                          setNewOpen(true);
-                        }}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </SidebarIconButton>
-                      <SidebarIconButton
-                        label="Collapse all folders"
-                        onClick={() => treeRef.current?.collapseAll()}
-                      >
-                        <ChevronsDownUp className="h-3.5 w-3.5" />
-                      </SidebarIconButton>
-                      <SidebarIconButton
-                        label={`Sort: ${treeSortMode === "type" ? "type" : "name"}`}
-                        onClick={() => {
-                          setTreeSortMode((m) => {
-                            const next = m === "name" ? "type" : "name";
-                            try {
-                              localStorage.setItem("kiwifs-tree-sort", next);
-                            } catch {}
-                            return next;
-                          });
-                        }}
-                      >
-                        <ArrowDownAZ className="h-3.5 w-3.5" />
-                      </SidebarIconButton>
-                    </>
-                  }
-                >
-                  <div className="shrink-0 px-2 pb-1.5">
-                    <Input
-                      ref={treeFilterRef}
-                      value={treeFilter}
-                      onChange={(e) => setTreeFilter(e.target.value)}
-                      placeholder="Filter pages…"
-                      className="h-7 text-xs font-normal normal-case tracking-normal"
-                      aria-label="Filter file tree"
-                    />
-                  </div>
-                  <KiwiTree
-                    ref={treeRef}
-                    activePath={activePath}
-                    revealRequest={treeRevealRequest}
-                    onSelect={navigate}
-                    refreshKey={refreshKey}
-                    filterQuery={treeFilter}
-                    sortMode={treeSortMode}
-                    compactFolders
-                    enableFileNesting
-                    onCreateChild={(folder) => {
-                      setNewFolder(folder);
-                      setNewOpen(true);
-                    }}
-                    onDeleted={() => {
-                      setActivePath(null);
-                      setRefreshKey((k) => k + 1);
-                    }}
-                    onDuplicated={(p) => {
-                      setRefreshKey((k) => k + 1);
-                      navigate(p);
-                    }}
-                    onMoved={(p) => {
-                      setRefreshKey((k) => k + 1);
-                      if (p) navigate(p);
-                    }}
-                    enableKanbanDrag={kanbanOpen}
-                  />
-                </SidebarSection>
-              </div>
-            </div>
-          </aside>
+          <AppSidebar
+            activePath={activePath}
+            isMobile={isMobile}
+            sidebarOpen={sidebarOpen}
+            sidebarWidth={sidebarWidth}
+            resizing={resizing}
+            treeRef={treeRef}
+            treeFilterRef={treeFilterRef}
+            treeFilter={treeFilter}
+            treeRevealRequest={treeRevealRequest}
+            treeSortMode={treeSortMode}
+            refreshKey={refreshKey}
+            kanbanOpen={kanbanOpen}
+            starred={starred}
+            pinned={pinned}
+            recent={recent}
+            onSpaceSwitch={handleSpaceSwitch}
+            onNavigate={navigate}
+            onToggleStar={toggleStar}
+            onTogglePin={togglePin}
+            onCreatePage={(folder) => {
+              setNewFolder(folder);
+              setNewOpen(true);
+            }}
+            onTreeFilterChange={setTreeFilter}
+            onTreeSortModeChange={setTreeSortMode}
+            onActivePathChange={setActivePath}
+            onTreeRefresh={() => setRefreshKey((key) => key + 1)}
+          />
 
           {/* Sidebar resize handle (desktop only) */}
           {sidebarOpen && !isMobile && (
@@ -758,6 +630,7 @@ const handleSpaceSwitch = useCallback(() => {
                   setSearchOpen(true);
                 }}
                 refreshKey={refreshKey}
+                onPublishedChanged={refreshPublishedPages}
               />
             ) : treeLoading ? (
               <div className="flex h-full items-center justify-center">
@@ -888,133 +761,6 @@ function ToolbarButton({
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
-  );
-}
-
-/* ── Sidebar Section ── */
-
-function SidebarSection({
-  icon,
-  title,
-  children,
-  storageKey,
-  defaultOpen,
-  expandSignal,
-  headerActions,
-  fill,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
-  storageKey?: string;
-  defaultOpen?: boolean;
-  expandSignal?: number;
-  headerActions?: React.ReactNode;
-  fill?: boolean;
-}) {
-  const [collapsed, setCollapsed] = useState(() => {
-    if (!storageKey) return false;
-    try {
-      const stored = localStorage.getItem(`kiwifs-section-${storageKey}`);
-      if (stored !== null) return stored === "1";
-    } catch {}
-    return !defaultOpen;
-  });
-
-  useEffect(() => {
-    if (expandSignal == null) return;
-    setCollapsed(false);
-  }, [expandSignal]);
-
-  return (
-    <div className={`border-b border-border/50 last:border-b-0${fill ? " flex-1 min-h-0 flex flex-col" : ""}`}>
-      <div className="flex items-center gap-0.5 px-1 py-1 shrink-0">
-        <button
-          type="button"
-          onClick={() => {
-            const next = !collapsed;
-            setCollapsed(next);
-            if (storageKey) {
-              try { localStorage.setItem(`kiwifs-section-${storageKey}`, next ? "1" : "0"); } catch {}
-            }
-          }}
-          className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider text-left hover:text-foreground hover:bg-accent/50 transition-colors rounded-sm"
-        >
-          {icon}
-          <span className="flex-1 truncate">{title}</span>
-          {collapsed
-            ? <ChevronRight className="h-3 w-3 shrink-0" />
-            : <ChevronDown className="h-3 w-3 shrink-0" />}
-        </button>
-        {headerActions && !collapsed && (
-          <div className="flex items-center shrink-0">{headerActions}</div>
-        )}
-      </div>
-      {!collapsed && (
-        <div className={fill ? "flex-1 min-h-0 flex flex-col overflow-hidden" : "pb-2"}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SidebarIconButton({
-  children,
-  label,
-  onClick,
-}: {
-  children: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          aria-label={label}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClick();
-          }}
-          className="h-6 w-6 grid place-items-center rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
-        >
-          {children}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-/* ── Sidebar Page Item ── */
-
-function SidebarPageItem({
-  path,
-  active,
-  onSelect,
-  trailing,
-}: {
-  path: string;
-  active: boolean;
-  onSelect: (path: string) => void;
-  trailing?: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(path)}
-      className={
-        "group w-full flex items-center gap-1.5 px-3 py-1 text-left text-sm transition-colors " +
-        "hover:bg-accent hover:text-accent-foreground " +
-        (active ? "bg-accent text-accent-foreground font-medium" : "")
-      }
-    >
-      <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      <span className="truncate flex-1">{titleize(path)}</span>
-      {trailing}
-    </button>
   );
 }
 

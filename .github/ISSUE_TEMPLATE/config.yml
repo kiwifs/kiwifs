@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://github.com/kiwifs/kiwifs/discussions/categories/q-a
+    about: Ask usage questions and get help from the community.
+  - name: Propose a roadmap use case
+    url: https://github.com/kiwifs/kiwifs/discussions
+    about: Discuss larger product ideas before opening implementation issues.
+  - name: Security vulnerability
+    url: https://github.com/kiwifs/kiwifs/security/policy
+    about: Please report security vulnerabilities privately.
+  - name: Documentation
+    url: https://docs.kiwifs.com
+    about: Read the docs before filing a usage issue.

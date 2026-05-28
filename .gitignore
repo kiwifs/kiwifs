@@ -21,6 +21,9 @@ secrets/
 # Claude Code / Cursor local settings
 .claude/
 
+# AI agent local configs
+.antigravitycli/
+
 # IDE / editor
 .vscode/
 .idea/

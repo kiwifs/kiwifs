@@ -65,3 +65,24 @@ export const NewPage: Story = {
     ),
   ],
 };
+
+/** Open editor with Source mode preference (set localStorage before mount). */
+export const SourceModePreferred: Story = {
+  ...MarkdownEditor,
+  decorators: [
+    (Story) => {
+      try {
+        localStorage.setItem("kiwifs-editor-mode", "source");
+      } catch {
+        /* ignore */
+      }
+      return (
+        <MockApiProvider overrides={{ fileContent: mockMarkdownRich }}>
+          <div className="h-screen bg-background text-foreground">
+            <Story />
+          </div>
+        </MockApiProvider>
+      );
+    },
+  ],
+};

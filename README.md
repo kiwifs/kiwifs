@@ -239,8 +239,14 @@ If you want to offer KiwiFS as a managed service or need a commercial license, [
 
 Thanks to everyone who has contributed to KiwiFS.
 
-<a href="https://github.com/kiwifs/kiwifs/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=kiwifs/kiwifs" alt="Contributors" />
-</a>
+<a href="https://github.com/amelia751"><img src="https://github.com/amelia751.png" width="50" alt="amelia751"></a>
+<a href="https://github.com/hermes-agent"><img src="https://github.com/hermes-agent.png" width="50" alt="hermes-agent"></a>
+<a href="https://github.com/shoveller"><img src="https://github.com/shoveller.png" width="50" alt="shoveller"></a>
+<a href="https://github.com/jasperdevs"><img src="https://github.com/jasperdevs.png" width="50" alt="jasperdevs"></a>
+<a href="https://github.com/KavishShah15"><img src="https://github.com/KavishShah15.png" width="50" alt="KavishShah15"></a>
+<a href="https://github.com/Avuru02"><img src="https://github.com/Avuru02.png" width="50" alt="Avuru02"></a>
+<a href="https://github.com/SAY-5"><img src="https://github.com/SAY-5.png" width="50" alt="SAY-5"></a>
+<a href="https://github.com/PranavChahal"><img src="https://github.com/PranavChahal.png" width="50" alt="PranavChahal"></a>
+<a href="https://github.com/nanookclaw"><img src="https://github.com/nanookclaw.png" width="50" alt="nanookclaw"></a>
 
 Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md).
