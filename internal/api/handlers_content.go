@@ -28,6 +28,15 @@ type templatesResponse struct {
 	Templates []templateEntry `json:"templates"`
 }
 
+// ListTemplates godoc
+//
+//	@Summary		List templates
+//	@Description	Lists markdown templates found in the .kiwi/templates directory.
+//	@Tags			templates
+//	@Security		BearerAuth
+//	@Success		200		{object}	templatesResponse
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/templates [get]
 func (h *Handlers) ListTemplates(c echo.Context) error {
 	dir := filepath.Join(h.root, ".kiwi", "templates")
 	out := []templateEntry{}
@@ -54,6 +63,18 @@ type templateBody struct {
 	Content string `json:"content"`
 }
 
+// ReadTemplate godoc
+//
+//	@Summary		Read template content
+//	@Description	Reads the contents of a specific markdown template by name.
+//	@Tags			templates
+//	@Security		BearerAuth
+//	@Param			name	query		string	true	"Template name (without .md extension)"
+//	@Success		200		{object}	templateBody
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/template [get]
 func (h *Handlers) ReadTemplate(c echo.Context) error {
 	name := c.QueryParam("name")
 	if name == "" {
@@ -84,6 +105,17 @@ type commentBody struct {
 	Author string          `json:"author,omitempty"`
 }
 
+// ListComments godoc
+//
+//	@Summary		List comments for a file
+//	@Description	Returns all inline comments (both active and resolved) attached to a specific file path.
+//	@Tags			comments
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"File path to list comments for"
+//	@Success		200		{object}	commentsResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/comments [get]
 func (h *Handlers) ListComments(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -96,6 +128,18 @@ func (h *Handlers) ListComments(c echo.Context) error {
 	return c.JSON(http.StatusOK, commentsResponse{Path: path, Comments: list})
 }
 
+// AddComment godoc
+//
+//	@Summary		Add a comment to a file
+//	@Description	Adds a new inline comment at a specific anchor position within a file path. Automatically commits the changes.
+//	@Tags			comments
+//	@Security		BearerAuth
+//	@Param			path	query		string		true	"File path to add the comment to"
+//	@Param			X-Actor	header		string		false	"Actor identity performing the operation"
+//	@Param			body	body		commentBody	true	"Comment details"
+//	@Success		200		{object}	comments.Comment
+//	@Failure		400		{object}	map[string]string
+//	@Router			/api/kiwi/comments [post]
 func (h *Handlers) AddComment(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -130,6 +174,20 @@ func (h *Handlers) AddComment(c echo.Context) error {
 	return c.JSON(http.StatusOK, record)
 }
 
+// DeleteComment godoc
+//
+//	@Summary		Delete a comment
+//	@Description	Deletes a specific inline comment by ID from a file path. Automatically commits the changes.
+//	@Tags			comments
+//	@Security		BearerAuth
+//	@Param			id		path		string	true	"Comment ID"
+//	@Param			path	query		string	true	"File path the comment is attached to"
+//	@Param			X-Actor	header		string	false	"Actor identity performing the operation"
+//	@Success		200		{object}	map[string]string
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/comments/{id} [delete]
 func (h *Handlers) DeleteComment(c echo.Context) error {
 	id := c.Param("id")
 	path := c.QueryParam("path")
@@ -156,6 +214,25 @@ func (h *Handlers) DeleteComment(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"deleted": id, "path": path})
 }
 
+type resolveCommentBody struct {
+	Resolved bool `json:"resolved"`
+}
+
+// ResolveComment godoc
+//
+//	@Summary		Resolve or unresolve a comment
+//	@Description	Sets the resolution status (resolved or unresolved) of a specific inline comment by ID. Automatically commits the changes.
+//	@Tags			comments
+//	@Security		BearerAuth
+//	@Param			id		path		string				true	"Comment ID"
+//	@Param			path	query		string				true	"File path the comment is attached to"
+//	@Param			X-Actor	header		string				false	"Actor identity performing the operation"
+//	@Param			body	body		resolveCommentBody	true	"Resolution state"
+//	@Success		200		{object}	comments.Comment
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/comments/{id} [patch]
 func (h *Handlers) ResolveComment(c echo.Context) error {
 	id := c.Param("id")
 	path := c.QueryParam("path")
@@ -167,9 +244,7 @@ func (h *Handlers) ResolveComment(c echo.Context) error {
 		actor = pipeline.DefaultActor
 	}
 
-	var body struct {
-		Resolved bool `json:"resolved"`
-	}
+	var body resolveCommentBody
 	if err := bindJSON(c, &body); err != nil {
 		return err
 	}
@@ -202,6 +277,15 @@ func shortID(id string) string {
 	return id
 }
 
+// GetTheme godoc
+//
+//	@Summary		Get theme configuration
+//	@Description	Reads and returns the theme configuration from .kiwi/theme.json. Returns empty object if file does not exist.
+//	@Tags			theme
+//	@Security		BearerAuth
+//	@Success		200		{object}	map[string]any
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/theme [get]
 func (h *Handlers) GetTheme(c echo.Context) error {
 	p := filepath.Join(h.root, ".kiwi", "theme.json")
 	data, err := os.ReadFile(p)
@@ -218,12 +302,35 @@ func (h *Handlers) GetTheme(c echo.Context) error {
 	return c.JSON(http.StatusOK, theme)
 }
 
+type uiConfigResponse struct {
+	ThemeLocked bool `json:"themeLocked"`
+}
+
+// UIConfig godoc
+//
+//	@Summary		Get UI configuration
+//	@Description	Returns current UI configurations, including whether theme editing is locked.
+//	@Tags			theme
+//	@Security		BearerAuth
+//	@Success		200		{object}	uiConfigResponse
+//	@Router			/api/kiwi/ui-config [get]
 func (h *Handlers) UIConfig(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]any{
-		"themeLocked": h.ui.ThemeLocked,
+	return c.JSON(http.StatusOK, uiConfigResponse{
+		ThemeLocked: h.ui.ThemeLocked,
 	})
 }
 
+// Janitor godoc
+//
+//	@Summary		Run janitor scan
+//	@Description	Runs or returns the cached result of a janitor scan over the workspace files to identify issues like stale files, orphans, broken links, etc.
+//	@Tags			janitor
+//	@Security		BearerAuth
+//	@Param			staleDays	query		int		false	"Number of days after which a file is considered stale (defaults to system setting or 90)"
+//	@Param			fresh		query		bool	false	"If true, bypasses the cached result and triggers a fresh scan"
+//	@Success		200			{object}	janitor.ScanResult
+//	@Failure		500			{object}	map[string]string
+//	@Router			/api/kiwi/janitor [get]
 func (h *Handlers) Janitor(c echo.Context) error {
 	defaultStale := h.janitorStaleDays
 	if defaultStale <= 0 {
@@ -249,6 +356,20 @@ func (h *Handlers) Janitor(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
+// PutTheme godoc
+//
+//	@Summary		Update theme configuration
+//	@Description	Updates the theme configuration in .kiwi/theme.json. Maximum payload size is 64KB. Automatically commits the changes.
+//	@Tags			theme
+//	@Security		BearerAuth
+//	@Param			X-Actor	header		string			false	"Actor identity performing the operation"
+//	@Param			body	body		map[string]any	true	"Theme configuration JSON"
+//	@Success		200		{object}	map[string]any
+//	@Failure		400		{object}	map[string]string
+//	@Failure		403		{object}	map[string]string
+//	@Failure		413		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/theme [put]
 func (h *Handlers) PutTheme(c echo.Context) error {
 	if h.ui.ThemeLocked {
 		return echo.NewHTTPError(http.StatusForbidden, "theme editing is locked by admin")

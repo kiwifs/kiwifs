@@ -9,24 +9,35 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// ExportDocument handles POST /api/kiwi/export/document
-// It renders markdown to PDF, HTML, slides, or a static site.
+type exportDocumentRequest struct {
+	Format        string            `json:"format"`
+	Path          string            `json:"path"`
+	Theme         string            `json:"theme"`
+	SelfContained bool              `json:"self_contained"`
+	Bibliography  string            `json:"bibliography"`
+	CSLStyle      string            `json:"csl_style"`
+	CrossRef      bool              `json:"crossref"`
+	PDFEngine     string            `json:"pdf_engine"`
+	SlideFormat   string            `json:"slide_format"`
+	Metadata      map[string]string `json:"metadata"`
+	SiteName      string            `json:"site_name"`
+	SiteURL       string            `json:"site_url"`
+	RepoURL       string            `json:"repo_url"`
+}
+
+// ExportDocument godoc
+//
+//	@Summary		Export document
+//	@Description	Renders markdown files to a PDF, HTML page, slides presentation, or static website zip file.
+//	@Tags			export
+//	@Security		BearerAuth
+//	@Param			body	body		exportDocumentRequest	true	"Document export configuration"
+//	@Success		200		{file}		string					"Rendered document blob"
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/export/document [post]
 func (h *Handlers) ExportDocument(c echo.Context) error {
-	var req struct {
-		Format        string            `json:"format"`
-		Path          string            `json:"path"`
-		Theme         string            `json:"theme"`
-		SelfContained bool              `json:"self_contained"`
-		Bibliography  string            `json:"bibliography"`
-		CSLStyle      string            `json:"csl_style"`
-		CrossRef      bool              `json:"crossref"`
-		PDFEngine     string            `json:"pdf_engine"`
-		SlideFormat   string            `json:"slide_format"`
-		Metadata      map[string]string `json:"metadata"`
-		SiteName      string            `json:"site_name"`
-		SiteURL       string            `json:"site_url"`
-		RepoURL       string            `json:"repo_url"`
-	}
+	var req exportDocumentRequest
 
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body: "+err.Error())

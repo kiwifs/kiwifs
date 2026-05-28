@@ -9,6 +9,24 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// Export godoc
+//
+//	@Summary		Export files
+//	@Description	Exports files in the repository under a given path prefix, in JSONL, CSV, or Parquet format.
+//	@Tags			export
+//	@Produce		application/x-ndjson,text/csv,application/vnd.apache.parquet
+//	@Security		BearerAuth
+//	@Param			format				query		string	false	"Export format ('jsonl', 'csv', 'parquet')"
+//	@Param			path				query		string	false	"Path prefix of the files to export"
+//	@Param			include_content		query		bool	false	"Whether to include file contents"
+//	@Param			include_links		query		bool	false	"Whether to include parsed links"
+//	@Param			include_embeddings	query		bool	false	"Whether to include document vector embeddings"
+//	@Param			limit				query		int		false	"Maximum number of documents to export (0 for unlimited)"
+//	@Param			columns				query		string	false	"Comma-separated list of frontmatter fields to export"
+//	@Success		200					{string}	string	"Exported file stream"
+//	@Failure		400					{object}	map[string]string
+//	@Failure		500					{object}	map[string]string
+//	@Router			/api/kiwi/export [get]
 func (h *Handlers) Export(c echo.Context) error {
 	format := c.QueryParam("format")
 	if format == "" {

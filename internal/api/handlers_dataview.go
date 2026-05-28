@@ -19,6 +19,20 @@ type queryResponse struct {
 	Groups  []dataview.GroupResult `json:"groups,omitempty"`
 }
 
+// Query godoc
+//
+//	@Summary		Execute DQL query
+//	@Description	Executes a Dataview Query Language (DQL) query over file metadata. Returns JSON by default, or formatted text when format is specified.
+//	@Tags			dataview
+//	@Security		BearerAuth
+//	@Param			q		query		string	true	"DQL query string"
+//	@Param			limit	query		int		false	"Limit results"
+//	@Param			offset	query		int		false	"Offset results"
+//	@Param			format	query		string	false	"Output format ('json', 'table', 'list', 'count', 'distinct')"
+//	@Success		200		{object}	queryResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		501		{object}	map[string]string
+//	@Router			/api/kiwi/query [get]
 func (h *Handlers) Query(c echo.Context) error {
 	if h.dv == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "dataview requires sqlite search backend")
@@ -110,6 +124,21 @@ func (cs calcSpec) label() string {
 	return cs.fn + ":" + cs.field
 }
 
+// QueryAggregate godoc
+//
+//	@Summary		Execute aggregate query
+//	@Description	Computes aggregates (count, avg, sum, min, max) grouped by a frontmatter field, optionally filtered by path prefix and where expressions.
+//	@Tags			dataview
+//	@Security		BearerAuth
+//	@Param			group_by	query		string		true	"Field name to group results by"
+//	@Param			calc		query		string		false	"Comma-separated calculations (e.g. 'count,avg:score')"
+//	@Param			where		query		[]string	false	"Filter expressions (can be repeated)"
+//	@Param			path_prefix	query		string		false	"Filter files by path prefix"
+//	@Success		200			{object}	aggregateResponse
+//	@Failure		400			{object}	map[string]string
+//	@Failure		501			{object}	map[string]string
+//	@Failure		500			{object}	map[string]string
+//	@Router			/api/kiwi/query/aggregate [get]
 func (h *Handlers) QueryAggregate(c echo.Context) error {
 	if h.dv == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "dataview requires sqlite search backend")
@@ -219,6 +248,18 @@ type viewRefreshRequest struct {
 	Path string `json:"path"`
 }
 
+// ViewRefresh godoc
+//
+//	@Summary		Refresh a dataview
+//	@Description	Regenerates a dataview file by executing its queries if underlying data has changed.
+//	@Tags			dataview
+//	@Security		BearerAuth
+//	@Param			path	query		string				false	"File path of the dataview to refresh (if not in body)"
+//	@Param			body	body		viewRefreshRequest	true	"Refresh options"
+//	@Success		200		{object}	map[string]string
+//	@Failure		400		{object}	map[string]string
+//	@Failure		501		{object}	map[string]string
+//	@Router			/api/kiwi/view/refresh [post]
 func (h *Handlers) ViewRefresh(c echo.Context) error {
 	if h.dv == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "dataview requires sqlite search backend")

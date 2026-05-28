@@ -9,8 +9,19 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// MemoryReport returns episodic vs merged-from coverage for consolidation pipelines.
-// Query param episodes_prefix overrides [memory] episodes_path_prefix from config.
+// MemoryReport godoc
+//
+//	@Summary		Get memory consolidation report
+//	@Description	Returns a consolidation report summarizing episodic memory coverage across the knowledge base.
+//	@Tags			memory
+//	@Security		BearerAuth
+//	@Param			episodes_prefix	query		string	false	"Override the default episodes path prefix"
+//	@Param			limit			query		int		false	"Limit the number of files returned"
+//	@Param			offset			query		int		false	"Skip the first N files"
+//	@Success		200				{object}	memory.Report
+//	@Failure		400				{object}	map[string]string
+//	@Failure		500				{object}	map[string]string
+//	@Router			/api/kiwi/memory/report [get]
 func (h *Handlers) MemoryReport(c echo.Context) error {
 	ctx := c.Request().Context()
 	prefix := c.QueryParam("episodes_prefix")
