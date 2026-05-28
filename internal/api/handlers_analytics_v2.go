@@ -61,6 +61,18 @@ type AnalyticsOverviewResponse struct {
 	UniquePagesDelta  float64 `json:"unique_pages_delta_percent"`
 }
 
+// AnalyticsOverview godoc
+//
+//	@Summary		Get analytics overview
+//	@Description	Retrieve high-level analytics overview metrics (total page views, total search queries, search success rate, unique pages viewed) and their delta percentages compared to the previous period. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			period	query		string	false	"Time period to analyze (e.g. '7d', '30d', '90d', default: '7d')"
+//	@Success		200		{object}	AnalyticsOverviewResponse
+//	@Failure		501		{object}	map[string]string	"Analytics v2 not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Internal server error while loading overview stats"
+//	@Router			/api/kiwi/analytics/overview [get]
 func (h *Handlers) AnalyticsOverview(c echo.Context) error {
 	aq, ok := h.searcher.(search.AnalyticsQuerier)
 	if !ok {
@@ -92,13 +104,27 @@ func (h *Handlers) AnalyticsOverview(c echo.Context) error {
 // --- Views endpoint ---
 
 type AnalyticsViewsResponse struct {
-	Period     string             `json:"period"`
-	Path       string             `json:"path,omitempty"`
-	Source     string             `json:"source,omitempty"`
-	TimeSeries []search.TimePoint `json:"time_series"`
+	Period     string                `json:"period"`
+	Path       string                `json:"path,omitempty"`
+	Source     string                `json:"source,omitempty"`
+	TimeSeries []search.TimePoint    `json:"time_series"`
 	TopPages   []search.PageViewStat `json:"top_pages"`
 }
 
+// AnalyticsViews godoc
+//
+//	@Summary		Get page view time-series and top pages
+//	@Description	Retrieve detailed page view statistics including time-series data and top pages in the wiki database. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			period	query		string	false	"Time period to analyze (e.g. '7d', '30d', '90d', default: '30d')"
+//	@Param			path	query		string	false	"Specific page path to filter views"
+//	@Param			source	query		string	false	"Source connector filter"
+//	@Success		200		{object}	AnalyticsViewsResponse
+//	@Failure		501		{object}	map[string]string	"Analytics v2 not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Internal server error querying page views"
+//	@Router			/api/kiwi/analytics/views/v2 [get]
 func (h *Handlers) AnalyticsViews(c echo.Context) error {
 	aq, ok := h.searcher.(search.AnalyticsQuerier)
 	if !ok {
@@ -148,12 +174,24 @@ func (h *Handlers) AnalyticsViews(c echo.Context) error {
 // --- Searches endpoint ---
 
 type AnalyticsSearchesResponse struct {
-	Period            string               `json:"period"`
-	SearchSuccessRate float64              `json:"search_success_rate"`
-	TimeSeries        []search.TimePoint   `json:"time_series"`
-	TopFailed         []search.SearchStat  `json:"top_failed"`
+	Period            string              `json:"period"`
+	SearchSuccessRate float64             `json:"search_success_rate"`
+	TimeSeries        []search.TimePoint  `json:"time_series"`
+	TopFailed         []search.SearchStat `json:"top_failed"`
 }
 
+// AnalyticsSearches godoc
+//
+//	@Summary		Get search success and queries analysis
+//	@Description	Retrieve detailed search analytics including time-series search success rates and top failed search terms. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			period	query		string	false	"Time period to analyze (e.g. '7d', '30d', '90d', default: '30d')"
+//	@Success		200		{object}	AnalyticsSearchesResponse
+//	@Failure		501		{object}	map[string]string	"Analytics v2 not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Internal query error"
+//	@Router			/api/kiwi/analytics/searches [get]
 func (h *Handlers) AnalyticsSearches(c echo.Context) error {
 	aq, ok := h.searcher.(search.AnalyticsQuerier)
 	if !ok {
@@ -206,6 +244,18 @@ type AnalyticsTrendsResponse struct {
 	Declining []search.TrendStat `json:"declining"`
 }
 
+// AnalyticsTrends godoc
+//
+//	@Summary		Get trending and declining pages
+//	@Description	Lists the trending and declining pages in the wiki based on traffic delta. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			period	query		string	false	"Time period to evaluate (e.g. '7d', '30d', default: '7d')"
+//	@Success		200		{object}	AnalyticsTrendsResponse
+//	@Failure		501		{object}	map[string]string	"Analytics v2 not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Internal query error"
+//	@Router			/api/kiwi/analytics/trends [get]
 func (h *Handlers) AnalyticsTrends(c echo.Context) error {
 	aq, ok := h.searcher.(search.AnalyticsQuerier)
 	if !ok {
@@ -247,6 +297,18 @@ type AnalyticsContentGapsResponse struct {
 	Results []search.FailedSearchStat `json:"results"`
 }
 
+// AnalyticsContentGaps godoc
+//
+//	@Summary		Get search content gaps
+//	@Description	Identifies missing documentation or search gaps by listing queries that returned zero results. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			limit	query		int		false	"Maximum number of content gaps to return (default: 20)"
+//	@Success		200		{object}	AnalyticsContentGapsResponse
+//	@Failure		501		{object}	map[string]string	"Analytics v2 not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Internal query error"
+//	@Router			/api/kiwi/analytics/content-gaps [get]
 func (h *Handlers) AnalyticsContentGaps(c echo.Context) error {
 	aq, ok := h.searcher.(search.AnalyticsQuerier)
 	if !ok {
@@ -271,6 +333,20 @@ type dismissRequest struct {
 	SearchType string `json:"search_type"`
 }
 
+// AnalyticsDismissContentGap godoc
+//
+//	@Summary		Dismiss a search content gap
+//	@Description	Dismisses or hides a specific failed search query from the content gaps listing. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		dismissRequest	true	"The search query to dismiss"
+//	@Success		200		{object}	map[string]string	"Result confirmation message"
+//	@Failure		400		{object}	map[string]string	"Query parameter is missing"
+//	@Failure		501		{object}	map[string]string	"Analytics v2 not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Failed to dismiss query"
+//	@Router			/api/kiwi/analytics/content-gaps/dismiss [post]
 func (h *Handlers) AnalyticsDismissContentGap(c echo.Context) error {
 	aq, ok := h.searcher.(search.AnalyticsQuerier)
 	if !ok {
@@ -305,6 +381,18 @@ type AnalyticsSourcesResponse struct {
 	Sources map[string]int `json:"sources"`
 }
 
+// AnalyticsSources godoc
+//
+//	@Summary		Get views source breakdown
+//	@Description	Returns a breakdown of page views by source connector type. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			period	query		string	false	"Time period to analyze (e.g. '7d', '30d', default: '7d')"
+//	@Success		200		{object}	AnalyticsSourcesResponse
+//	@Failure		501		{object}	map[string]string	"Analytics v2 not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Internal query error"
+//	@Router			/api/kiwi/analytics/sources [get]
 func (h *Handlers) AnalyticsSources(c echo.Context) error {
 	aq, ok := h.searcher.(search.AnalyticsQuerier)
 	if !ok {

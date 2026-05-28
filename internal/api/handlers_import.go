@@ -35,8 +35,8 @@ type importRequest struct {
 	Prefix      string          `json:"prefix"`
 	DryRun      bool            `json:"dry_run"`
 	Limit       int             `json:"limit"`
-	Credentials json.RawMessage `json:"credentials,omitempty"` // Service account JSON (Firestore)
-	APIKey      string          `json:"api_key,omitempty"`     // API key (Notion, Airtable)
+	Credentials json.RawMessage `json:"credentials,omitempty" swaggertype:"object"` // Service account JSON (Firestore)
+	APIKey      string          `json:"api_key,omitempty"`                          // API key (Notion, Airtable)
 
 	// Airbyte-specific fields
 	AirbyteConfig map[string]any `json:"airbyte_config,omitempty"` // Raw Airbyte connector config
@@ -52,6 +52,42 @@ type importResponse struct {
 	Errors   []string `json:"errors"`
 }
 
+type toggleSyncRequest struct {
+	Enabled  *bool  `json:"enabled,omitempty"`
+	Interval string `json:"interval,omitempty"`
+}
+
+type runConnectionRequest struct {
+	Credentials json.RawMessage `json:"credentials,omitempty" swaggertype:"object"`
+	APIKey      string          `json:"api_key,omitempty"`
+}
+
+type airbyteCloudCheckRequest struct {
+	From   string         `json:"from"`
+	Config map[string]any `json:"config"`
+}
+
+type airbyteCloudDiscoverRequest struct {
+	SourceID string `json:"source_id"`
+}
+
+type airbyteCloudSyncRequest struct {
+	ConnectionID string `json:"connection_id"`
+}
+
+// Import godoc
+//
+//	@Summary		Run an import job
+//	@Description	Runs an import job from a specified data source (builtin connectors like Postgres, SQLite, Notion, Markdown, etc., or Airbyte connectors).
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		importRequest	true	"Import request details"
+//	@Success		200		{object}	importResponse
+//	@Failure		400		{object}	map[string]string	"Invalid request body or source configuration details"
+//	@Failure		500		{object}	map[string]string	"Internal server or import pipeline error"
+//	@Router			/api/kiwi/import [post]
 func (h *Handlers) Import(c echo.Context) error {
 	var req importRequest
 	if err := c.Bind(&req); err != nil {
@@ -404,7 +440,7 @@ type browseRequest struct {
 	DB          string          `json:"db"`
 	Project     string          `json:"project"`
 	Database    string          `json:"database"`
-	Credentials json.RawMessage `json:"credentials,omitempty"`
+	Credentials json.RawMessage `json:"credentials,omitempty" swaggertype:"object"`
 	APIKey      string          `json:"api_key,omitempty"`
 }
 
@@ -412,7 +448,18 @@ type browseResponse struct {
 	Tables []importer.BrowseTable `json:"tables"`
 }
 
-// ImportBrowse lists available tables/collections for a given data source.
+// ImportBrowse godoc
+//
+//	@Summary		Browse data source tables/collections
+//	@Description	Lists available tables or collections for a given database data source (Firestore, Postgres, MySQL, MongoDB).
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		browseRequest	true	"Browse request details"
+//	@Success		200		{object}	browseResponse
+//	@Failure		400		{object}	map[string]string	"Invalid request body or connection error"
+//	@Router			/api/kiwi/import/browse [post]
 func (h *Handlers) ImportBrowse(c echo.Context) error {
 	var req browseRequest
 	if err := c.Bind(&req); err != nil {
@@ -535,7 +582,7 @@ type previewRequest struct {
 	BaseID      string          `json:"base_id"`
 	TableID     string          `json:"table_id"`
 	Project     string          `json:"project"`
-	Credentials json.RawMessage `json:"credentials,omitempty"`
+	Credentials json.RawMessage `json:"credentials,omitempty" swaggertype:"object"`
 	APIKey      string          `json:"api_key,omitempty"`
 	Limit       int             `json:"limit"`
 
@@ -555,7 +602,19 @@ type previewResponse struct {
 	Records []previewRecord `json:"records"`
 }
 
-// ImportPreview fetches sample records from a source and returns rendered markdown previews.
+// ImportPreview godoc
+//
+//	@Summary		Preview import records
+//	@Description	Fetches sample records from a source and returns rendered markdown previews of the documents.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		previewRequest	true	"Preview request details"
+//	@Success		200		{object}	previewResponse
+//	@Failure		400		{object}	map[string]string	"Invalid request body or source configuration details"
+//	@Failure		500		{object}	map[string]string	"Internal server or preview error"
+//	@Router			/api/kiwi/import/preview [post]
 func (h *Handlers) ImportPreview(c echo.Context) error {
 	var req previewRequest
 	if err := c.Bind(&req); err != nil {
@@ -644,7 +703,15 @@ func (h *Handlers) ImportPreview(c echo.Context) error {
 
 // --- Connection CRUD endpoints (Phase 3) ---
 
-// ListConnections returns all saved import connections.
+// ListConnections godoc
+//
+//	@Summary		List saved connections
+//	@Description	Returns a list of all saved import connections (metadata only, no credentials stored).
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Success		200		{array}		importer.ConnectionMeta
+//	@Router			/api/kiwi/import/connections [get]
 func (h *Handlers) ListConnections(c echo.Context) error {
 	if h.connStore == nil {
 		return c.JSON(http.StatusOK, []any{})
@@ -652,7 +719,20 @@ func (h *Handlers) ListConnections(c echo.Context) error {
 	return c.JSON(http.StatusOK, h.connStore.List())
 }
 
-// SaveConnection saves connection metadata (no credentials stored).
+// SaveConnection godoc
+//
+//	@Summary		Save import connection
+//	@Description	Saves or updates import connection metadata (without credentials).
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			connection	body		importer.ConnectionMeta	true	"Connection metadata to save"
+//	@Success		200			{object}	importer.ConnectionMeta
+//	@Failure		400			{object}	map[string]string		"Invalid request body or missing 'from' field"
+//	@Failure		503			{object}	map[string]string		"Connection store not available"
+//	@Failure		500			{object}	map[string]string		"Internal database error"
+//	@Router			/api/kiwi/import/connections [post]
 func (h *Handlers) SaveConnection(c echo.Context) error {
 	if h.connStore == nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "connection store not available")
@@ -675,7 +755,17 @@ func (h *Handlers) SaveConnection(c echo.Context) error {
 	return c.JSON(http.StatusOK, conn)
 }
 
-// DeleteConnection removes a saved connection.
+// DeleteConnection godoc
+//
+//	@Summary		Delete saved connection
+//	@Description	Removes a saved import connection configuration.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Connection ID"
+//	@Success		204	"No Content"
+//	@Failure		404	{object}	map[string]string	"Connection not found"
+//	@Failure		503	{object}	map[string]string	"Connection store not available"
+//	@Router			/api/kiwi/import/connections/{id} [delete]
 func (h *Handlers) DeleteConnection(c echo.Context) error {
 	if h.connStore == nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "connection store not available")
@@ -688,7 +778,22 @@ func (h *Handlers) DeleteConnection(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// ToggleSync pauses or resumes auto-sync for a connection, or changes interval.
+// ToggleSync godoc
+//
+//	@Summary		Toggle or update connection sync
+//	@Description	Pauses or resumes auto-sync for a connection, or changes its sync interval.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string				true	"Connection ID"
+//	@Param			request	body		toggleSyncRequest	true	"Sync toggle and interval options"
+//	@Success		200		{object}	importer.ConnectionMeta
+//	@Failure		400		{object}	map[string]string	"Invalid request body"
+//	@Failure		404		{object}	map[string]string	"Connection not found"
+//	@Failure		503		{object}	map[string]string	"Connection store not available"
+//	@Failure		500		{object}	map[string]string	"Internal save error"
+//	@Router			/api/kiwi/import/connections/{id}/sync [post]
 func (h *Handlers) ToggleSync(c echo.Context) error {
 	if h.connStore == nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "connection store not available")
@@ -700,10 +805,7 @@ func (h *Handlers) ToggleSync(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "connection not found")
 	}
 
-	var req struct {
-		Enabled  *bool  `json:"enabled,omitempty"`
-		Interval string `json:"interval,omitempty"`
-	}
+	var req toggleSyncRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
@@ -731,7 +833,15 @@ func (h *Handlers) ToggleSync(c echo.Context) error {
 	return c.JSON(http.StatusOK, conn)
 }
 
-// SyncStatus returns the sync status for all sync-enabled connections.
+// SyncStatus godoc
+//
+//	@Summary		Get sync-enabled connections status
+//	@Description	Returns a list of all connections that have auto-sync enabled, showing their current sync status and errors if any.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Success		200		{array}		importer.ConnectionMeta
+//	@Router			/api/kiwi/import/sync/status [get]
 func (h *Handlers) SyncStatus(c echo.Context) error {
 	if h.connStore == nil {
 		return c.JSON(http.StatusOK, []any{})
@@ -739,8 +849,22 @@ func (h *Handlers) SyncStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, h.connStore.ListSyncEnabled())
 }
 
-// RunConnection re-runs an import for a saved connection.
-// Credentials must be provided in the request body (they are not stored).
+// RunConnection godoc
+//
+//	@Summary		Run saved connection import
+//	@Description	Triggers an import run using metadata from a saved connection. Connection credentials/API keys must be supplied in the request body as they are not stored.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string					true	"Connection ID"
+//	@Param			request	body		runConnectionRequest	true	"Runtime credentials or API key"
+//	@Success		200		{object}	importResponse
+//	@Failure		400		{object}	map[string]string		"Invalid request body or source configuration details"
+//	@Failure		404		{object}	map[string]string		"Connection not found"
+//	@Failure		503		{object}	map[string]string		"Connection store not available"
+//	@Failure		500		{object}	map[string]string		"Internal import error"
+//	@Router			/api/kiwi/import/connections/{id}/run [post]
 func (h *Handlers) RunConnection(c echo.Context) error {
 	if h.connStore == nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "connection store not available")
@@ -753,10 +877,7 @@ func (h *Handlers) RunConnection(c echo.Context) error {
 	}
 
 	// Parse runtime credentials from body
-	var creds struct {
-		Credentials json.RawMessage `json:"credentials,omitempty"`
-		APIKey      string          `json:"api_key,omitempty"`
-	}
+	var creds runConnectionRequest
 	if err := c.Bind(&creds); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
@@ -842,7 +963,15 @@ type airbyteRequest struct {
 	Config       map[string]any `json:"config,omitempty"`
 }
 
-// ImportSources lists all available import sources with their backend type.
+// ImportSources godoc
+//
+//	@Summary		List available import sources
+//	@Description	Returns a list of all supported built-in and Airbyte import sources, as well as server capabilities (whether Docker is available and if an Airbyte Cloud API key is configured).
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Success		200		{object}	map[string]any	"JSON map listing builtin/airbyte sources and capabilities"
+//	@Router			/api/kiwi/import/sources [get]
 func (h *Handlers) ImportSources(c echo.Context) error {
 	dockerOK := importer.DockerAvailable()
 	cloudKey := h.cfg.Import.AirbyteAPIKey
@@ -859,7 +988,20 @@ func (h *Handlers) ImportSources(c echo.Context) error {
 	})
 }
 
-// ImportAirbyteSpec returns the connector specification for an Airbyte source.
+// ImportAirbyteSpec godoc
+//
+//	@Summary		Get Airbyte connector specification
+//	@Description	Retrieves the configuration specification schema for a local Docker-based Airbyte connector.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		airbyteRequest	true	"Airbyte request details (source type/image)"
+//	@Success		200		{object}	map[string]any	"Connector JSON schema specification"
+//	@Failure		400		{object}	map[string]string	"Invalid request body or missing connector image"
+//	@Failure		503		{object}	map[string]string	"Docker not available or Airbyte key missing"
+//	@Failure		500		{object}	map[string]string	"Docker/specification retrieval error"
+//	@Router			/api/kiwi/import/airbyte/spec [post]
 func (h *Handlers) ImportAirbyteSpec(c echo.Context) error {
 	var req airbyteRequest
 	if err := c.Bind(&req); err != nil {
@@ -909,7 +1051,20 @@ func (h *Handlers) ImportAirbyteSpec(c echo.Context) error {
 			"Either start Docker or set AIRBYTE_API_KEY in your config/environment.")
 }
 
-// ImportAirbyteCheck validates connection config against an Airbyte connector.
+// ImportAirbyteCheck godoc
+//
+//	@Summary		Check Airbyte connector connection
+//	@Description	Validates the connection configuration against a local Docker-based Airbyte connector.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		airbyteRequest	true	"Airbyte connector configuration details"
+//	@Success		200		{object}	map[string]any	"Connection verification result"
+//	@Failure		400		{object}	map[string]string	"Invalid request body or missing config/image"
+//	@Failure		503		{object}	map[string]string	"Docker not available"
+//	@Failure		500		{object}	map[string]string	"Internal execution error"
+//	@Router			/api/kiwi/import/airbyte/check [post]
 func (h *Handlers) ImportAirbyteCheck(c echo.Context) error {
 	var req airbyteRequest
 	if err := c.Bind(&req); err != nil {
@@ -947,7 +1102,20 @@ func (h *Handlers) ImportAirbyteCheck(c echo.Context) error {
 	return c.JSON(http.StatusOK, status)
 }
 
-// ImportAirbyteDiscover returns available streams from an Airbyte connector.
+// ImportAirbyteDiscover godoc
+//
+//	@Summary		Discover Airbyte connector streams
+//	@Description	Discovers and returns schema definitions (streams) available from a local Docker-based Airbyte connector.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		airbyteRequest	true	"Airbyte connector configuration details"
+//	@Success		200		{object}	map[string]any	"Connector catalog and streams schema"
+//	@Failure		400		{object}	map[string]string	"Invalid request body or missing config/image"
+//	@Failure		503		{object}	map[string]string	"Docker not available"
+//	@Failure		500		{object}	map[string]string	"Internal schema discovery error"
+//	@Router			/api/kiwi/import/airbyte/discover [post]
 func (h *Handlers) ImportAirbyteDiscover(c echo.Context) error {
 	var req airbyteRequest
 	if err := c.Bind(&req); err != nil {
@@ -1024,17 +1192,27 @@ func (h *Handlers) getAirbyteWorkspaceID() string {
 	return ws
 }
 
-// ImportAirbyteCloudCheck creates a temporary source in Airbyte Cloud and validates the connection.
+// ImportAirbyteCloudCheck godoc
+//
+//	@Summary		Check Airbyte Cloud connection
+//	@Description	Validates the connection configuration by creating a temporary source on Airbyte Cloud.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		airbyteCloudCheckRequest	true	"Airbyte Cloud connector configuration details"
+//	@Success		200		{object}	map[string]any				"Verification status (includes status, message, and temporary source_id)"
+//	@Failure		400		{object}	map[string]string			"Invalid request body, config, or workspace details"
+//	@Failure		503		{object}	map[string]string			"Airbyte Cloud key is not configured"
+//	@Failure		502		{object}	map[string]string			"Airbyte Cloud API integration gateway error"
+//	@Router			/api/kiwi/import/airbyte-cloud/check [post]
 func (h *Handlers) ImportAirbyteCloudCheck(c echo.Context) error {
 	client, err := h.getAirbyteCloudClient()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, err.Error())
 	}
 
-	var req struct {
-		From   string         `json:"from"`
-		Config map[string]any `json:"config"`
-	}
+	var req airbyteCloudCheckRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
@@ -1071,16 +1249,27 @@ func (h *Handlers) ImportAirbyteCloudCheck(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// ImportAirbyteCloudDiscover uses Airbyte Cloud API to discover streams from a source.
+// ImportAirbyteCloudDiscover godoc
+//
+//	@Summary		Discover Airbyte Cloud streams
+//	@Description	Discovers schema streams available for a specified source ID using the Airbyte Cloud API.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		airbyteCloudDiscoverRequest	true	"Airbyte Cloud source identifier"
+//	@Success		200		{object}	map[string]any				"Discovered streams and fields schemas"
+//	@Failure		400		{object}	map[string]string			"Invalid request body or missing source_id"
+//	@Failure		503		{object}	map[string]string			"Airbyte Cloud key is not configured"
+//	@Failure		502		{object}	map[string]string			"Airbyte Cloud API integration gateway error"
+//	@Router			/api/kiwi/import/airbyte-cloud/discover [post]
 func (h *Handlers) ImportAirbyteCloudDiscover(c echo.Context) error {
 	client, err := h.getAirbyteCloudClient()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, err.Error())
 	}
 
-	var req struct {
-		SourceID string `json:"source_id"`
-	}
+	var req airbyteCloudDiscoverRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
@@ -1096,7 +1285,17 @@ func (h *Handlers) ImportAirbyteCloudDiscover(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"streams": streams})
 }
 
-// ImportAirbyteCloudConnections lists existing Airbyte Cloud connections.
+// ImportAirbyteCloudConnections godoc
+//
+//	@Summary		List Airbyte Cloud connections
+//	@Description	Returns a list of all configured connections on the active Airbyte Cloud workspace.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Success		200		{object}	map[string]any		"List of connection configurations"
+//	@Failure		503		{object}	map[string]string	"Airbyte Cloud key is not configured"
+//	@Failure		502		{object}	map[string]string	"Airbyte Cloud API integration gateway error"
+//	@Router			/api/kiwi/import/airbyte-cloud/connections [get]
 func (h *Handlers) ImportAirbyteCloudConnections(c echo.Context) error {
 	client, err := h.getAirbyteCloudClient()
 	if err != nil {
@@ -1117,16 +1316,27 @@ func (h *Handlers) ImportAirbyteCloudConnections(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"connections": conns})
 }
 
-// ImportAirbyteCloudSync triggers a sync for an existing Airbyte Cloud connection.
+// ImportAirbyteCloudSync godoc
+//
+//	@Summary		Trigger Airbyte Cloud sync
+//	@Description	Manually triggers a sync job for an existing connection configured on Airbyte Cloud.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		airbyteCloudSyncRequest	true	"Airbyte Cloud connection identifier"
+//	@Success		200		{object}	map[string]any			"Triggered sync job details (job ID, status, timestamps)"
+//	@Failure		400		{object}	map[string]string		"Invalid request body or missing connection_id"
+//	@Failure		503		{object}	map[string]string		"Airbyte Cloud key is not configured"
+//	@Failure		502		{object}	map[string]string		"Airbyte Cloud API integration gateway error"
+//	@Router			/api/kiwi/import/airbyte-cloud/sync [post]
 func (h *Handlers) ImportAirbyteCloudSync(c echo.Context) error {
 	client, err := h.getAirbyteCloudClient()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, err.Error())
 	}
 
-	var req struct {
-		ConnectionID string `json:"connection_id"`
-	}
+	var req airbyteCloudSyncRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
@@ -1146,9 +1356,26 @@ func (h *Handlers) ImportAirbyteCloudSync(c echo.Context) error {
 
 const maxImportUploadSize = 256 << 20 // 256 MB
 
-// ImportUpload accepts a multipart file upload, writes it to a temp file, then
-// runs the import pipeline against it. This lets browser users drag-and-drop a
-// file (CSV, JSON, JSONL, YAML, Excel, SQLite) instead of typing server paths.
+// ImportUpload godoc
+//
+//	@Summary		Upload and import/preview file
+//	@Description	Accepts a multipart file upload (CSV, JSON, JSONL, YAML, Excel, SQLite) and runs the import or preview pipeline on it.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			multipart/form-data
+//	@Produce		json
+//	@Param			file		formData	file	true	"The data file to upload"
+//	@Param			from		formData	string	true	"Data source type ('csv', 'json', 'jsonl', 'yaml', 'excel', 'sqlite')"
+//	@Param			prefix		formData	string	false	"Target directory prefix in wiki"
+//	@Param			id_column	formData	string	false	"Column/field name to use as primary key"
+//	@Param			table		formData	string	false	"Table name (for sqlite)"
+//	@Param			query		formData	string	false	"SQL query to run (for sqlite)"
+//	@Param			mode		formData	string	false	"Run mode ('import' to import files, 'preview' to return first 5 records)"
+//	@Success		200			{object}	importResponse		"On successful import mode (returns stats)"
+//	@Failure		400			{object}	map[string]string	"Invalid file, missing source type, or configuration error"
+//	@Failure		413			{object}	map[string]string	"File exceeds size limit"
+//	@Failure		500			{object}	map[string]string	"Failed to copy file or run import"
+//	@Router			/api/kiwi/import/upload [post]
 func (h *Handlers) ImportUpload(c echo.Context) error {
 	from := c.FormValue("from")
 	if from == "" {

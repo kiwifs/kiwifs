@@ -45,11 +45,11 @@ type EngagementStats struct {
 }
 
 type AnalyticsResponse struct {
-	TotalPages int           `json:"total_pages"`
-	TotalWords int           `json:"total_words"`
-	Health     HealthStats   `json:"health"`
-	Coverage   CoverageStats `json:"coverage"`
-	TopUpdated []PageStat    `json:"top_updated"`
+	TotalPages int             `json:"total_pages"`
+	TotalWords int             `json:"total_words"`
+	Health     HealthStats     `json:"health"`
+	Coverage   CoverageStats   `json:"coverage"`
+	TopUpdated []PageStat      `json:"top_updated"`
 	Engagement EngagementStats `json:"engagement"`
 }
 
@@ -66,6 +66,19 @@ type PageViewsResponse struct {
 	Results []search.PageViewStat `json:"results"`
 }
 
+// Analytics godoc
+//
+//	@Summary		Get system-wide analytics
+//	@Description	Retrieve system-wide analytics, including document health, coverage, engagement metrics, and top updated pages. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			scope			query		string	false	"Directory path prefix to filter statistics"
+//	@Param			stale_threshold	query		int		false	"Number of days since update to consider a page stale (default: 30)"
+//	@Success		200				{object}	AnalyticsResponse
+//	@Failure		501				{object}	map[string]string	"Analytics not implemented for non-SQLite backends"
+//	@Failure		500				{object}	map[string]string	"Internal server error while building stats"
+//	@Router			/api/kiwi/analytics [get]
 func (h *Handlers) Analytics(c echo.Context) error {
 	sq, ok := h.searcher.(*search.SQLite)
 	if !ok {
@@ -85,6 +98,20 @@ func (h *Handlers) Analytics(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// FailedSearches godoc
+//
+//	@Summary		Get top failed search queries
+//	@Description	Retrieve the top failed search queries within a specified timeframe. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			top		query		int		false	"Maximum number of failed queries to return (default: 20)"
+//	@Param			since	query		string	false	"Retrieve stats since this Unix timestamp or RFC3339 date"
+//	@Success		200		{object}	FailedSearchesResponse
+//	@Failure		400		{object}	map[string]string	"Invalid since date format"
+//	@Failure		501		{object}	map[string]string	"Failed search analytics not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Internal query error"
+//	@Router			/api/kiwi/analytics/failed-searches [get]
 func (h *Handlers) FailedSearches(c echo.Context) error {
 	recorder, ok := h.searcher.(search.FailedSearchRecorder)
 	if !ok {
@@ -110,6 +137,21 @@ func (h *Handlers) FailedSearches(c echo.Context) error {
 	})
 }
 
+// PageViews godoc
+//
+//	@Summary		Get page views statistics
+//	@Description	Retrieve page view statistics for pages in the wiki database. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			top		query		int		false	"Maximum number of records to return (default: 20)"
+//	@Param			path	query		string	false	"Specific page path to filter stats"
+//	@Param			since	query		string	false	"Retrieve stats since this Unix timestamp or RFC3339 date"
+//	@Success		200		{object}	PageViewsResponse
+//	@Failure		400		{object}	map[string]string	"Invalid since date format"
+//	@Failure		501		{object}	map[string]string	"Page view analytics not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Internal query error"
+//	@Router			/api/kiwi/analytics/views [get]
 func (h *Handlers) PageViews(c echo.Context) error {
 	recorder, ok := h.searcher.(search.PageViewRecorder)
 	if !ok {
@@ -345,6 +387,19 @@ type HealthCheckResponse struct {
 	Issues          []string `json:"issues"`
 }
 
+// HealthCheck godoc
+//
+//	@Summary		Get page health check details
+//	@Description	Returns health, quality metrics, and issues list for a single page. Requires SQLite search backend.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			path	query		string	true	"Path of the page to inspect"
+//	@Success		200		{object}	HealthCheckResponse
+//	@Failure		400		{object}	map[string]string	"Path parameter is missing"
+//	@Failure		501		{object}	map[string]string	"Health check not implemented for non-SQLite backends"
+//	@Failure		500		{object}	map[string]string	"Internal metadata retrieval error"
+//	@Router			/api/kiwi/health-check [get]
 func (h *Handlers) HealthCheck(c echo.Context) error {
 	sq, ok := h.searcher.(*search.SQLite)
 	if !ok {

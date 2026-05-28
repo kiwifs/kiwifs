@@ -44,7 +44,7 @@ type ConnectionMeta struct {
 	Via          string         `json:"via,omitempty"` // "airbyte", "airbyte-cloud", "builtin"
 	AirbyteImage string         `json:"airbyte_image,omitempty"`
 	Streams      []string       `json:"streams,omitempty"`
-	AirbyteState json.RawMessage `json:"airbyte_state,omitempty"` // incremental sync cursor
+	AirbyteState json.RawMessage `json:"airbyte_state,omitempty" swaggertype:"object"` // incremental sync cursor
 }
 
 // ConnectionStats records the result of the most recent import run.

@@ -9,19 +9,30 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// Lint validates markdown content for structural issues and returns a list
-// of findings. Accepts JSON body with either "path" (reads from store) or
-// "content" (inline markdown).
+type lintRequest struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+type lintResponse struct {
+	Issues []markdown.LintIssue `json:"issues"`
+}
+
+// Lint godoc
 //
-//	POST /api/kiwi/lint
-//	{ "path": "pages/foo.md" }         → lint an existing file
-//	{ "content": "# Hello\n..." }      → lint inline content
-//	→ { "issues": [...] }
+//	@Summary		Lint markdown content
+//	@Description	Validates markdown content for structural issues and returns a list of lint issues. Accepts either a file path to read from storage or inline markdown content directly.
+//	@Tags			lint
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		lintRequest	true	"Markdown file path or content to lint"
+//	@Success		200		{object}	lintResponse
+//	@Failure		400		{object}	map[string]string	"Invalid request body or parameters"
+//	@Failure		404		{object}	map[string]string	"File not found (when path is provided)"
+//	@Router			/api/kiwi/lint [post]
 func (h *Handlers) Lint(c echo.Context) error {
-	var req struct {
-		Path    string `json:"path"`
-		Content string `json:"content"`
-	}
+	var req lintRequest
 
 	body, err := io.ReadAll(io.LimitReader(c.Request().Body, 32<<20+1))
 	if err != nil {
@@ -49,7 +60,7 @@ func (h *Handlers) Lint(c echo.Context) error {
 		issues = []markdown.LintIssue{}
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"issues": issues,
+	return c.JSON(http.StatusOK, lintResponse{
+		Issues: issues,
 	})
 }
