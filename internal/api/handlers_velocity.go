@@ -12,6 +12,46 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+type velocityHotSpot struct {
+	Path         string `json:"path" example:"/docs/getting-started.md"`
+	Changes      int    `json:"changes" example:"15"`
+	Authors      int    `json:"authors" example:"3"`
+	LinesChanged int    `json:"lines_changed" example:"240"`
+}
+
+type velocityColdSpot struct {
+	Path            string `json:"path" example:"/docs/archived.md"`
+	DaysSinceChange int    `json:"days_since_change" example:"120"`
+}
+
+type velocityBurst struct {
+	Path       string  `json:"path" example:"/docs/active.md"`
+	RecentRate float64 `json:"recent_rate" example:"2.5"`
+	AvgRate    float64 `json:"avg_rate" example:"0.5"`
+}
+
+type velocityResponse struct {
+	Period            string             `json:"period" example:"30d"`
+	TotalChanges      int                `json:"total_changes" example:"142"`
+	HotSpots          []velocityHotSpot  `json:"hot_spots"`
+	ColdSpots         []velocityColdSpot `json:"cold_spots"`
+	Bursts            []velocityBurst    `json:"bursts"`
+	SingleAuthorPages []string           `json:"single_author_pages" example:"/docs/internal.md"`
+}
+
+// Velocity godoc
+//
+//	@Summary		Get repository editing velocity metrics
+//	@Description	Analyzes git log and repository changes to calculate page activity metrics including hot spots (frequently edited pages), cold spots (inactive pages), bursts (sudden spikes in activity), and single-author pages.
+//	@Tags			analytics
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			period		query		string	false	"Time period to analyze (e.g. 30d, 2w, 3m). Default '30d'."
+//	@Param			limit		query		int		false	"Maximum number of hot spots to return. Default 20."
+//	@Param			path_prefix	query		string	false	"Optional directory path prefix to filter pages."
+//	@Success		200			{object}	velocityResponse
+//	@Failure		500			{object}	map[string]string
+//	@Router			/api/kiwi/velocity [get]
 func (h *Handlers) Velocity(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -101,22 +141,12 @@ func (h *Handlers) Velocity(c echo.Context) error {
 	if topN > len(items) {
 		topN = len(items)
 	}
-	type hotSpot struct {
-		Path         string `json:"path"`
-		Changes      int    `json:"changes"`
-		Authors      int    `json:"authors"`
-		LinesChanged int    `json:"lines_changed"`
-	}
-	hotSpots := make([]hotSpot, topN)
+	hotSpots := make([]velocityHotSpot, topN)
 	for i := 0; i < topN; i++ {
-		hotSpots[i] = hotSpot{Path: items[i].path, Changes: items[i].changes, Authors: items[i].authors, LinesChanged: items[i].lines}
+		hotSpots[i] = velocityHotSpot{Path: items[i].path, Changes: items[i].changes, Authors: items[i].authors, LinesChanged: items[i].lines}
 	}
 
-	type coldSpot struct {
-		Path            string `json:"path"`
-		DaysSinceChange int    `json:"days_since_change"`
-	}
-	var coldSpots []coldSpot
+	var coldSpots []velocityColdSpot
 	periodDaysVal := velocityParsePeriodDays(period)
 	_ = storage.Walk(ctx, h.store, "/", func(e storage.Entry) error {
 		if !strings.HasSuffix(e.Path, ".md") {
@@ -134,17 +164,12 @@ func (h *Handlers) Velocity(c echo.Context) error {
 					days = int(time.Since(time.Unix(ts, 0)).Hours() / 24)
 				}
 			}
-			coldSpots = append(coldSpots, coldSpot{Path: e.Path, DaysSinceChange: days})
+			coldSpots = append(coldSpots, velocityColdSpot{Path: e.Path, DaysSinceChange: days})
 		}
 		return nil
 	})
 
-	type burst struct {
-		Path       string  `json:"path"`
-		RecentRate float64 `json:"recent_rate"`
-		AvgRate    float64 `json:"avg_rate"`
-	}
-	var bursts []burst
+	var bursts []velocityBurst
 	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
 	periodDays := velocityParsePeriodDays(period)
 	for _, item := range items {
@@ -158,7 +183,7 @@ func (h *Handlers) Velocity(c echo.Context) error {
 		recentRate := float64(recentCount) / 7.0
 		avgRate := float64(item.changes) / float64(periodDays)
 		if avgRate > 0 && recentRate > 3*avgRate {
-			bursts = append(bursts, burst{Path: item.path, RecentRate: recentRate, AvgRate: avgRate})
+			bursts = append(bursts, velocityBurst{Path: item.path, RecentRate: recentRate, AvgRate: avgRate})
 		}
 	}
 
@@ -170,25 +195,25 @@ func (h *Handlers) Velocity(c echo.Context) error {
 	}
 
 	if hotSpots == nil {
-		hotSpots = []hotSpot{}
+		hotSpots = []velocityHotSpot{}
 	}
 	if coldSpots == nil {
-		coldSpots = []coldSpot{}
+		coldSpots = []velocityColdSpot{}
 	}
 	if bursts == nil {
-		bursts = []burst{}
+		bursts = []velocityBurst{}
 	}
 	if singleAuthor == nil {
 		singleAuthor = []string{}
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"period":              period,
-		"total_changes":       totalChanges,
-		"hot_spots":           hotSpots,
-		"cold_spots":          coldSpots,
-		"bursts":              bursts,
-		"single_author_pages": singleAuthor,
+	return c.JSON(http.StatusOK, velocityResponse{
+		Period:            period,
+		TotalChanges:      totalChanges,
+		HotSpots:          hotSpots,
+		ColdSpots:         coldSpots,
+		Bursts:            bursts,
+		SingleAuthorPages: singleAuthor,
 	})
 }
 

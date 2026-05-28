@@ -9,15 +9,28 @@ import (
 )
 
 type ingestRequest struct {
-	File             string `json:"file"`
-	SplitMode        string `json:"split_mode"`
-	Prefix           string `json:"prefix"`
-	ExtractKeywords  bool   `json:"extract_keywords"`
-	MaxKeywords      int    `json:"max_keywords"`
-	ConvertCrossRefs bool   `json:"convert_crossrefs"`
-	Actor            string `json:"actor"`
+	File             string `json:"file" example:"/tmp/report.pdf"`
+	SplitMode        string `json:"split_mode" example:"heading"`
+	Prefix           string `json:"prefix" example:"imports/report/"`
+	ExtractKeywords  bool   `json:"extract_keywords" example:"true"`
+	MaxKeywords      int    `json:"max_keywords" example:"5"`
+	ConvertCrossRefs bool   `json:"convert_crossrefs" example:"true"`
+	Actor            string `json:"actor" example:"admin"`
 }
 
+// Ingest godoc
+//
+//	@Summary		Ingest a document
+//	@Description	Ingests an external file (PDF, DOCX, XLSX, PPTX, JPG, PNG, etc.) using MarkItDown, processes it (splitting, keyword extraction, etc.), and writes it to the knowledge base.
+//	@Tags			importer
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		ingestRequest	true	"Ingestion options and file path"
+//	@Success		200		{object}	importer.IngestResult
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/ingest [post]
 func (h *Handlers) Ingest(c echo.Context) error {
 	var req ingestRequest
 	if err := c.Bind(&req); err != nil {

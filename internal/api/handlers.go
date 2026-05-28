@@ -79,13 +79,27 @@ func (h *Handlers) invalidateGraphCache() {
 	h.graphCache.Store(nil)
 }
 
-// BackupStatus returns the backup syncer's last push result.
+type backupStatusResponse struct {
+	Enabled bool `json:"enabled" example:"true"`
+	Status  any  `json:"status,omitempty"`
+}
+
+// BackupStatus godoc
+//
+//	@Summary		Get backup and synchronization status
+//	@Description	Retrieves the status of the repository backup and synchronization process, if enabled.
+//	@Tags			health
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Success		200		{object}	backupStatusResponse
+//	@Router			/api/kiwi/backup/status [get]
+//	@Router			/api/kiwi/sync/status [get]
 func (h *Handlers) BackupStatus(c echo.Context) error {
 	if h.backupStatusFn == nil {
-		return c.JSON(http.StatusOK, map[string]any{"enabled": false})
+		return c.JSON(http.StatusOK, backupStatusResponse{Enabled: false})
 	}
 	status := h.backupStatusFn()
-	return c.JSON(http.StatusOK, map[string]any{"enabled": true, "status": status})
+	return c.JSON(http.StatusOK, backupStatusResponse{Enabled: true, Status: status})
 }
 
 type treeEntry struct {

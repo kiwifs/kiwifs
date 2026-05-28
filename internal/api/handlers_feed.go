@@ -10,8 +10,17 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// FeedAtom generates an Atom feed of recent changes.
-// GET /api/kiwi/feed.xml?filter=published
+// FeedAtom godoc
+//
+//	@Summary		Get Atom activity feed
+//	@Description	Generates an Atom XML activity feed of recent changes in the knowledge base.
+//	@Tags			feed
+//	@Security		BearerAuth
+//	@Produce		xml
+//	@Param			filter	query		string	false	"Filter events (e.g. 'published' to only show events for published pages)"
+//	@Success		200		{string}	string	"Atom XML feed content"
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/feed.xml [get]
 func (h *Handlers) FeedAtom(c echo.Context) error {
 	filter := c.QueryParam("filter")
 	feed, err := h.buildFeed(c.Request().Context(), filter)
@@ -27,8 +36,17 @@ func (h *Handlers) FeedAtom(c echo.Context) error {
 	return c.Blob(http.StatusOK, "application/atom+xml; charset=UTF-8", []byte(atom))
 }
 
-// FeedJSON generates a JSON feed of recent changes.
-// GET /api/kiwi/feed.json?filter=published
+// FeedJSON godoc
+//
+//	@Summary		Get JSON activity feed
+//	@Description	Generates a JSON activity feed of recent changes in the knowledge base.
+//	@Tags			feed
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			filter	query		string	false	"Filter events (e.g. 'published' to only show events for published pages)"
+//	@Success		200		{string}	string	"JSON feed content"
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/feed.json [get]
 func (h *Handlers) FeedJSON(c echo.Context) error {
 	filter := c.QueryParam("filter")
 	feed, err := h.buildFeed(c.Request().Context(), filter)

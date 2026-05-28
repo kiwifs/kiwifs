@@ -13,20 +13,34 @@ import (
 
 // timelineEvent represents a single event in the activity timeline.
 type timelineEvent struct {
-	Type      string `json:"type"`
-	Path      string `json:"path"`
-	Actor     string `json:"actor"`
-	Timestamp string `json:"timestamp"`
-	Message   string `json:"message"`
+	Type      string `json:"type" example:"write"`
+	Path      string `json:"path" example:"/docs/getting-started.md"`
+	Actor     string `json:"actor" example:"Jane Doe"`
+	Timestamp string `json:"timestamp" example:"2026-05-28T20:27:17Z"`
+	Message   string `json:"message" example:"Update installation steps"`
 }
 
 type timelineResponse struct {
 	Events []timelineEvent `json:"events"`
-	Total  int             `json:"total"`
+	Total  int             `json:"total" example:"15"`
 }
 
-// Timeline returns recent changes from the git repository as a timeline of events.
-// GET /api/kiwi/timeline?limit=50&offset=0&actor=X&type=write|delete
+// Timeline godoc
+//
+//	@Summary		Get recent timeline events
+//	@Description	Returns a list of recent repository activity events (added, modified, deleted files) formatted as an activity timeline.
+//	@Tags			timeline
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			limit		query		int		false	"Maximum number of events to return (default 50, max 500)"
+//	@Param			offset		query		int		false	"Offset for pagination (default 0)"
+//	@Param			actor		query		string	false	"Filter by actor name"
+//	@Param			type		query		string	false	"Filter by event type ('write' or 'delete')"
+//	@Param			path_prefix	query		string	false	"Filter by file path prefix"
+//	@Success		200			{object}	timelineResponse
+//	@Failure		400			{object}	map[string]string
+//	@Failure		500			{object}	map[string]string
+//	@Router			/api/kiwi/timeline [get]
 func (h *Handlers) Timeline(c echo.Context) error {
 	limit := parseIntParam(c, "limit", 50)
 	if limit <= 0 {

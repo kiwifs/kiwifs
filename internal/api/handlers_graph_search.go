@@ -12,7 +12,54 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// Peek returns a lightweight summary of a file.
+type peekResponse struct {
+	Path        string   `json:"path" example:"/docs/getting-started.md"`
+	Title       string   `json:"title" example:"Getting Started"`
+	Frontmatter any      `json:"frontmatter"`
+	Snippet     string   `json:"snippet" example:"This guide will help you set up and run KiwiFS in less than 5 minutes..."`
+	LinksOut    []string `json:"links_out" example:"/docs/install.md"`
+	LinksIn     []string `json:"links_in" example:"/docs/index.md"`
+	WordCount   int      `json:"word_count" example:"450"`
+	Headings    []string `json:"headings" example:"KiwiFS CLI,Installation,Running Server"`
+}
+
+type sectionReadResponse struct {
+	Path      string `json:"path" example:"/docs/getting-started.md"`
+	Heading   string `json:"heading" example:"Installation"`
+	Level     int    `json:"level" example:"2"`
+	Content   string `json:"content" example:"To install KiwiFS, run the following command..."`
+	LineStart int    `json:"line_start" example:"14"`
+	LineEnd   int    `json:"line_end" example:"28"`
+}
+
+type graphWalkNeighbor struct {
+	Path      string `json:"path" example:"/docs/advanced.md"`
+	Relation  string `json:"relation" example:"sibling_tag"`
+	SharedTag string `json:"shared_tag,omitempty" example:"setup"`
+}
+
+type graphWalkResponse struct {
+	Path      string              `json:"path" example:"/docs/getting-started.md"`
+	LinksOut  []string            `json:"links_out" example:"/docs/install.md"`
+	LinksIn   []string            `json:"links_in" example:"/docs/index.md"`
+	Siblings  []graphWalkNeighbor `json:"siblings"`
+	HubScore  float64             `json:"hub_score" example:"0.125"`
+	InDegree  int                 `json:"in_degree" example:"2"`
+	OutDegree int                 `json:"out_degree" example:"1"`
+}
+
+// Peek godoc
+//
+//	@Summary		Get a lightweight summary of a file
+//	@Description	Parses the markdown file at the given path to return metadata, title, YAML frontmatter, a text snippet, outgoing/incoming links, word count, and a list of headings.
+//	@Tags			graph
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			path	query		string	true	"File path in kiwifs"
+//	@Success		200		{object}	peekResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Router			/api/kiwi/peek [get]
 func (h *Handlers) Peek(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -72,19 +119,32 @@ func (h *Handlers) Peek(c echo.Context) error {
 
 	wordCount := len(strings.Fields(string(body)))
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"path":        path,
-		"title":       title,
-		"frontmatter": sanitizeForJSON(parsed.Frontmatter),
-		"snippet":     snippet,
-		"links_out":   linksOut,
-		"links_in":    linksIn,
-		"word_count":  wordCount,
-		"headings":    headings,
+	return c.JSON(http.StatusOK, peekResponse{
+		Path:        path,
+		Title:       title,
+		Frontmatter: sanitizeForJSON(parsed.Frontmatter),
+		Snippet:     snippet,
+		LinksOut:    linksOut,
+		LinksIn:     linksIn,
+		WordCount:   wordCount,
+		Headings:    headings,
 	})
 }
 
-// SectionRead returns a single heading section from a file.
+// SectionRead godoc
+//
+//	@Summary		Read a single heading section from a file
+//	@Description	Extracts a single section from a markdown file by heading text or section index.
+//	@Tags			graph
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			path	query		string	true	"File path in kiwifs"
+//	@Param			heading	query		string	false	"Heading text of the section to extract"
+//	@Param			index	query		int		false	"Index of the section to extract"
+//	@Success		200		{object}	sectionReadResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Router			/api/kiwi/section [get]
 func (h *Handlers) SectionRead(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -121,17 +181,29 @@ func (h *Handlers) SectionRead(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"path":       path,
-		"heading":    section.Heading,
-		"level":      section.Level,
-		"content":    section.Content,
-		"line_start": section.LineStart,
-		"line_end":   section.LineEnd,
+	return c.JSON(http.StatusOK, sectionReadResponse{
+		Path:      path,
+		Heading:   section.Heading,
+		Level:     section.Level,
+		Content:   section.Content,
+		LineStart: section.LineStart,
+		LineEnd:   section.LineEnd,
 	})
 }
 
-// GraphWalk performs a one-hop graph traversal from a page.
+// GraphWalk godoc
+//
+//	@Summary		Perform a one-hop graph traversal from a page
+//	@Description	Walks the links graph from a page, returning outgoing links, incoming backlinks, directory/tag siblings, degree metrics, and page centrality/hub score.
+//	@Tags			graph
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			path			query		string	true	"File path in kiwifs"
+//	@Param			include_siblings	query		string	false	"Include tag/directory siblings in walk (default 'true')"
+//	@Success		200				{object}	graphWalkResponse
+//	@Failure		400				{object}	map[string]string
+//	@Failure		404				{object}	map[string]string
+//	@Router			/api/kiwi/graph/walk [get]
 func (h *Handlers) GraphWalk(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -151,12 +223,6 @@ func (h *Handlers) GraphWalk(c echo.Context) error {
 
 	includeSiblings := c.QueryParam("include_siblings") != "false"
 
-	type neighbor struct {
-		Path      string `json:"path"`
-		Relation  string `json:"relation"`
-		SharedTag string `json:"shared_tag,omitempty"`
-	}
-
 	outLinks := links.Extract(body)
 	outLinks = links.Unique(outLinks)
 	if outLinks == nil {
@@ -174,7 +240,7 @@ func (h *Handlers) GraphWalk(c echo.Context) error {
 		inLinks = []string{}
 	}
 
-	var siblings []neighbor
+	var siblings []graphWalkNeighbor
 	if includeSiblings {
 		dir := dirOf(path)
 		var fileTags []string
@@ -188,7 +254,7 @@ func (h *Handlers) GraphWalk(c echo.Context) error {
 				return nil
 			}
 			if dirOf(e.Path) == dir {
-				siblings = append(siblings, neighbor{
+				siblings = append(siblings, graphWalkNeighbor{
 					Path:     e.Path,
 					Relation: "sibling_dir",
 				})
@@ -200,7 +266,7 @@ func (h *Handlers) GraphWalk(c echo.Context) error {
 					for _, ft := range fileTags {
 						for _, ot := range otherTags {
 							if strings.EqualFold(ft, ot) {
-								siblings = append(siblings, neighbor{
+								siblings = append(siblings, graphWalkNeighbor{
 									Path:      e.Path,
 									Relation:  "sibling_tag",
 									SharedTag: ft,
@@ -214,7 +280,7 @@ func (h *Handlers) GraphWalk(c echo.Context) error {
 		})
 	}
 	if siblings == nil {
-		siblings = []neighbor{}
+		siblings = []graphWalkNeighbor{}
 	}
 
 	var hubScore float64
@@ -239,14 +305,14 @@ func (h *Handlers) GraphWalk(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"path":       path,
-		"links_out":  outLinks,
-		"links_in":   inLinks,
-		"siblings":   siblings,
-		"hub_score":  hubScore,
-		"in_degree":  len(inLinks),
-		"out_degree": len(outLinks),
+	return c.JSON(http.StatusOK, graphWalkResponse{
+		Path:      path,
+		LinksOut:  outLinks,
+		LinksIn:   inLinks,
+		Siblings:  siblings,
+		HubScore:  hubScore,
+		InDegree:  len(inLinks),
+		OutDegree: len(outLinks),
 	})
 }
 

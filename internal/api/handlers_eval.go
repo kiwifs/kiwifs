@@ -12,24 +12,44 @@ type evalRequest struct {
 }
 
 type evalQuery struct {
-	Question      string   `json:"question"`
-	ExpectedPaths []string `json:"expected_paths"`
+	Question      string   `json:"question" example:"how to install kiwifs?"`
+	ExpectedPaths []string `json:"expected_paths" example:"/docs/install.md"`
 }
 
 type evalMetrics struct {
-	HitRate      float64 `json:"hit_rate"`
-	MRR          float64 `json:"mrr"`
-	PrecisionAtK float64 `json:"precision_at_5"`
+	HitRate      float64 `json:"hit_rate" example:"0.8"`
+	MRR          float64 `json:"mrr" example:"0.75"`
+	PrecisionAtK float64 `json:"precision_at_5" example:"0.6"`
 }
 
 type evalQueryResult struct {
-	Question     string   `json:"question"`
-	FTSRank      int      `json:"fts_rank"`
-	SemanticRank int      `json:"semantic_rank"`
-	FTSHits      []string `json:"fts_hits"`
-	SemanticHits []string `json:"semantic_hits"`
+	Question     string   `json:"question" example:"how to install kiwifs?"`
+	FTSRank      int      `json:"fts_rank" example:"1"`
+	SemanticRank int      `json:"semantic_rank" example:"2"`
+	FTSHits      []string `json:"fts_hits" example:"/docs/install.md"`
+	SemanticHits []string `json:"semantic_hits" example:"/docs/install.md"`
 }
 
+type evalResponse struct {
+	FTS      evalMetrics       `json:"fts"`
+	Semantic evalMetrics       `json:"semantic"`
+	PerQuery []evalQueryResult `json:"per_query"`
+	Errors   int               `json:"errors" example:"0"`
+}
+
+// Eval godoc
+//
+//	@Summary		Evaluate search performance
+//	@Description	Runs search queries using both FTS5 and semantic search engines, and measures metrics (Hit Rate, MRR, Precision@5) against expected page paths.
+//	@Tags			eval
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		evalRequest	true	"Evaluation request containing questions and expected paths"
+//	@Success		200		{object}	evalResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/eval [post]
 func (h *Handlers) Eval(c echo.Context) error {
 	var req evalRequest
 	if err := c.Bind(&req); err != nil {
@@ -131,18 +151,18 @@ func (h *Handlers) Eval(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "all search queries failed")
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"fts": evalMetrics{
+	return c.JSON(http.StatusOK, evalResponse{
+		FTS: evalMetrics{
 			HitRate:      float64(ftsHitCount) / total,
 			MRR:          ftsMRRSum / total,
 			PrecisionAtK: ftsPrecSum / total,
 		},
-		"semantic": evalMetrics{
+		Semantic: evalMetrics{
 			HitRate:      float64(semHitCount) / total,
 			MRR:          semMRRSum / total,
 			PrecisionAtK: semPrecSum / total,
 		},
-		"per_query": perQuery,
-		"errors":    errorCount,
+		PerQuery: perQuery,
+		Errors:   errorCount,
 	})
 }
