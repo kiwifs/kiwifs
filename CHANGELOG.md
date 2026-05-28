@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.4](https://github.com/kiwifs/kiwifs/compare/v0.19.3...v0.19.4) (2026-05-28)
+
+
+### Features
+
+* **ui:** make editor title editable ([#183](https://github.com/kiwifs/kiwifs/issues/183)) ([134b6ff](https://github.com/kiwifs/kiwifs/commit/134b6ff910e14c7ad2c7b0b38a1d47a849f7026b))
+
 ## [0.19.3](https://github.com/kiwifs/kiwifs/compare/v0.19.2...v0.19.3) (2026-05-27)
 
 
