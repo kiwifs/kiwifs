@@ -16,6 +16,7 @@ import { Decoration, DecorationSet } from "prosemirror-view";
 import matter from "gray-matter";
 import { api, type TreeEntry } from "@kw/lib/api";
 import { Button } from "@kw/components/ui/button";
+import { Input } from "@kw/components/ui/input";
 import { Textarea } from "@kw/components/ui/textarea";
 import { dirOf, stem, titleize } from "@kw/lib/paths";
 import { KiwiBreadcrumb } from "./KiwiBreadcrumb";
@@ -42,6 +43,64 @@ import {
 import { cn } from "@kw/lib/cn";
 
 const wikiLinkPluginKey = new PluginKey("kiwi-wiki-links");
+
+function yamlQuote(value: string): string {
+  return JSON.stringify(value);
+}
+
+function unquoteYamlTitle(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {}
+  }
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1).replace(/''/g, "'");
+  }
+  return trimmed;
+}
+
+function titleFromFrontmatterText(frontmatterText: string): string | null {
+  try {
+    const parsed = matter(`---\n${frontmatterText}\n---\n`);
+    if (typeof parsed.data?.title === "string") return parsed.data.title;
+  } catch {}
+  const titleLine = frontmatterText
+    .split(/\r?\n/)
+    .find((line) => /^\s*title\s*:/.test(line));
+  if (!titleLine) return null;
+  return unquoteYamlTitle(titleLine.replace(/^\s*title\s*:\s*/, ""));
+}
+
+function setTitleInFrontmatterText(frontmatterText: string, title: string): string {
+  const titleLine = `title: ${yamlQuote(title)}`;
+  const lines = frontmatterText ? frontmatterText.split(/\r?\n/) : [];
+  const titleIndex = lines.findIndex((line) => /^\s*title\s*:/.test(line));
+  if (titleIndex >= 0) {
+    lines[titleIndex] = titleLine;
+    return lines.join("\n");
+  }
+  return [titleLine, ...lines].join("\n").trimEnd();
+}
+
+function setTitleInMarkdownSource(markdown: string, title: string): string {
+  const { frontmatter, body } = splitFrontmatter(markdown);
+  const nextFrontmatterText = setTitleInFrontmatterText(frontmatterToText(frontmatter), title);
+  return joinFrontmatter(nextFrontmatterText, body);
+}
+
+function titleFromMarkdownSource(markdown: string): string | null {
+  const { frontmatter } = splitFrontmatter(markdown);
+  const fromFrontmatter = titleFromFrontmatterText(frontmatterToText(frontmatter));
+  if (fromFrontmatter !== null) return fromFrontmatter;
+  try {
+    const parsed = matter(markdown);
+    if (typeof parsed.data?.title === "string") return parsed.data.title;
+  } catch {}
+  return null;
+}
 
 function wikiLinkDecoPlugin() {
   return new Plugin({
@@ -474,6 +533,14 @@ function EditorInner({
     }, 2000);
   }, [ready, editorMode]);
 
+  const markVisualTitleDirty = useCallback(() => {
+    setSaveStatus("dirty");
+    if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = window.setTimeout(() => {
+      onSaveRef.current();
+    }, 2000);
+  }, []);
+
   const performModeSwitch = useCallback(
     async (target: EditorMode, opts?: { discard?: boolean }) => {
       setVisualParseError(null);
@@ -558,12 +625,50 @@ function EditorInner({
   }, [saveRef, requestModeSwitch]);
 
   const fmTitle = useMemo(() => {
-    try {
-      const parsed = matter(editorMode === "source" ? sourceText : initialMd);
-      if (typeof parsed.data?.title === "string") return parsed.data.title;
-    } catch {}
-    return null;
-  }, [initialMd, editorMode, sourceText]);
+    if (editorMode === "visual") return titleFromFrontmatterText(fmText);
+    return titleFromMarkdownSource(sourceText);
+  }, [editorMode, fmText, sourceText]);
+
+  const displayTitle = fmTitle ?? titleize(path);
+  const [titleInputValue, setTitleInputValue] = useState(displayTitle);
+
+  useEffect(() => {
+    setTitleInputValue(displayTitle);
+  }, [displayTitle]);
+
+  const handleTitleChange = useCallback(
+    (nextTitle: string) => {
+      setTitleInputValue(nextTitle);
+      if (editorMode === "visual") {
+        setFmText((current: string) => setTitleInFrontmatterText(current, nextTitle));
+        markVisualTitleDirty();
+        return;
+      }
+      setSourceText((current: string) => setTitleInMarkdownSource(current, nextTitle));
+      markDirty();
+    },
+    [editorMode, markDirty, markVisualTitleDirty],
+  );
+
+  const handleFrontmatterTextChange = useCallback(
+    (nextText: string) => {
+      setFmText(nextText);
+      const nextTitle = titleFromFrontmatterText(nextText);
+      if (nextTitle !== null) setTitleInputValue(nextTitle);
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  const handleSourceTextChange = useCallback(
+    (nextText: string) => {
+      setSourceText(nextText);
+      const nextTitle = titleFromMarkdownSource(nextText);
+      if (nextTitle !== null) setTitleInputValue(nextTitle);
+      markDirty();
+    },
+    [markDirty],
+  );
 
   const canSave =
     saveStatus !== "clean" &&
@@ -584,10 +689,14 @@ function EditorInner({
         <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6">
           <div className="mb-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-              <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground leading-tight">
-                  {fmTitle || titleize(path)}
-                </h1>
+              <div className="min-w-0 flex-1">
+                <Input
+                  value={titleInputValue}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  aria-label="Page title"
+                  title="Updates the frontmatter title field"
+                  className="w-full min-w-0 h-auto border-transparent bg-transparent px-0 py-0 text-xl sm:text-2xl font-bold tracking-tight text-foreground leading-tight shadow-none focus-visible:border-input focus-visible:px-2 focus-visible:py-1"
+                />
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <SaveIndicator status={saveStatus} />
                   {editorMode === "visual" && (
@@ -643,7 +752,7 @@ function EditorInner({
               {fmOpen && (
                 <Textarea
                   value={fmText}
-                  onChange={(e) => { setFmText(e.target.value); markDirty(); }}
+                  onChange={(e) => handleFrontmatterTextChange(e.target.value)}
                   placeholder={"title: My Page\ntags:\n  - draft"}
                   className="mt-2 font-mono text-xs min-h-[80px] resize-y"
                   rows={Math.max(3, fmText.split("\n").length)}
@@ -656,10 +765,7 @@ function EditorInner({
             {editorMode === "source" ? (
               <MarkdownSourceEditor
                 value={sourceText}
-                onChange={(next) => {
-                  setSourceText(next);
-                  markDirty();
-                }}
+                onChange={handleSourceTextChange}
                 dark={isDark}
                 onSaveShortcut={() => onSaveRef.current()}
                 pages={wikiPages}
