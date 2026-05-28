@@ -24,6 +24,21 @@ type changesResponse struct {
 	LastSeq string        `json:"last_seq"`
 }
 
+// Changes godoc
+//
+//	@Summary		Get changes feed
+//	@Description	Returns a list of commit changes in the repository. Supports long polling for real-time updates.
+//	@Tags			changes
+//	@Security		BearerAuth
+//	@Param			since	query		string	false	"Sequence (commit hash) to get changes since"
+//	@Param			limit	query		int		false	"Maximum number of changes to return (default 50, max 500)"
+//	@Param			feed	query		string	false	"Feed type ('longpoll' for long polling)"
+//	@Param			timeout	query		string	false	"Timeout duration for longpoll (e.g. 30s, max 120s)"
+//	@Success		200		{object}	changesResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		503		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/changes [get]
 func (h *Handlers) Changes(c echo.Context) error {
 	since := c.QueryParam("since")
 	limit := parseIntParam(c, "limit", 50)

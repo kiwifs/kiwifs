@@ -27,6 +27,21 @@ type searchResponse struct {
 	Results []searchResultEntry `json:"results"`
 }
 
+// Search godoc
+//
+//	@Summary		Full-text search
+//	@Description	Performs a full-text search query on the repository content.
+//	@Tags			search
+//	@Security		BearerAuth
+//	@Param			q				query		string	true	"Search query string"
+//	@Param			limit			query		int		false	"Maximum number of search results to return (default: 15, max: 200)"
+//	@Param			offset			query		int		false	"Number of search results to skip (offset) (default: 0)"
+//	@Param			boost			query		string	false	"Set to 'none' or 'off' to disable trust boosting in search results"
+//	@Param			modifiedAfter	query		string	false	"RFC3339 formatted cutoff date to filter search results by modification time"
+//	@Success		200				{object}	searchResponse
+//	@Failure		400				{object}	map[string]string
+//	@Failure		500				{object}	map[string]string
+//	@Router			/api/kiwi/search [get]
 func (h *Handlers) Search(c echo.Context) error {
 	q := c.QueryParam("q")
 	if q == "" {
@@ -113,6 +128,20 @@ func (h *Handlers) Search(c echo.Context) error {
 	})
 }
 
+// VerifiedSearch godoc
+//
+//	@Summary		Verified full-text search
+//	@Description	Performs a verified full-text search query on the repository using the SQLite search backend.
+//	@Tags			search
+//	@Security		BearerAuth
+//	@Param			q		query		string	true	"Search query string"
+//	@Param			limit	query		int		false	"Maximum number of search results to return (default: 15, max: 200)"
+//	@Param			offset	query		int		false	"Number of search results to skip (offset) (default: 0)"
+//	@Success		200		{object}	searchResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Failure		501		{object}	map[string]string
+//	@Router			/api/kiwi/search/verified [get]
 func (h *Handlers) VerifiedSearch(c echo.Context) error {
 	q := c.QueryParam("q")
 	if q == "" {
@@ -154,6 +183,17 @@ type staleResponse struct {
 	Results   []search.MetaResult `json:"results"`
 }
 
+// StalePages godoc
+//
+//	@Summary		Get stale pages
+//	@Description	Returns pages that have not been modified for a given number of days.
+//	@Tags			search
+//	@Security		BearerAuth
+//	@Param			days	query		int	false	"Number of days threshold for staleness (default 30)"
+//	@Success		200		{object}	staleResponse
+//	@Failure		500		{object}	map[string]string
+//	@Failure		501		{object}	map[string]string
+//	@Router			/api/kiwi/stale [get]
 func (h *Handlers) StalePages(c echo.Context) error {
 	sd, ok := h.searcher.(search.StaleDetector)
 	if !ok {
@@ -182,6 +222,18 @@ type contradictionsResponse struct {
 	Paths []string `json:"contradictions"`
 }
 
+// Contradictions godoc
+//
+//	@Summary		Find page contradictions
+//	@Description	Finds pages that contradict the content of the specified page.
+//	@Tags			search
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"Path of the file to check for contradictions (must start with '/')"
+//	@Success		200		{object}	contradictionsResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Failure		501		{object}	map[string]string
+//	@Router			/api/kiwi/contradictions [get]
 func (h *Handlers) Contradictions(c echo.Context) error {
 	cd, ok := h.searcher.(search.ContradictionDetector)
 	if !ok {
@@ -218,6 +270,22 @@ type semanticResponse struct {
 	Results []vectorstore.Result `json:"results"`
 }
 
+// SemanticSearch godoc
+//
+//	@Summary		Semantic vector search
+//	@Description	Performs a semantic/vector search using embeddings. Accepts query parameters or a JSON body.
+//	@Tags			search
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Param			body	body		semanticRequest	false	"JSON body containing query, topK, offset, and modifiedAfter filters"
+//	@Param			q		query		string			false	"Search query string (used if not provided in JSON body)"
+//	@Param			topK	query		int				false	"Maximum number of search results to return (default: 10)"
+//	@Param			offset	query		int				false	"Number of search results to skip (offset)"
+//	@Success		200		{object}	semanticResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Failure		503		{object}	map[string]string
+//	@Router			/api/kiwi/search/semantic [post]
 func (h *Handlers) SemanticSearch(c echo.Context) error {
 	if h.vectors == nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "semantic search is not enabled")
@@ -309,6 +377,22 @@ type metaResponse struct {
 	Results []metaResultEntry `json:"results"`
 }
 
+// Meta godoc
+//
+//	@Summary		Query page metadata
+//	@Description	Queries page metadata using filters, sorting, and pagination.
+//	@Tags			search
+//	@Security		BearerAuth
+//	@Param			where	query		[]string	false	"AND filters in the format 'field operator value' (e.g. 'tags contains project')"
+//	@Param			or		query		[]string	false	"OR filters in the format 'field operator value'"
+//	@Param			sort	query		string		false	"Field to sort the results by"
+//	@Param			order	query		string		false	"Sorting order ('asc' or 'desc')"
+//	@Param			limit	query		int			false	"Maximum number of results to return"
+//	@Param			offset	query		int			false	"Number of results to skip (offset)"
+//	@Success		200		{object}	metaResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		501		{object}	map[string]string
+//	@Router			/api/kiwi/meta [get]
 func (h *Handlers) Meta(c echo.Context) error {
 	mq, ok := h.searcher.(metaQuerier)
 	if !ok {

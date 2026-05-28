@@ -8,6 +8,16 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// Events godoc
+//
+//	@Summary		Get real-time events stream
+//	@Description	Returns a Server-Sent Events (SSE) stream for real-time notifications about file changes and other events.
+//	@Tags			integration
+//	@Security		BearerAuth
+//	@Produce		event-stream
+//	@Success		200		{string}	string	"SSE stream of events"
+//	@Failure		503		{object}	map[string]string
+//	@Router			/api/kiwi/events [get]
 func (h *Handlers) Events(c echo.Context) error {
 	ch, err := h.hub.Subscribe()
 	if err != nil {

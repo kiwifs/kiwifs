@@ -36,6 +36,18 @@ func init() {
 	}
 }
 
+// Tree godoc
+//
+//	@Summary		Get directory tree
+//	@Description	Returns the hierarchical directory tree starting from a specific path.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Param			path	query		string	false	"Directory path to start tree building from (defaults to '/')"
+//	@Success		200		{object}	treeEntry
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/tree [get]
 func (h *Handlers) Tree(c echo.Context) error {
 	path := c.QueryParam("path")
 	if path == "" {
@@ -84,6 +96,24 @@ func (h *Handlers) addPermalinks(entry *treeEntry) {
 	}
 }
 
+// ReadFile godoc
+//
+//	@Summary		Read file content or metadata
+//	@Description	Reads a file's content or metadata from the file system. Supports conditional GET using ETag/Last-Modified, link resolution, and metadata-only output.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Param			path				query		string	true	"Path of the file to read (must start with '/')"
+//	@Param			metadata_only		query		bool	false	"If true, returns only the Markdown frontmatter metadata as JSON"
+//	@Param			resolve_links		query		bool	false	"If true, resolves wiki-style links in markdown files"
+//	@Param			source				query		string	false	"Referrer or source recording page views"
+//	@Param			If-None-Match		header		string	false	"ETag to check for caching (returns 304 Not Modified if matched)"
+//	@Param			If-Modified-Since	header		string	false	"HTTP date to check for caching"
+//	@Success		200					{string}	string	"File content (raw bytes) or JSON metadata"
+//	@Success		304					{string}	string	"Not Modified"
+//	@Failure		400					{object}	map[string]string
+//	@Failure		404					{object}	map[string]string
+//	@Failure		500					{object}	map[string]string
+//	@Router			/api/kiwi/file [get]
 func (h *Handlers) ReadFile(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -171,6 +201,17 @@ func pageViewSource(c echo.Context) string {
 	return source
 }
 
+// Readlink godoc
+//
+//	@Summary		Read symlink target
+//	@Description	Returns the target path of a symbolic link.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"Path of the symlink (must start with '/')"
+//	@Success		200		{string}	string	"Target path of the symlink"
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Router			/api/kiwi/readlink [get]
 func (h *Handlers) Readlink(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -195,6 +236,16 @@ type resolveLinksRequest struct {
 	Content string `json:"content"`
 }
 
+// ResolveLinks godoc
+//
+//	@Summary		Resolve wiki links in content
+//	@Description	Resolves wiki-style links in the provided content body and returns the updated content.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Param			body	body		resolveLinksRequest	true	"Content to resolve links in"
+//	@Success		200		{object}	map[string]string
+//	@Failure		400		{object}	map[string]string
+//	@Router			/api/kiwi/resolve-links [post]
 func (h *Handlers) ResolveLinks(c echo.Context) error {
 	var req resolveLinksRequest
 	if err := bindJSON(c, &req); err != nil {
@@ -210,6 +261,25 @@ func (h *Handlers) ResolveLinks(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"content": resolved})
 }
 
+// WriteFile godoc
+//
+//	@Summary		Write file or create symlink
+//	@Description	Writes content to a file. If the Content-Type header is application/x-symlink, creates a symbolic link instead. Supports optimistic concurrency control.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Accept			plain,octet-stream,application/x-symlink
+//	@Param			path			query		string	true	"Path of the file to write (must start with '/')"
+//	@Param			body			body		string	true	"File content or symlink target path (max 32MB)"
+//	@Param			If-Match		header		string	false	"ETag to check for conflict (prevents update if the file changed)"
+//	@Param			X-Actor			header		string	false	"Actor identity performing the write"
+//	@Param			X-Provenance	header		string	false	"Provenance metadata header"
+//	@Success		200				{object}	map[string]string
+//	@Failure		400				{object}	map[string]string
+//	@Failure		409				{object}	map[string]string
+//	@Failure		413				{object}	map[string]string
+//	@Failure		422				{object}	map[string]string
+//	@Failure		500				{object}	map[string]string
+//	@Router			/api/kiwi/file [put]
 func (h *Handlers) WriteFile(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -293,6 +363,20 @@ type bulkResponse struct {
 	Files []bulkResult `json:"files"`
 }
 
+// BulkWrite godoc
+//
+//	@Summary		Bulk write multiple files
+//	@Description	Writes multiple files in a single transaction/operation.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Param			body			body		bulkRequest	true	"Bulk write request payload containing list of files, actor, and commit message"
+//	@Param			X-Provenance	header		string		false	"Provenance metadata header applied to all files if present"
+//	@Success		200				{object}	bulkResponse
+//	@Failure		400				{object}	map[string]string
+//	@Failure		409				{object}	map[string]string
+//	@Failure		422				{object}	map[string]string
+//	@Failure		500				{object}	map[string]string
+//	@Router			/api/kiwi/bulk [post]
 func (h *Handlers) BulkWrite(c echo.Context) error {
 	var req bulkRequest
 	if err := bindJSON(c, &req); err != nil {
@@ -387,6 +471,22 @@ type uploadResponse struct {
 	ETag        string `json:"etag"`
 }
 
+// UploadAsset godoc
+//
+//	@Summary		Upload an asset file
+//	@Description	Uploads an image, video, audio, or PDF asset file to the specified directory.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Accept			mpfd
+//	@Param			path	query		string	false	"Subdirectory path to upload the asset into (e.g. 'images')"
+//	@Param			file	formData	file	true	"The asset file to upload"
+//	@Param			X-Actor	header		string	false	"Actor identity performing the upload"
+//	@Success		200		{object}	uploadResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		413		{object}	map[string]string
+//	@Failure		415		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/assets [post]
 func (h *Handlers) UploadAsset(c echo.Context) error {
 	dir := strings.TrimSpace(c.QueryParam("path"))
 	dir = strings.Trim(dir, "/")
@@ -498,6 +598,17 @@ func assetMarkdown(path, name, ct string) string {
 	}
 }
 
+// ServeRawFile godoc
+//
+//	@Summary		Serve raw file content
+//	@Description	Serves a raw file from the filesystem. Does not require authentication.
+//	@Tags			files
+//	@Param			filepath	path		string	true	"Path to the raw file"
+//	@Success		200			{string}	string	"Raw file bytes"
+//	@Failure		400			{object}	map[string]string
+//	@Failure		404			{object}	map[string]string
+//	@Failure		500			{object}	map[string]string
+//	@Router			/raw/{filepath} [get]
 func (h *Handlers) ServeRawFile(c echo.Context) error {
 	path := c.Param("*")
 	abs, err := storage.GuardPath(h.store.AbsPath(""), path)
@@ -565,6 +676,20 @@ type renameRequest struct {
 	To   string `json:"to"`
 }
 
+// RenameFile godoc
+//
+//	@Summary		Rename a file
+//	@Description	Renames a file from one path to another, optionally updating wiki links pointing to it in other files.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Param			update_links	query		bool			false	"If true, automatically updates links to the renamed file (default true)"
+//	@Param			body			body		renameRequest	true	"Rename request body containing source and target paths"
+//	@Param			X-Actor			header		string			false	"Actor identity performing the rename"
+//	@Success		200				{object}	map[string]interface{}
+//	@Failure		400				{object}	map[string]string
+//	@Failure		404				{object}	map[string]string
+//	@Failure		500				{object}	map[string]string
+//	@Router			/api/kiwi/rename [post]
 func (h *Handlers) RenameFile(c echo.Context) error {
 	var req renameRequest
 	if err := bindJSON(c, &req); err != nil {
@@ -599,6 +724,19 @@ func (h *Handlers) RenameFile(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// RenameDir godoc
+//
+//	@Summary		Rename a directory
+//	@Description	Renames a directory and all files inside it.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Param			body	body		renameRequest	true	"Rename request body containing source and target directory paths"
+//	@Param			X-Actor	header		string			false	"Actor identity performing the rename"
+//	@Success		200		{object}	map[string]interface{}
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/rename-dir [post]
 func (h *Handlers) RenameDir(c echo.Context) error {
 	var req renameRequest
 	if err := bindJSON(c, &req); err != nil {
@@ -627,6 +765,24 @@ func (h *Handlers) RenameDir(c echo.Context) error {
 	})
 }
 
+// AppendFile godoc
+//
+//	@Summary		Append content to a file
+//	@Description	Appends text/binary content to an existing file, separated by a separator.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Accept			plain,octet-stream
+//	@Param			path		query		string	true	"Path of the file to append to (must start with '/')"
+//	@Param			separator	query		string	false	"Separator to insert before the appended content (default newline)"
+//	@Param			body		body		string	true	"Content to append (max 32MB)"
+//	@Param			X-Actor		header		string	false	"Actor identity performing the append"
+//	@Success		200			{object}	map[string]string
+//	@Failure		400			{object}	map[string]string
+//	@Failure		409			{object}	map[string]string
+//	@Failure		413			{object}	map[string]string
+//	@Failure		422			{object}	map[string]string
+//	@Failure		500			{object}	map[string]string
+//	@Router			/api/kiwi/file/append [post]
 func (h *Handlers) AppendFile(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -666,6 +822,19 @@ func (h *Handlers) AppendFile(c echo.Context) error {
 	})
 }
 
+// DeleteFile godoc
+//
+//	@Summary		Delete a file
+//	@Description	Deletes a file from the repository.
+//	@Tags			files
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"Path of the file to delete (must start with '/')"
+//	@Param			X-Actor	header		string	false	"Actor identity performing the delete"
+//	@Success		200		{object}	map[string]string
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/file [delete]
 func (h *Handlers) DeleteFile(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {

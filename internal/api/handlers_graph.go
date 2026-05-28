@@ -16,6 +16,18 @@ type tocResponse struct {
 	Headings []markdown.Heading `json:"headings"`
 }
 
+// ToC godoc
+//
+//	@Summary		Get table of contents for a file
+//	@Description	Returns a list of headings (ToC) for the specified file.
+//	@Tags			graph
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"Path of the file (must start with '/')"
+//	@Success		200		{object}	tocResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/toc [get]
 func (h *Handlers) ToC(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -37,6 +49,17 @@ type backlinksResponse struct {
 	Backlinks []links.Entry `json:"backlinks"`
 }
 
+// Backlinks godoc
+//
+//	@Summary		Get backlinks for a file
+//	@Description	Returns a list of files that link to the specified file.
+//	@Tags			graph
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"Path of the file (must start with '/')"
+//	@Success		200		{object}	backlinksResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/backlinks [get]
 func (h *Handlers) Backlinks(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -65,6 +88,15 @@ type graphResponse struct {
 	Edges []links.Edge `json:"edges"`
 }
 
+// Graph godoc
+//
+//	@Summary		Get links graph
+//	@Description	Returns a graph of all nodes (files) and edges (links) in the workspace repository.
+//	@Tags			graph
+//	@Security		BearerAuth
+//	@Success		200		{object}	graphResponse
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/graph [get]
 func (h *Handlers) Graph(c echo.Context) error {
 	if cached := h.graphCache.Load(); cached != nil {
 		return c.JSON(http.StatusOK, cached)
