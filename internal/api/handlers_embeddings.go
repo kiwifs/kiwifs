@@ -7,6 +7,32 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+type chunkResp struct {
+	ChunkIdx int       `json:"chunk_idx" example:"0"`
+	Text     string    `json:"text" example:"This is the first sentence..."`
+	Vector   []float32 `json:"vector" example:"0.1,-0.2,0.4"`
+}
+
+type embeddingsResponse struct {
+	Path       string      `json:"path" example:"/docs/getting-started.md"`
+	Dimensions int         `json:"dimensions" example:"1536"`
+	Chunks     []chunkResp `json:"chunks"`
+}
+
+// Embeddings godoc
+//
+//	@Summary		Get embeddings for a file
+//	@Description	Returns the stored vector embeddings and text chunks for a specified file path.
+//	@Tags			embeddings
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			path	query		string	true	"File path to get embeddings for"
+//	@Success		200		{object}	embeddingsResponse
+//	@Failure		400		{object}	map[string]string	"Path parameter is required"
+//	@Failure		404		{object}	map[string]string	"No embeddings found for path"
+//	@Failure		500		{object}	map[string]string	"Internal vector database query error"
+//	@Failure		503		{object}	map[string]string	"Vector search service is disabled"
+//	@Router			/api/kiwi/embeddings [get]
 func (h *Handlers) Embeddings(c echo.Context) error {
 	path := c.QueryParam("path")
 	if path == "" {
@@ -25,12 +51,6 @@ func (h *Handlers) Embeddings(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "no embeddings found for path")
 	}
 
-	type chunkResp struct {
-		ChunkIdx int       `json:"chunk_idx"`
-		Text     string    `json:"text"`
-		Vector   []float32 `json:"vector"`
-	}
-
 	out := make([]chunkResp, len(chunks))
 	dims := 0
 	for i, ch := range chunks {
@@ -44,9 +64,9 @@ func (h *Handlers) Embeddings(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"path":       path,
-		"dimensions": dims,
-		"chunks":     out,
+	return c.JSON(http.StatusOK, embeddingsResponse{
+		Path:       path,
+		Dimensions: dims,
+		Chunks:     out,
 	})
 }

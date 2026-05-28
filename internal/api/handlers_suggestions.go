@@ -9,11 +9,30 @@ import (
 )
 
 type suggestionItem struct {
-	Target     string  `json:"target"`
-	Similarity float64 `json:"similarity"`
-	Snippet    string  `json:"snippet"`
+	Target     string  `json:"target" example:"/docs/getting-started.md"`
+	Similarity float64 `json:"similarity" example:"0.875"`
+	Snippet    string  `json:"snippet" example:"A quick guide on starting with KiwiFS..."`
 }
 
+type suggestionsResponse struct {
+	Suggestions []suggestionItem `json:"suggestions"`
+}
+
+// Suggestions godoc
+//
+//	@Summary		Get link suggestions for a file
+//	@Description	Computes and returns potential links to other pages in the workspace using vector similarity search, excluding already linked pages.
+//	@Tags			suggestions
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			path	query		string	true	"File path to get suggestions for"
+//	@Param			limit	query		int		false	"Maximum number of suggestions to return (default 10)"
+//	@Success		200		{object}	suggestionsResponse
+//	@Failure		400		{object}	map[string]string	"Path query parameter missing or invalid limit parameter"
+//	@Failure		404		{object}	map[string]string	"Page not found"
+//	@Failure		500		{object}	map[string]string	"Internal vector search error"
+//	@Failure		503		{object}	map[string]string	"Vector search service is disabled"
+//	@Router			/api/kiwi/suggestions [get]
 func (h *Handlers) Suggestions(c echo.Context) error {
 	path := c.QueryParam("path")
 	if path == "" {
@@ -83,8 +102,8 @@ func (h *Handlers) Suggestions(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"suggestions": suggestions,
+	return c.JSON(http.StatusOK, suggestionsResponse{
+		Suggestions: suggestions,
 	})
 }
 

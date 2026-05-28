@@ -13,6 +13,17 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// Rules godoc
+//
+//	@Summary		Get rules configurations
+//	@Description	Reads and returns the contents of the rules.md file. Supports formatting the rules for specific environments (e.g., cursor, claude, agents, openclaw) via the 'format' query parameter.
+//	@Tags			rules
+//	@Security		BearerAuth
+//	@Produce		plain
+//	@Param			format	query		string	false	"Format option (cursor, claude, agents, openclaw)"
+//	@Success		200		{string}	string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/rules [get]
 func (h *Handlers) Rules(c echo.Context) error {
 	rulesPath := filepath.Join(h.root, ".kiwi", "rules.md")
 	data, err := os.ReadFile(rulesPath)
@@ -35,6 +46,26 @@ func (h *Handlers) Rules(c echo.Context) error {
 	return c.String(http.StatusOK, formatRules(raw, format))
 }
 
+type putRulesResponse struct {
+	Status string `json:"status" example:"ok"`
+	Path   string `json:"path" example:".kiwi/rules.md"`
+}
+
+// PutRules godoc
+//
+//	@Summary		Update rules configuration
+//	@Description	Writes the request body content to the rules.md file and commits it to the repository.
+//	@Tags			rules
+//	@Security		BearerAuth
+//	@Accept			plain
+//	@Produce		json
+//	@Param			body	body		string	true	"Rules markdown content (max 256 KB)"
+//	@Param			X-Actor	header		string	false	"Actor identity performing the write"
+//	@Success		200		{object}	putRulesResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		413		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/rules [put]
 func (h *Handlers) PutRules(c echo.Context) error {
 	const maxBody = 256 << 10
 	body, err := io.ReadAll(io.LimitReader(c.Request().Body, maxBody+1))
@@ -62,7 +93,7 @@ func (h *Handlers) PutRules(c echo.Context) error {
 		log.Printf("handlers: commit rules: %v", cerr)
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "path": ".kiwi/rules.md"})
+	return c.JSON(http.StatusOK, putRulesResponse{Status: "ok", Path: ".kiwi/rules.md"})
 }
 
 func formatRules(raw, format string) string {
@@ -137,10 +168,10 @@ func formatOpenClaw(userRules string) string {
 		rules = "(no rules defined)"
 	}
 	return fmt.Sprintf(`{
-  "kiwifs": {
-    "type": "mcp",
-    "tools": ["kiwi_write", "kiwi_read", "kiwi_search", "kiwi_tree", "kiwi_context"],
-    "rules": %q
-  }
-}`, rules)
+		"kiwifs": {
+			"type": "mcp",
+			"tools": ["kiwi_write", "kiwi_read", "kiwi_search", "kiwi_tree", "kiwi_context"],
+			"rules": %q
+		}
+	}`, rules)
 }
