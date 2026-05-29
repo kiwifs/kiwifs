@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.6](https://github.com/kiwifs/kiwifs/compare/v0.19.5...v0.19.6) (2026-05-29)
+
+
+### Features
+
+* add team-wiki init template and workflow pages ([#190](https://github.com/kiwifs/kiwifs/issues/190)) ([e748b40](https://github.com/kiwifs/kiwifs/commit/e748b405b8077620223aeae56bda4987d00f6103))
+* **ui:** add Storybook stories for Graph and Bases views ([#188](https://github.com/kiwifs/kiwifs/issues/188)) ([2458ef4](https://github.com/kiwifs/kiwifs/commit/2458ef41bfe9d13f9092fdd91167478894f8d6bf))
+
 ## [0.19.5](https://github.com/kiwifs/kiwifs/compare/v0.19.4...v0.19.5) (2026-05-29)
 
 
