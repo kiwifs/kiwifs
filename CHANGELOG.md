@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.7](https://github.com/kiwifs/kiwifs/compare/v0.19.6...v0.19.7) (2026-05-29)
+
+
+### Features
+
+* **spaces:** add init-templates API and template-aware space creation ([#192](https://github.com/kiwifs/kiwifs/issues/192)) ([5c8961a](https://github.com/kiwifs/kiwifs/commit/5c8961a6254171458dd8bc7ec1beda05ddfa185c))
+
 ## [0.19.6](https://github.com/kiwifs/kiwifs/compare/v0.19.5...v0.19.6) (2026-05-29)
 
 
