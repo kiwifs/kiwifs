@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.5](https://github.com/kiwifs/kiwifs/compare/v0.19.4...v0.19.5) (2026-05-29)
+
+
+### Features
+
+* **ui:** add graph link visibility controls ([#185](https://github.com/kiwifs/kiwifs/issues/185)) ([5517913](https://github.com/kiwifs/kiwifs/commit/55179132e507de6d46f8ba83fe10da58eaa00c97))
+
+
+### Bug Fixes
+
+* **ui:** prevent duplicate source editor saves ([#186](https://github.com/kiwifs/kiwifs/issues/186)) ([a530bce](https://github.com/kiwifs/kiwifs/commit/a530bce60514c211c50e8298cfe682c3bbe72a50))
+
 ## [0.19.4](https://github.com/kiwifs/kiwifs/compare/v0.19.3...v0.19.4) (2026-05-28)
 
 
