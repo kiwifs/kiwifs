@@ -8,8 +8,17 @@ import {
   mockComments,
   mockGraphNodes,
   mockGraphEdges,
+  mockBasesViews,
+  mockBasesRows,
+  type MockSavedView,
 } from "./data";
-import type { WorkflowColumn, WorkflowDef, WorkflowPage } from "@kw/lib/api";
+import type {
+  GraphEdge,
+  GraphNode,
+  WorkflowColumn,
+  WorkflowDef,
+  WorkflowPage,
+} from "@kw/lib/api";
 
 export type MockOverrides = {
   fileContent?: string | null;
@@ -22,6 +31,12 @@ export type MockOverrides = {
   workflows?: WorkflowDef[];
   workflowBoards?: Record<string, { columns: WorkflowColumn[]; unmatchedPages?: WorkflowPage[] }>;
   workflowErrors?: string[];
+  graphNodes?: GraphNode[];
+  graphEdges?: GraphEdge[];
+  graphError?: string;
+  views?: MockSavedView[];
+  viewResults?: Record<string, Record<string, unknown>[]>;
+  viewsError?: string;
   delay?: number;
 };
 
@@ -167,10 +182,40 @@ function createMockFetch(overrides: MockOverrides = {}) {
       }
 
       if (url.includes("/graph")) {
+        if (overrides.graphError) {
+          return jsonResponse({ error: overrides.graphError }, 500);
+        }
         return jsonResponse({
-          nodes: mockGraphNodes,
-          edges: mockGraphEdges,
+          nodes: overrides.graphNodes ?? mockGraphNodes,
+          edges: overrides.graphEdges ?? mockGraphEdges,
         });
+      }
+
+      if (url.includes("/kiwi/views/") && url.includes("/execute") && method === "GET") {
+        const name = decodeURIComponent(
+          url.split("/kiwi/views/")[1]?.split("/execute")[0]?.split(/[?#]/)[0] ?? "",
+        );
+        const rows = overrides.viewResults?.[name] ?? mockBasesRows;
+        return jsonResponse({ rows, total: rows.length });
+      }
+
+      if (url.includes("/kiwi/views/") && method === "PUT") {
+        return jsonResponse({ status: "ok" });
+      }
+
+      if (url.includes("/kiwi/views/") && method === "DELETE") {
+        return jsonResponse({ status: "ok" });
+      }
+
+      if (
+        method === "GET" &&
+        url.includes("/kiwi/views") &&
+        !url.includes("/kiwi/views/")
+      ) {
+        if (overrides.viewsError) {
+          return jsonResponse({ error: overrides.viewsError }, 500);
+        }
+        return jsonResponse({ views: overrides.views ?? mockBasesViews });
       }
 
       if (url.includes("/workflow/board/") && method === "GET") {

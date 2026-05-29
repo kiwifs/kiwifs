@@ -564,3 +564,176 @@ export const mockGraphEdges: GraphEdge[] = [
   { source: "welcome.md", target: "pages/wikilinks.md" },
   { source: "index.md", target: "welcome.md" },
 ];
+
+/** Expanded graph fixture for Storybook (12 nodes, wiki-link mesh). */
+export const mockGraphNodesLarge: GraphNode[] = [
+  { path: "index.md", tags: [] },
+  { path: "welcome.md", tags: ["guide"] },
+  { path: "pages/frontmatter.md", tags: ["documentation", "guide"] },
+  { path: "pages/wikilinks.md", tags: ["documentation", "links"] },
+  { path: "pages/use-sqlite-for-search.md", tags: ["architecture", "search"] },
+  { path: "pages/rendering.md", tags: ["documentation", "ui"] },
+  { path: "pages/kanban.md", tags: ["features", "workflow"] },
+  { path: "pages/bases.md", tags: ["features", "data"] },
+  { path: "engineering/architecture.md", tags: ["engineering"] },
+  { path: "engineering/api-design.md", tags: ["engineering", "api"] },
+  { path: "product/roadmap.md", tags: ["product"] },
+  { path: "episodes/example-episode.md", tags: ["episode"] },
+];
+
+export const mockGraphEdgesLarge: GraphEdge[] = [
+  { source: "index.md", target: "welcome.md" },
+  { source: "welcome.md", target: "pages/frontmatter.md" },
+  { source: "welcome.md", target: "pages/wikilinks.md" },
+  { source: "pages/frontmatter.md", target: "pages/wikilinks.md" },
+  { source: "pages/frontmatter.md", target: "pages/rendering.md" },
+  { source: "pages/wikilinks.md", target: "pages/kanban.md" },
+  { source: "pages/use-sqlite-for-search.md", target: "engineering/architecture.md" },
+  { source: "pages/rendering.md", target: "pages/bases.md" },
+  { source: "pages/kanban.md", target: "pages/bases.md" },
+  { source: "engineering/architecture.md", target: "engineering/api-design.md" },
+  { source: "engineering/api-design.md", target: "product/roadmap.md" },
+  { source: "product/roadmap.md", target: "pages/kanban.md" },
+  { source: "episodes/example-episode.md", target: "welcome.md" },
+  { source: "pages/frontmatter.md", target: "pages/use-sqlite-for-search.md" },
+];
+
+export type MockSavedView = {
+  name: string;
+  query: string;
+  layout: "table" | "cards" | "list" | "map";
+  columns: { key: string; label: string; summary?: string }[];
+  filters: unknown[];
+  sort: unknown[];
+};
+
+export const mockBasesViews: MockSavedView[] = [
+  {
+    name: "All pages",
+    query: 'TABLE title, status, priority, created_at, tags WHERE type != "template"',
+    layout: "table",
+    columns: [
+      { key: "title", label: "Title" },
+      { key: "status", label: "Status" },
+      { key: "priority", label: "Priority", summary: "avg" },
+      { key: "created_at", label: "Created" },
+      { key: "tags", label: "Tags" },
+    ],
+    filters: [],
+    sort: [{ key: "priority", direction: "desc" }],
+  },
+  {
+    name: "Card gallery",
+    query: 'TABLE title, status, assignee WHERE status != "archived"',
+    layout: "cards",
+    columns: [
+      { key: "title", label: "Title" },
+      { key: "status", label: "Status" },
+      { key: "assignee", label: "Assignee" },
+    ],
+    filters: [],
+    sort: [],
+  },
+  {
+    name: "Compact list",
+    query: "TABLE title, path, modified",
+    layout: "list",
+    columns: [
+      { key: "title", label: "Title" },
+      { key: "path", label: "Path" },
+      { key: "modified", label: "Modified" },
+    ],
+    filters: [],
+    sort: [],
+  },
+  {
+    name: "Office map",
+    query: "TABLE title, location, latitude, longitude",
+    layout: "map",
+    columns: [
+      { key: "title", label: "Title" },
+      { key: "location", label: "Location" },
+    ],
+    filters: [],
+    sort: [],
+  },
+];
+
+export const mockBasesRows: Record<string, unknown>[] = [
+  {
+    path: "pages/frontmatter.md",
+    title: "Frontmatter Guide",
+    status: "published",
+    priority: 1,
+    created_at: "2025-12-15",
+    modified: "2026-05-20",
+    tags: ["documentation", "guide"],
+    assignee: "alice",
+  },
+  {
+    path: "pages/wikilinks.md",
+    title: "Wiki Links",
+    status: "published",
+    priority: 2,
+    created_at: "2025-11-02",
+    modified: "2026-05-18",
+    tags: ["documentation", "links"],
+    assignee: "bob",
+  },
+  {
+    path: "pages/use-sqlite-for-search.md",
+    title: "SQLite for Search",
+    status: "draft",
+    priority: 1,
+    created_at: "2026-01-08",
+    modified: "2026-05-22",
+    tags: ["architecture", "search"],
+    assignee: "charlie",
+  },
+  {
+    path: "pages/kanban.md",
+    title: "Kanban Workflows",
+    status: "review",
+    priority: 3,
+    created_at: "2026-02-14",
+    modified: "2026-05-24",
+    tags: ["features", "workflow"],
+    assignee: "mina",
+  },
+  {
+    path: "pages/bases.md",
+    title: "Bases Overview",
+    status: "published",
+    priority: 4,
+    created_at: "2026-03-01",
+    modified: "2026-05-25",
+    tags: ["features", "data"],
+    assignee: "alice",
+  },
+  {
+    path: "engineering/architecture.md",
+    title: "System Architecture",
+    status: "published",
+    priority: 2,
+    created_at: "2025-10-10",
+    modified: "2026-05-10",
+    tags: ["engineering"],
+    assignee: "bob",
+    latitude: 37.7749,
+    longitude: -122.4194,
+    location: "San Francisco HQ",
+  },
+  {
+    path: "product/roadmap.md",
+    title: "Product Roadmap",
+    status: "published",
+    priority: 5,
+    created_at: "2026-04-01",
+    modified: "2026-05-26",
+    tags: ["product", "planning"],
+    assignee: "dana",
+    latitude: 40.7128,
+    longitude: -74.006,
+    location: "New York Office",
+  },
+];
