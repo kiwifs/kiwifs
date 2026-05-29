@@ -489,39 +489,52 @@ function EditorInner({
   }, [editor, editorMode, visualParseBody]);
 
   const onSaveRef = useRef<(opts?: { close?: boolean }) => Promise<boolean>>(async () => false);
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
   onSaveRef.current = async (opts) => {
+    if (saveInFlightRef.current) return saveInFlightRef.current;
     if (editorMode === "visual" && !editor) return false;
-    setSaving(true);
-    setSaveStatus("saving");
-    setError(null);
-    try {
-      let md: string;
-      if (editorMode === "source") {
-        md = sourceText;
-      } else {
-        const body = await editor!.blocksToMarkdownLossy(editor!.document);
-        md = joinFrontmatter(fmText, body);
+
+    const savePromise = (async () => {
+      if (autoSaveTimer.current) {
+        window.clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = null;
       }
-      const res = await api.writeFile(path, md, etagRef.current || undefined);
-      etagRef.current = res.etag ? `"${res.etag}"` : null;
-      syncedMdRef.current = md;
-      setSourceText(md);
-      const { fmText: nextFm, body: nextBody } = sourceToVisualParts(md);
-      setFmText(nextFm);
-      setVisualParseBody(nextBody);
-      setSaveStatus("saved");
-      setLastEdit({ author: "you", date: new Date().toISOString() });
-      if (savedFlashTimer.current) window.clearTimeout(savedFlashTimer.current);
-      savedFlashTimer.current = window.setTimeout(() => setSaveStatus("clean"), 2000);
-      if (opts?.close) onSaved(path);
-      return true;
-    } catch (e) {
-      setSaveStatus("error");
-      setError(String(e));
-      return false;
-    } finally {
-      setSaving(false);
-    }
+      setSaving(true);
+      setSaveStatus("saving");
+      setError(null);
+      try {
+        let md: string;
+        if (editorMode === "source") {
+          md = sourceText;
+        } else {
+          const body = await editor!.blocksToMarkdownLossy(editor!.document);
+          md = joinFrontmatter(fmText, body);
+        }
+        const res = await api.writeFile(path, md, etagRef.current || undefined);
+        etagRef.current = res.etag ? `"${res.etag}"` : null;
+        syncedMdRef.current = md;
+        setSourceText(md);
+        const { fmText: nextFm, body: nextBody } = sourceToVisualParts(md);
+        setFmText(nextFm);
+        setVisualParseBody(nextBody);
+        setSaveStatus("saved");
+        setLastEdit({ author: "you", date: new Date().toISOString() });
+        if (savedFlashTimer.current) window.clearTimeout(savedFlashTimer.current);
+        savedFlashTimer.current = window.setTimeout(() => setSaveStatus("clean"), 2000);
+        if (opts?.close) onSaved(path);
+        return true;
+      } catch (e) {
+        setSaveStatus("error");
+        setError(String(e));
+        return false;
+      } finally {
+        setSaving(false);
+        saveInFlightRef.current = null;
+      }
+    })();
+
+    saveInFlightRef.current = savePromise;
+    return savePromise;
   };
 
   const markDirty = useCallback(() => {
@@ -767,7 +780,7 @@ function EditorInner({
                 value={sourceText}
                 onChange={handleSourceTextChange}
                 dark={isDark}
-                onSaveShortcut={() => onSaveRef.current()}
+                onSaveShortcut={() => onSaveRef.current({ close: true })}
                 pages={wikiPages}
                 minHeight="60vh"
               />
