@@ -85,6 +85,62 @@ interface GLink {
   target: string | GNode;
 }
 
+
+function createNodeLabelSprite(label: string, isDark: boolean): THREE.Sprite {
+  const paddingX = 16;
+  const paddingY = 8;
+  const fontSize = 28;
+  const font = `${fontSize}px Sans-Serif`;
+  const measureCanvas = document.createElement("canvas");
+  const measureCtx = measureCanvas.getContext("2d")!;
+  measureCtx.font = font;
+  const textWidth = Math.ceil(measureCtx.measureText(label).width);
+  const width = Math.max(64, textWidth + paddingX * 2);
+  const height = fontSize + paddingY * 2;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = font;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const radius = 10;
+  ctx.beginPath();
+  ctx.moveTo(radius, 0);
+  ctx.lineTo(width - radius, 0);
+  ctx.quadraticCurveTo(width, 0, width, radius);
+  ctx.lineTo(width, height - radius);
+  ctx.quadraticCurveTo(width, height, width - radius, height);
+  ctx.lineTo(radius, height);
+  ctx.quadraticCurveTo(0, height, 0, height - radius);
+  ctx.lineTo(0, radius);
+  ctx.quadraticCurveTo(0, 0, radius, 0);
+  ctx.closePath();
+  ctx.fillStyle = isDark ? "rgba(15,23,42,0.86)" : "rgba(255,255,255,0.86)";
+  ctx.fill();
+  ctx.strokeStyle = isDark ? "rgba(148,163,184,0.42)" : "rgba(30,41,59,0.22)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = isDark ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.9)";
+  ctx.fillText(label, width / 2, height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  const scale = 0.08;
+  sprite.scale.set(width * scale, height * scale, 1);
+  return sprite;
+}
+
 function topDir(path: string): string {
   const i = path.indexOf("/");
   return i < 0 ? "(root)" : path.slice(0, i);
@@ -256,6 +312,7 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
 
   const [sizeByPageRank, setSizeByPageRank] = useState(true);
   const [colorByCommunity, setColorByCommunity] = useState(true);
+  const [showLinks, setShowLinks] = useState(false);
 
   const [pathFindActive, setPathFindActive] = useState(false);
   const [pathSource, setPathSource] = useState<string | null>(null);
@@ -358,9 +415,9 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
     (link: GLink) => {
       const source = link.source as GNode;
       const target = link.target as GNode;
-      return nodeVisible(source) && nodeVisible(target);
+      return showLinks && nodeVisible(source) && nodeVisible(target);
     },
-    [nodeVisible],
+    [nodeVisible, showLinks],
   );
 
   const getGraphApi = useCallback(
@@ -415,6 +472,30 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
   const handleNodeHover = useCallback((node: GNode | null) => {
     setHovered((current) => (current?.id === node?.id ? current : node));
   }, []);
+
+  const shouldShowInlineLabel = useCallback(
+    (node: GNode) => {
+      const isActive = activePath === node.id;
+      const isHovered = hovered?.id === node.id;
+      const isNeighbor = hovered ? adj.get(hovered.id)?.has(node.id) : false;
+      const onPath = pathSet?.has(node.id) ?? false;
+      const queryMatch = Boolean(qLower && nodeMatchesQuery(node));
+      return (
+        !built?.performance.largeGraph ||
+        isActive ||
+        isHovered ||
+        isNeighbor ||
+        onPath ||
+        queryMatch
+      );
+    },
+    [activePath, adj, built?.performance.largeGraph, hovered, nodeMatchesQuery, pathSet, qLower],
+  );
+
+  const nodeTooltipLabel = useCallback(
+    (node: GNode) => (shouldShowInlineLabel(node) ? "" : node.label),
+    [shouldShowInlineLabel],
+  );
 
   const handleNodeClick = useCallback(
     (node: GNode) => {
@@ -554,13 +635,7 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
       }
 
       // Labels
-      const shouldShowLabel =
-        !built?.performance.largeGraph ||
-        isActive ||
-        isHovered ||
-        onPath ||
-        Boolean(qLower && nodeMatchesQuery(node));
-      if (!shouldShowLabel) return;
+      if (!shouldShowInlineLabel(node)) return;
 
       const fontSize = Math.max(3, 12 / globalScale);
       ctx.font = `${fontSize}px Sans-Serif`;
@@ -569,7 +644,7 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
       ctx.fillStyle = isDark ? "rgba(255,255,255,0.88)" : "rgba(20,20,20,0.82)";
       ctx.fillText(node.label, nx, ny + r + fontSize);
     },
-    [activePath, adj, built?.performance.largeGraph, hovered, nodeColor, nodeMatchesQuery, pathSet, qLower],
+    [activePath, adj, hovered, nodeColor, pathSet, qLower, nodeMatchesQuery, shouldShowInlineLabel],
   );
 
   const glowTexture = useMemo(() => {
@@ -593,6 +668,7 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
       const r = Math.max(2, node.radius);
       const color = nodeColor(node);
       const isHoveredNode = hovered?.id === node.id;
+      const isDark = document.documentElement.classList.contains("dark");
       const highlighted =
         activePath === node.id ||
         isHoveredNode ||
@@ -629,9 +705,15 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
       sprite.scale.set(glowScale, glowScale, 1);
       group.add(sprite);
 
+      if (shouldShowInlineLabel(node)) {
+        const label = createNodeLabelSprite(node.label, isDark);
+        label.position.set(0, r + 8, 0);
+        group.add(label);
+      }
+
       return group;
     },
-    [activePath, adj, glowTexture, hovered, nodeColor, nodeMatchesQuery, pathSet, qLower],
+    [activePath, adj, glowTexture, hovered, nodeColor, nodeMatchesQuery, pathSet, qLower, shouldShowInlineLabel],
   );
 
   return (
@@ -736,6 +818,15 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
           />
           Color by community
         </label>
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showLinks}
+            onChange={(e) => setShowLinks(e.target.checked)}
+            className="accent-primary h-3 w-3"
+          />
+          Show links
+        </label>
         <Button
           variant="outline"
           size="sm"
@@ -805,7 +896,7 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
               graphData={graphData}
               nodeId="id"
               nodeVal="radius"
-              nodeLabel="label"
+              nodeLabel={nodeTooltipLabel}
               nodeVisibility={nodeVisible}
               nodeColor={nodeColor}
               nodeCanvasObject={nodeCanvasObject}
@@ -818,7 +909,7 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
               linkVisibility={linkVisible}
               linkColor={linkColor}
               linkWidth={linkWidth}
-              linkDirectionalParticles={(link) => linkWidth(link) > 1 ? 2 : 0}
+              linkDirectionalParticles={(link) => showLinks && linkWidth(link) > 1 ? 2 : 0}
               linkDirectionalParticleWidth={(link) => linkWidth(link) > 2 ? 3 : 1.5}
               linkDirectionalParticleColor={linkColor}
               onNodeHover={(node) => handleNodeHover(node as GNode | null)}
@@ -839,7 +930,7 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
               graphData={graphData}
               nodeId="id"
               nodeVal="radius"
-              nodeLabel="label"
+              nodeLabel={nodeTooltipLabel}
               nodeVisibility={nodeVisible}
               nodeThreeObject={nodeThreeObject}
               nodeThreeObjectExtend={false}
@@ -848,7 +939,7 @@ export function KiwiGraph({ tree, activePath, onNavigate, onClose }: Props) {
               linkWidth={linkWidth3D}
               linkOpacity={0.35}
               linkResolution={4}
-              linkDirectionalParticles={(link) => linkWidth(link) > 1 ? 2 : 0}
+              linkDirectionalParticles={(link) => showLinks && linkWidth(link) > 1 ? 2 : 0}
               linkDirectionalParticleWidth={(link) => linkWidth(link) > 2 ? 3 : 1.5}
               linkDirectionalParticleColor={linkColor3D}
               onNodeHover={(node) => handleNodeHover(node as GNode | null)}
