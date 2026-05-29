@@ -10,8 +10,27 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// SpaceInfo returns metadata about the current space including its visibility.
-// GET /api/kiwi/space/info
+type spaceInfoResponse struct {
+	Visibility string `json:"visibility"`
+	Root       string `json:"root"`
+}
+
+type updateVisibilityRequest struct {
+	Visibility string `json:"visibility"`
+}
+
+type updateVisibilityResponse struct {
+	Visibility string `json:"visibility"`
+}
+
+// SpaceInfo godoc
+//
+//	@Summary		Get space metadata
+//	@Description	Returns metadata about the current workspace space, such as its visibility (private, unlisted, public) and its root directory path.
+//	@Tags			space
+//	@Security		BearerAuth
+//	@Success		200		{object}	spaceInfoResponse
+//	@Router			/api/kiwi/space/info [get]
 func (h *Handlers) SpaceInfo(c echo.Context) error {
 	vis := "private"
 	if h.cfg != nil {
@@ -20,19 +39,25 @@ func (h *Handlers) SpaceInfo(c echo.Context) error {
 	if vis == "" {
 		vis = "private"
 	}
-	return c.JSON(http.StatusOK, map[string]any{
-		"visibility": vis,
-		"root":       h.root,
+	return c.JSON(http.StatusOK, spaceInfoResponse{
+		Visibility: vis,
+		Root:       h.root,
 	})
 }
 
-// UpdateVisibility changes the space's visibility setting.
-// PUT /api/kiwi/space/visibility  { "visibility": "public" }
-// This is an admin-only endpoint (scope enforcement done by auth middleware).
+// UpdateVisibility godoc
+//
+//	@Summary		Update space visibility
+//	@Description	Changes the space's visibility setting. This is an admin-only endpoint.
+//	@Tags			space
+//	@Security		BearerAuth
+//	@Param			body	body		updateVisibilityRequest	true	"Visibility setting"
+//	@Success		200		{object}	updateVisibilityResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/space/visibility [put]
 func (h *Handlers) UpdateVisibility(c echo.Context) error {
-	var body struct {
-		Visibility string `json:"visibility"`
-	}
+	var body updateVisibilityRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid JSON body")
 	}
@@ -75,7 +100,7 @@ func (h *Handlers) UpdateVisibility(c echo.Context) error {
 		h.cfg.Space.Visibility = body.Visibility
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"visibility": body.Visibility,
+	return c.JSON(http.StatusOK, updateVisibilityResponse{
+		Visibility: body.Visibility,
 	})
 }

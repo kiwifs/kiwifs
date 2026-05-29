@@ -21,6 +21,24 @@ type createShareRequest struct {
 	Password  string `json:"password,omitempty"`
 }
 
+type revokeShareResponse struct {
+	Revoked string `json:"revoked"`
+}
+
+// CreateShareLink godoc
+//
+//	@Summary		Create a share link
+//	@Description	Creates a password-protected or open public share link for a given file path.
+//	@Tags			share
+//	@Security		BearerAuth
+//	@Param			X-Actor	header		string				false	"Actor identity performing the operation"
+//	@Param			body	body		createShareRequest	true	"Share creation details"
+//	@Success		200		{object}	rbac.ShareLink
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Failure		501		{object}	map[string]string
+//	@Router			/api/kiwi/share [post]
 func (h *Handlers) CreateShareLink(c echo.Context) error {
 	if h.shares == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "share links not enabled")
@@ -56,6 +74,18 @@ func (h *Handlers) CreateShareLink(c echo.Context) error {
 	return c.JSON(http.StatusOK, link)
 }
 
+// ListShareLinks godoc
+//
+//	@Summary		List share links for a path
+//	@Description	Returns all active share links associated with the specified file path.
+//	@Tags			share
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"File path to list share links for"
+//	@Success		200		{array}		rbac.ShareLink
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Failure		501		{object}	map[string]string
+//	@Router			/api/kiwi/share [get]
 func (h *Handlers) ListShareLinks(c echo.Context) error {
 	if h.shares == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "share links not enabled")
@@ -74,6 +104,18 @@ func (h *Handlers) ListShareLinks(c echo.Context) error {
 	return c.JSON(http.StatusOK, links)
 }
 
+// RevokeShareLink godoc
+//
+//	@Summary		Revoke a share link
+//	@Description	Deletes/revokes an active share link by its ID.
+//	@Tags			share
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Share link ID"
+//	@Success		200	{object}	revokeShareResponse
+//	@Failure		400	{object}	map[string]string
+//	@Failure		404	{object}	map[string]string
+//	@Failure		501	{object}	map[string]string
+//	@Router			/api/kiwi/share/{id} [delete]
 func (h *Handlers) RevokeShareLink(c echo.Context) error {
 	if h.shares == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "share links not enabled")
@@ -85,9 +127,23 @@ func (h *Handlers) RevokeShareLink(c echo.Context) error {
 	if err := h.shares.Revoke(id); err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
-	return c.JSON(http.StatusOK, map[string]string{"revoked": id})
+	return c.JSON(http.StatusOK, revokeShareResponse{Revoked: id})
 }
 
+// PublicPage godoc
+//
+//	@Summary		Access a public shared page
+//	@Description	Retrieves the content of a file via a public share token. Requires X-Share-Password or password query parameter if password protected.
+//	@Tags			share
+//	@Param			token				path		string	true	"Share token"
+//	@Param			password			query		string	false	"Optional password for password-protected shares"
+//	@Param			X-Share-Password	header		string	false	"Optional password for password-protected shares via header"
+//	@Success		200					{file}		string			"Raw file contents"
+//	@Failure		400					{object}	map[string]string
+//	@Failure		401					{object}	map[string]string
+//	@Failure		404					{object}	map[string]string
+//	@Failure		500					{object}	map[string]string
+//	@Router			/api/kiwi/public/{token} [get]
 func (h *Handlers) PublicPage(c echo.Context) error {
 	if h.shares == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
@@ -119,6 +175,16 @@ func (h *Handlers) PublicPage(c echo.Context) error {
 	return c.Blob(http.StatusOK, detectContentType(link.Path, content), content)
 }
 
+// PublicFile godoc
+//
+//	@Summary		Access a public file/asset
+//	@Description	Serves a file publicly if it is explicitly set to public, published, or if it inherits public access from a parent/sibling page.
+//	@Tags			share
+//	@Param			path	query		string	true	"Path to the public file/asset"
+//	@Success		200		{file}		string			"Raw file contents"
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Router			/api/kiwi/public/file [get]
 func (h *Handlers) PublicFile(c echo.Context) error {
 	raw := c.QueryParam("path")
 	if raw == "" {
@@ -194,6 +260,17 @@ func (h *Handlers) hasPublicSibling(ctx context.Context, assetPath string) bool 
 	return false
 }
 
+// PublicTree godoc
+//
+//	@Summary		Get public file tree
+//	@Description	Returns the tree hierarchy of all public/published documents.
+//	@Tags			share
+//	@Param			path	query		string	false	"Base path to build tree from (default /)"
+//	@Param			filter	query		string	false	"Filter ('published' to show only published pages)"
+//	@Success		200		{object}	treeEntry
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/public/tree [get]
 func (h *Handlers) PublicTree(c echo.Context) error {
 	path := c.QueryParam("path")
 	if path == "" {

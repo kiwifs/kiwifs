@@ -66,8 +66,19 @@ type publishedPagesResponse struct {
 	Pages []publishedPage `json:"pages"`
 }
 
-// Publish sets `published: true` and `published_at` in the page frontmatter.
-// POST /api/kiwi/publish
+// Publish godoc
+//
+//	@Summary		Publish a page
+//	@Description	Sets published: true and sets/updates published_at in the page's markdown frontmatter. Writes changes to git repository.
+//	@Tags			publish
+//	@Security		BearerAuth
+//	@Param			X-Actor	header		string			false	"Actor identity performing the operation"
+//	@Param			body	body		publishRequest	true	"Page path to publish"
+//	@Success		200		{object}	publishResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/publish [post]
 func (h *Handlers) Publish(c echo.Context) error {
 	var req publishRequest
 	if err := bindJSON(c, &req); err != nil {
@@ -115,8 +126,19 @@ func (h *Handlers) Publish(c echo.Context) error {
 	})
 }
 
-// Unpublish sets `published: false` in the page frontmatter, preserving published_at.
-// POST /api/kiwi/unpublish
+// Unpublish godoc
+//
+//	@Summary		Unpublish a page
+//	@Description	Sets published: false in the page's markdown frontmatter. Preserves existing published_at if present. Writes changes to git repository.
+//	@Tags			publish
+//	@Security		BearerAuth
+//	@Param			X-Actor	header		string			false	"Actor identity performing the operation"
+//	@Param			body	body		publishRequest	true	"Page path to unpublish"
+//	@Success		200		{object}	publishResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/unpublish [post]
 func (h *Handlers) Unpublish(c echo.Context) error {
 	var req publishRequest
 	if err := bindJSON(c, &req); err != nil {
@@ -150,14 +172,34 @@ func (h *Handlers) Unpublish(c echo.Context) error {
 	})
 }
 
-// PublishBulk sets `published: true` on many markdown pages with one pipeline BulkWrite.
-// POST /api/kiwi/publish/bulk
+// PublishBulk godoc
+//
+//	@Summary		Bulk publish pages
+//	@Description	Bulk-publishes multiple markdown pages in a single transaction/commit.
+//	@Tags			publish
+//	@Security		BearerAuth
+//	@Param			X-Actor	header		string				false	"Actor identity performing the operation"
+//	@Param			body	body		publishBulkRequest	true	"List of page paths to publish"
+//	@Success		200		{object}	publishBulkResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/publish/bulk [post]
 func (h *Handlers) PublishBulk(c echo.Context) error {
 	return h.publishBulk(c, true)
 }
 
-// UnpublishBulk sets `published: false` on many markdown pages with one pipeline BulkWrite.
-// POST /api/kiwi/unpublish/bulk
+// UnpublishBulk godoc
+//
+//	@Summary		Bulk unpublish pages
+//	@Description	Bulk-unpublishes multiple markdown pages in a single transaction/commit.
+//	@Tags			publish
+//	@Security		BearerAuth
+//	@Param			X-Actor	header		string				false	"Actor identity performing the operation"
+//	@Param			body	body		publishBulkRequest	true	"List of page paths to unpublish"
+//	@Success		200		{object}	publishBulkResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/unpublish/bulk [post]
 func (h *Handlers) UnpublishBulk(c echo.Context) error {
 	return h.publishBulk(c, false)
 }
@@ -297,8 +339,17 @@ func (h *Handlers) bulkWriteTolerant(ctx context.Context, files []publishBulkFil
 	return failed
 }
 
-// PublishStatus returns the publish metadata for a page.
-// GET /api/kiwi/publish/status?path=...
+// PublishStatus godoc
+//
+//	@Summary		Get publish status of a page
+//	@Description	Returns the publishing metadata (is published, published time, public URL, views count) for a specific page.
+//	@Tags			publish
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"Path of the page to check"
+//	@Success		200		{object}	publishStatusResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Router			/api/kiwi/publish/status [get]
 func (h *Handlers) PublishStatus(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
@@ -337,8 +388,15 @@ func (h *Handlers) PublishStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// PublishedPages returns every Markdown page whose frontmatter has published: true.
-// GET /api/kiwi/publish/list
+// PublishedPages godoc
+//
+//	@Summary		List all published pages
+//	@Description	Lists every page in the workspace that is currently published.
+//	@Tags			publish
+//	@Security		BearerAuth
+//	@Success		200		{object}	publishedPagesResponse
+//	@Failure		500		{object}	map[string]string
+//	@Router			/api/kiwi/publish/list [get]
 func (h *Handlers) PublishedPages(c echo.Context) error {
 	ctx := c.Request().Context()
 	tree, err := storage.BuildTree(ctx, h.store, "/", maxTreeDepth)

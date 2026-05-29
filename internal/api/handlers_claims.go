@@ -15,6 +15,43 @@ const (
 	maxLeaseDuration = 24 * time.Hour
 )
 
+type claimTaskRequest struct {
+	Path          string `json:"path"`
+	LeaseDuration string `json:"lease_duration"`
+}
+
+type claimConflictResponse struct {
+	Error       string        `json:"error"`
+	ActiveClaim *claims.Claim `json:"active_claim"`
+}
+
+type releaseTaskRequest struct {
+	Path string `json:"path"`
+}
+
+type releaseTaskResponse struct {
+	Status string `json:"status"`
+}
+
+type listClaimsResponse struct {
+	Claims []claims.Claim `json:"claims"`
+}
+
+// ClaimTask godoc
+//
+//	@Summary		Claim a task lease on a file path
+//	@Description	Acquires or extends an exclusive write lock lease for an actor on a file path. Returns 409 Conflict if already claimed by someone else.
+//	@Tags			claims
+//	@Security		BearerAuth
+//	@Param			X-Actor	header		string				true	"Actor identity performing the claim"
+//	@Param			body	body		claimTaskRequest	true	"Claim details. lease_duration is optional (default is 30 minutes, min is 1 minute, max is 24 hours)"
+//	@Success		200		{object}	claims.Claim
+//	@Failure		400		{object}	map[string]string
+//	@Failure		404		{object}	map[string]string
+//	@Failure		409		{object}	claimConflictResponse
+//	@Failure		500		{object}	map[string]string
+//	@Failure		503		{object}	map[string]string
+//	@Router			/api/kiwi/claim [post]
 func (h *Handlers) ClaimTask(c echo.Context) error {
 	actor := c.Request().Header.Get("X-Actor")
 	if actor == "" {
@@ -24,10 +61,7 @@ func (h *Handlers) ClaimTask(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "claims not enabled")
 	}
 
-	var body struct {
-		Path          string `json:"path"`
-		LeaseDuration string `json:"lease_duration"`
-	}
+	var body claimTaskRequest
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
 	}
@@ -61,9 +95,9 @@ func (h *Handlers) ClaimTask(c echo.Context) error {
 	if err != nil {
 		if errors.Is(err, claims.ErrAlreadyClaimed) {
 			existing, _ := h.claimStore.ActiveClaim(ctx, body.Path)
-			return c.JSON(http.StatusConflict, map[string]any{
-				"error":        "already claimed",
-				"active_claim": existing,
+			return c.JSON(http.StatusConflict, claimConflictResponse{
+				Error:       "already claimed",
+				ActiveClaim: existing,
 			})
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -72,6 +106,20 @@ func (h *Handlers) ClaimTask(c echo.Context) error {
 	return c.JSON(http.StatusOK, claim)
 }
 
+// ReleaseTask godoc
+//
+//	@Summary		Release a task lease on a file path
+//	@Description	Releases an exclusive write lock lease held by the actor on a file path.
+//	@Tags			claims
+//	@Security		BearerAuth
+//	@Param			X-Actor	header		string				true	"Actor identity performing the release"
+//	@Param			body	body		releaseTaskRequest	true	"Release details"
+//	@Success		200		{object}	releaseTaskResponse
+//	@Failure		400		{object}	map[string]string
+//	@Failure		403		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Failure		503		{object}	map[string]string
+//	@Router			/api/kiwi/claim [delete]
 func (h *Handlers) ReleaseTask(c echo.Context) error {
 	actor := c.Request().Header.Get("X-Actor")
 	if actor == "" {
@@ -81,9 +129,7 @@ func (h *Handlers) ReleaseTask(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "claims not enabled")
 	}
 
-	var body struct {
-		Path string `json:"path"`
-	}
+	var body releaseTaskRequest
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
 	}
@@ -99,9 +145,19 @@ func (h *Handlers) ReleaseTask(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"status": "released"})
+	return c.JSON(http.StatusOK, releaseTaskResponse{Status: "released"})
 }
 
+// ListClaims godoc
+//
+//	@Summary		List active claims
+//	@Description	Returns a list of all active leases currently held in the system.
+//	@Tags			claims
+//	@Security		BearerAuth
+//	@Success		200		{object}	listClaimsResponse
+//	@Failure		500		{object}	map[string]string
+//	@Failure		503		{object}	map[string]string
+//	@Router			/api/kiwi/claims [get]
 func (h *Handlers) ListClaims(c echo.Context) error {
 	if h.claimStore == nil {
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "claims not enabled")
@@ -111,5 +167,5 @@ func (h *Handlers) ListClaims(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	return c.JSON(http.StatusOK, map[string]any{"claims": active})
+	return c.JSON(http.StatusOK, listClaimsResponse{Claims: active})
 }

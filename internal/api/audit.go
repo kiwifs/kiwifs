@@ -195,7 +195,19 @@ func auditMiddleware(logger *AuditLogger) echo.MiddlewareFunc {
 	}
 }
 
-// AuditEndpoint handles GET /api/kiwi/audit?since=<RFC3339>&limit=100.
+// AuditEndpoint godoc
+//
+//	@Summary		Get audit logs
+//	@Description	Returns historical audit logs since a specific RFC3339 timestamp (defaults to last 24h) up to a limit (defaults to 100, max 10000).
+//	@Tags			audit
+//	@Security		BearerAuth
+//	@Param			since	query		string	false	"Optional RFC3339 timestamp to filter audit logs from"
+//	@Param			limit	query		int		false	"Optional limit on maximum returned entries (default 100, max 10000)"
+//	@Success		200		{array}		AuditEntry
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Failure		501		{object}	map[string]string
+//	@Router			/api/kiwi/audit [get]
 func (h *Handlers) AuditEndpoint(c echo.Context) error {
 	if h.auditLogger == nil {
 		return echo.NewHTTPError(http.StatusNotImplemented, "audit logging not enabled")
