@@ -16,10 +16,7 @@ async function ensureInit(): Promise<void> {
   if ($typst) return;
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    const mod = await import(
-      // @ts-ignore deep import from typst.ts
-      "@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs"
-    );
+    const mod = await import("@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs");
     $typst = mod.$typst;
     $typst.setCompilerInitOptions({
       getModule: () =>

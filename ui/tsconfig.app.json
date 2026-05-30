@@ -19,7 +19,8 @@
     "baseUrl": ".",
     "paths": {
       "@kw/*": ["src/*"],
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "markdown2typst": ["src/typst.d.ts"]
     }
   },
   "include": ["src"]
