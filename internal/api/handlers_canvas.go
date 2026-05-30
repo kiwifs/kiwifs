@@ -18,7 +18,24 @@ type canvasListEntry struct {
 	Name string `json:"name"`
 }
 
-// ListCanvas returns all canvas files in the knowledge base.
+type canvasListResponse struct {
+	Canvases []canvasListEntry `json:"canvases"`
+}
+
+type writeCanvasResponse struct {
+	ETag string `json:"etag"`
+	Path string `json:"path"`
+}
+
+// ListCanvas godoc
+//
+//	@Summary		List all canvases
+//	@Description	Returns a list of all canvas files (.canvas.json) in the knowledge base.
+//	@Tags			canvas
+//	@Security		BearerAuth
+//	@Success		200	{object}	canvasListResponse
+//	@Failure		500	{object}	map[string]string	"Internal server error walking storage"
+//	@Router			/api/kiwi/canvases [get]
 func (h *Handlers) ListCanvas(c echo.Context) error {
 	var entries []canvasListEntry
 
@@ -42,7 +59,18 @@ func (h *Handlers) ListCanvas(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"canvases": entries})
 }
 
-// ReadCanvas reads a canvas file and returns its JSON content unchanged.
+// ReadCanvas godoc
+//
+//	@Summary		Read canvas content
+//	@Description	Reads a canvas file and returns its JSON content if structurally valid.
+//	@Tags			canvas
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"Path to canvas file (must end with .canvas.json)"
+//	@Success		200		{object}	jsoncanvas.Document
+//	@Failure		400		{object}	map[string]string	"Invalid query parameters or file type"
+//	@Failure		404		{object}	map[string]string	"Canvas file not found"
+//	@Failure		500		{object}	map[string]string	"Internal server error reading file or invalid canvas JSON structure"
+//	@Router			/api/kiwi/canvas [get]
 func (h *Handlers) ReadCanvas(c echo.Context) error {
 	path, err := requireCanvasPath(c)
 	if err != nil {
@@ -65,7 +93,19 @@ func (h *Handlers) ReadCanvas(c echo.Context) error {
 	return c.JSONBlob(http.StatusOK, content)
 }
 
-// WriteCanvas writes a canvas file, preserving the request body after validation.
+// WriteCanvas godoc
+//
+//	@Summary		Write canvas content
+//	@Description	Creates or updates a canvas file after validating its structure against the JSON Canvas specification.
+//	@Tags			canvas
+//	@Security		BearerAuth
+//	@Param			path	query		string				true	"Path to canvas file (must end with .canvas.json)"
+//	@Param			X-Actor	header		string				false	"Actor identity performing the write"
+//	@Param			canvas	body		jsoncanvas.Document	true	"JSON Canvas document contents"
+//	@Success		200		{object}	writeCanvasResponse
+//	@Failure		400		{object}	map[string]string	"Invalid parameters or invalid canvas JSON structure"
+//	@Failure		500		{object}	map[string]string	"Internal server error writing file"
+//	@Router			/api/kiwi/canvas [put]
 func (h *Handlers) WriteCanvas(c echo.Context) error {
 	path, err := requireCanvasPath(c)
 	if err != nil {

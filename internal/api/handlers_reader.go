@@ -86,7 +86,16 @@ func addHeadingIDs(html string) (string, []tocEntry) {
 	return result, toc
 }
 
-// PublishedPage serves a rendered HTML view of a published markdown page.
+// PublishedPage godoc
+//
+//	@Summary		Serve a published page
+//	@Description	Serves a rendered HTML view of a published markdown page, or serves co-located static assets (images, PDFs) publicly if they inherit access from their parent pages.
+//	@Tags			reader
+//	@Param			path	path		string	true	"Path to the published page or static asset"
+//	@Success		200		{string}	string	"Rendered HTML content or raw asset binary content"
+//	@Failure		404		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/p/{path} [get]
 func (h *Handlers) PublishedPage(c echo.Context) error {
 	raw := c.Param("*")
 	cleaned := strings.TrimPrefix(strings.TrimPrefix(raw, "/"), "/")

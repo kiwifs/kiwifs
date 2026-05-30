@@ -30,9 +30,95 @@ const ordinalStep = 1000
 
 const workflowRequestBodyLimit = 1 << 20
 
-// ListWorkflows returns all workflow definitions from .kiwi/workflows/*.json.
-// Broken JSON files are reported in the "errors" field so the UI can warn
-// that some boards are unavailable.
+type listWorkflowsResponse struct {
+	Workflows []workflow.Workflow `json:"workflows"`
+	Errors    []string            `json:"errors,omitempty"`
+}
+
+type saveWorkflowResponse struct {
+	Status   string            `json:"status"`
+	Workflow workflow.Workflow `json:"workflow"`
+}
+
+type deleteWorkflowResponse struct {
+	Status string `json:"status"`
+	Name   string `json:"name"`
+}
+
+type assignWorkflowRequest struct {
+	Path     string `json:"path"`
+	Workflow string `json:"workflow"`
+	State    string `json:"state"`
+	Ordinal  *int   `json:"ordinal,omitempty"` // optional position within column
+	Actor    string `json:"actor"`
+}
+
+type assignWorkflowResponse struct {
+	Path     string `json:"path"`
+	Workflow string `json:"workflow"`
+	State    string `json:"state"`
+	ETag     string `json:"etag"`
+	Noop     bool   `json:"noop,omitempty"`
+}
+
+type advanceWorkflowRequest struct {
+	Path        string `json:"path"`
+	Workflow    string `json:"workflow"`
+	TargetState string `json:"target_state"`
+	Actor       string `json:"actor"`
+}
+
+type advanceWorkflowResponse struct {
+	Path      string `json:"path"`
+	FromState string `json:"from_state"`
+	ToState   string `json:"to_state"`
+	ETag      string `json:"etag"`
+	Noop      bool   `json:"noop,omitempty"`
+}
+
+type workflowBoardCard struct {
+	Path        string   `json:"path"`
+	State       string   `json:"state"`
+	Title       string   `json:"title"`
+	Priority    any      `json:"priority,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Due         string   `json:"due,omitempty"`
+	Author      string   `json:"author,omitempty"`
+	Ordinal     int      `json:"ordinal,omitempty"`
+	Blocked     bool     `json:"blocked,omitempty"`
+	BlockReason string   `json:"block_reason,omitempty"`
+	DependsOn   []string `json:"depends_on,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Modified    string   `json:"modified,omitempty"`
+}
+
+type workflowBoardResponse struct {
+	Workflow workflow.Workflow              `json:"workflow"`
+	Board    map[string][]workflowBoardCard `json:"board"`
+}
+
+type reorderCardRequest struct {
+	Path    string `json:"path"`
+	Ordinal int    `json:"ordinal"`
+	Actor   string `json:"actor"`
+}
+
+type reorderCardResponse struct {
+	Path    string `json:"path"`
+	Ordinal int    `json:"ordinal"`
+	ETag    string `json:"etag"`
+	Noop    bool   `json:"noop,omitempty"`
+}
+
+// ListWorkflows godoc
+//
+//	@Summary		List workflows
+//	@Description	Returns all workflow definitions loaded from `.kiwi/workflows/*.json`. Broken JSON files are reported in the `errors` field.
+//	@Tags			workflow
+//	@Security		BearerAuth
+//	@Success		200	{object}	listWorkflowsResponse
+//	@Failure		500	{object}	map[string]string	"Internal server error"
+//	@Router			/api/kiwi/workflows [get]
 func (h *Handlers) ListWorkflows(c echo.Context) error {
 	result := workflow.LoadWithErrors(h.root)
 	workflows := result.Workflows
@@ -50,7 +136,17 @@ func (h *Handlers) ListWorkflows(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// GetWorkflow returns a single workflow definition
+// GetWorkflow godoc
+//
+//	@Summary		Get workflow definition
+//	@Description	Returns a single workflow definition by name.
+//	@Tags			workflow
+//	@Security		BearerAuth
+//	@Param			name	path		string	true	"Workflow name"
+//	@Success		200		{object}	workflow.Workflow
+//	@Failure		400		{object}	map[string]string	"Workflow name required"
+//	@Failure		404		{object}	map[string]string	"Workflow not found"
+//	@Router			/api/kiwi/workflows/{name} [get]
 func (h *Handlers) GetWorkflow(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
@@ -64,7 +160,17 @@ func (h *Handlers) GetWorkflow(c echo.Context) error {
 	return c.JSON(http.StatusOK, w)
 }
 
-// SaveWorkflow creates or updates a workflow definition
+// SaveWorkflow godoc
+//
+//	@Summary		Save workflow definition
+//	@Description	Creates or updates a workflow definition.
+//	@Tags			workflow
+//	@Security		BearerAuth
+//	@Param			name	path		string				true	"Workflow name"
+//	@Param			body	body		workflow.Workflow	true	"Workflow definition"
+//	@Success		200		{object}	saveWorkflowResponse
+//	@Failure		400		{object}	map[string]string	"Invalid input or workflow configuration"
+//	@Router			/api/kiwi/workflows/{name} [put]
 func (h *Handlers) SaveWorkflow(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
@@ -90,8 +196,17 @@ func (h *Handlers) SaveWorkflow(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"status": "saved", "workflow": w})
 }
 
-// DeleteWorkflow removes a workflow definition. It does not edit pages that
-// reference the workflow in frontmatter.
+// DeleteWorkflow godoc
+//
+//	@Summary		Delete workflow definition
+//	@Description	Removes a workflow definition. Pages referencing the workflow are not automatically edited.
+//	@Tags			workflow
+//	@Security		BearerAuth
+//	@Param			name	path		string	true	"Workflow name"
+//	@Success		200		{object}	deleteWorkflowResponse
+//	@Failure		400		{object}	map[string]string	"Workflow name required"
+//	@Failure		404		{object}	map[string]string	"Workflow not found"
+//	@Router			/api/kiwi/workflows/{name} [delete]
 func (h *Handlers) DeleteWorkflow(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
@@ -105,8 +220,19 @@ func (h *Handlers) DeleteWorkflow(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"status": "deleted", "name": name})
 }
 
-// AssignWorkflow adds an existing page to a workflow/state column, or moves it
-// into a workflow column regardless of its previous workflow membership.
+// AssignWorkflow godoc
+//
+//	@Summary		Assign page to a workflow state
+//	@Description	Adds a page to a workflow state or moves it into a state column, updating the page's frontmatter.
+//	@Tags			workflow
+//	@Security		BearerAuth
+//	@Param			body	body		assignWorkflowRequest	true	"Workflow assignment request"
+//	@Success		200		{object}	assignWorkflowResponse
+//	@Failure		400		{object}	map[string]string	"Invalid parameters or invalid state"
+//	@Failure		404		{object}	map[string]string	"Workflow or page not found"
+//	@Failure		409		{object}	map[string]string	"Concurrent modification conflict"
+//	@Failure		500		{object}	map[string]string	"Internal server error"
+//	@Router			/api/kiwi/workflow/assign [post]
 func (h *Handlers) AssignWorkflow(c echo.Context) error {
 	limitedBody := http.MaxBytesReader(c.Response(), c.Request().Body, workflowRequestBodyLimit)
 	body, err := io.ReadAll(limitedBody)
@@ -114,13 +240,7 @@ func (h *Handlers) AssignWorkflow(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	var req struct {
-		Path     string `json:"path"`
-		Workflow string `json:"workflow"`
-		State    string `json:"state"`
-		Ordinal  *int   `json:"ordinal,omitempty"` // optional position within column
-		Actor    string `json:"actor"`
-	}
+	var req assignWorkflowRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid JSON")
 	}
@@ -256,15 +376,19 @@ func pageStem(path string) string {
 	return base
 }
 
-// AdvanceWorkflow moves a page from one workflow state to another.
+// AdvanceWorkflow godoc
 //
-// Request body: { "path": "...", "workflow": "...", "target_state": "...", "actor": "..." }
-//
-// The handler:
-//  1. Reads the page's frontmatter to get current workflow+state
-//  2. Loads the workflow definition
-//  3. Validates the transition (terminal states, required_role)
-//  4. Updates frontmatter state and writes the page with optimistic locking
+//	@Summary		Advance page workflow state
+//	@Description	Moves a page from its current workflow state to a target state, validating transitions and WIP limits.
+//	@Tags			workflow
+//	@Security		BearerAuth
+//	@Param			body	body		advanceWorkflowRequest	true	"Workflow transition request"
+//	@Success		200		{object}	advanceWorkflowResponse
+//	@Failure		400		{object}	map[string]string	"Invalid parameters or missing frontmatter"
+//	@Failure		409		{object}	map[string]string	"Workflow mismatch, invalid transition, WIP limit reached, or concurrent modification conflict"
+//	@Failure		404		{object}	map[string]string	"Page or workflow not found"
+//	@Failure		500		{object}	map[string]string	"Internal server error"
+//	@Router			/api/kiwi/workflow/advance [post]
 func (h *Handlers) AdvanceWorkflow(c echo.Context) error {
 	limitedBody := http.MaxBytesReader(c.Response(), c.Request().Body, workflowRequestBodyLimit)
 	body, err := io.ReadAll(limitedBody)
@@ -272,12 +396,7 @@ func (h *Handlers) AdvanceWorkflow(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	var req struct {
-		Path        string `json:"path"`
-		Workflow    string `json:"workflow"`
-		TargetState string `json:"target_state"`
-		Actor       string `json:"actor"`
-	}
+	var req advanceWorkflowRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid JSON")
 	}
@@ -420,8 +539,18 @@ func (h *Handlers) AdvanceWorkflow(c echo.Context) error {
 	})
 }
 
-// WorkflowBoard returns pages grouped by their workflow state (Kanban view).
-// GET /api/kiwi/workflow/board/:workflow
+// WorkflowBoard godoc
+//
+//	@Summary		Get workflow board (Kanban view)
+//	@Description	Returns pages grouped by their workflow states.
+//	@Tags			workflow
+//	@Security		BearerAuth
+//	@Param			workflow	path		string	true	"Workflow name"
+//	@Success		200			{object}	workflowBoardResponse
+//	@Failure		400			{object}	map[string]string	"Workflow name required"
+//	@Failure		404			{object}	map[string]string	"Workflow not found"
+//	@Failure		500			{object}	map[string]string	"Internal server error"
+//	@Router			/api/kiwi/workflow/board/{workflow} [get]
 func (h *Handlers) WorkflowBoard(c echo.Context) error {
 	wfName := c.Param("workflow")
 	if wfName == "" {
@@ -561,12 +690,19 @@ func (h *Handlers) WorkflowBoard(c echo.Context) error {
 	})
 }
 
-// ReorderCard updates a card's ordinal (position within its column) without
-// changing its workflow state. The client sends the desired ordinal value,
-// typically computed as the midpoint between the two neighbouring cards.
+// ReorderCard godoc
 //
-// POST /api/kiwi/workflow/reorder
-// Body: { "path": "...", "ordinal": 1500, "actor": "..." }
+//	@Summary		Reorder card in column
+//	@Description	Updates a card's ordinal position within its column.
+//	@Tags			workflow
+//	@Security		BearerAuth
+//	@Param			body	body		reorderCardRequest	true	"Card reorder request"
+//	@Success		200		{object}	reorderCardResponse
+//	@Failure		400		{object}	map[string]string	"Invalid parameters"
+//	@Failure		404		{object}	map[string]string	"Page not found"
+//	@Failure		409		{object}	map[string]string	"Concurrent modification conflict"
+//	@Failure		500		{object}	map[string]string	"Internal server error"
+//	@Router			/api/kiwi/workflow/reorder [post]
 func (h *Handlers) ReorderCard(c echo.Context) error {
 	limitedBody := http.MaxBytesReader(c.Response(), c.Request().Body, workflowRequestBodyLimit)
 	body, err := io.ReadAll(limitedBody)
@@ -574,11 +710,7 @@ func (h *Handlers) ReorderCard(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	var req struct {
-		Path    string `json:"path"`
-		Ordinal int    `json:"ordinal"`
-		Actor   string `json:"actor"`
-	}
+	var req reorderCardRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid JSON")
 	}

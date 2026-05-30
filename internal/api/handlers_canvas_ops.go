@@ -11,9 +11,40 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// DeleteCanvas removes a canvas file.
+type deleteCanvasResponse struct {
+	Deleted string `json:"deleted"`
+}
+
+type patchCanvasResponse struct {
+	Path    string                 `json:"path"`
+	ETag    string                 `json:"etag"`
+	Applied jsoncanvas.PatchResult `json:"applied"`
+}
+
+type autoLayoutCanvasRequest struct {
+	Layout string `json:"layout"` // dot | neato | fdp | circo
+}
+
+type autoLayoutCanvasResponse struct {
+	Path      string `json:"path"`
+	ETag      string `json:"etag"`
+	NodeCount int    `json:"node_count"`
+	EdgeCount int    `json:"edge_count"`
+}
+
+// DeleteCanvas godoc
 //
-// DELETE /api/kiwi/canvas?path=<path>
+//	@Summary		Delete a canvas
+//	@Description	Removes a canvas file by path.
+//	@Tags			canvas
+//	@Security		BearerAuth
+//	@Param			path	query		string	true	"Path to canvas file (must end with .canvas.json)"
+//	@Param			X-Actor	header		string	false	"Actor identity performing the deletion"
+//	@Success		200		{object}	deleteCanvasResponse
+//	@Failure		400		{object}	map[string]string	"Invalid parameters"
+//	@Failure		404		{object}	map[string]string	"Canvas not found"
+//	@Failure		500		{object}	map[string]string	"Internal server error deleting canvas"
+//	@Router			/api/kiwi/canvas [delete]
 func (h *Handlers) DeleteCanvas(c echo.Context) error {
 	path, err := requireCanvasPath(c)
 	if err != nil {
@@ -35,14 +66,20 @@ func (h *Handlers) DeleteCanvas(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"deleted": path})
 }
 
-// PatchCanvas applies a batch of atomic node/edge operations.
+// PatchCanvas godoc
 //
-// PATCH /api/kiwi/canvas?path=<path>
-//
-// Agents use this to add, update, or remove individual nodes and edges
-// without replacing the entire document.
-//
-// Body: { "operations": [ { "op": "add_node", "node": {...} }, ... ] }
+//	@Summary		Patch canvas content
+//	@Description	Applies a batch of atomic node/edge operations (add, update, remove) to a canvas document.
+//	@Tags			canvas
+//	@Security		BearerAuth
+//	@Param			path	query		string					true	"Path to canvas file (must end with .canvas.json)"
+//	@Param			X-Actor	header		string					false	"Actor identity performing the patch"
+//	@Param			body	body		jsoncanvas.PatchRequest	true	"Patch operations to apply"
+//	@Success		200		{object}	patchCanvasResponse
+//	@Failure		400		{object}	map[string]string	"Invalid parameters or request body"
+//	@Failure		422		{object}	map[string]string	"Unprocessable entity: invalid patch operation"
+//	@Failure		500		{object}	map[string]string	"Internal server error writing canvas"
+//	@Router			/api/kiwi/canvas [patch]
 func (h *Handlers) PatchCanvas(c echo.Context) error {
 	path, err := requireCanvasPath(c)
 	if err != nil {
@@ -95,9 +132,23 @@ func (h *Handlers) PatchCanvas(c echo.Context) error {
 	})
 }
 
-// QueryCanvas searches nodes and edges within a canvas.
+// QueryCanvas godoc
 //
-// GET /api/kiwi/canvas/query?path=<path>&type=<node_type>&q=<search>&connected=<node_id>&nodes_only=true&edges_only=true
+//	@Summary		Query canvas elements
+//	@Description	Searches and filters nodes and edges within a canvas file.
+//	@Tags			canvas
+//	@Security		BearerAuth
+//	@Param			path		query		string	true	"Path to canvas file (must end with .canvas.json)"
+//	@Param			type		query		string	false	"Filter nodes by type (text, file, link, group)"
+//	@Param			q			query		string	false	"Substring search match against fields (text, file, url, label)"
+//	@Param			connected	query		string	false	"Filter by node ID connected to other nodes/edges"
+//	@Param			nodes_only	query		bool	false	"If true, omit edges from the result"
+//	@Param			edges_only	query		bool	false	"If true, omit nodes from the result"
+//	@Success		200			{object}	jsoncanvas.QueryResult
+//	@Failure		400			{object}	map[string]string	"Invalid query parameters or file type"
+//	@Failure		404			{object}	map[string]string	"Canvas not found"
+//	@Failure		500			{object}	map[string]string	"Internal server error querying canvas"
+//	@Router			/api/kiwi/canvas/query [get]
 func (h *Handlers) QueryCanvas(c echo.Context) error {
 	path, err := requireCanvasPath(c)
 	if err != nil {
@@ -128,13 +179,20 @@ func (h *Handlers) QueryCanvas(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// AutoLayoutCanvas repositions existing canvas nodes using Graphviz.
-// Unlike generate (which builds from wiki-links), this takes the current
-// nodes/edges and computes optimal spatial positions.
+// AutoLayoutCanvas godoc
 //
-// POST /api/kiwi/canvas/auto-layout?path=<path>
-//
-// Optional body: { "layout": "dot"|"neato"|"fdp"|"circo" }
+//	@Summary		Auto layout canvas nodes
+//	@Description	Repositions existing canvas nodes spatially using Graphviz layout engines.
+//	@Tags			canvas
+//	@Security		BearerAuth
+//	@Param			path	query		string					true	"Path to canvas file (must end with .canvas.json)"
+//	@Param			X-Actor	header		string					false	"Actor identity performing the layout operation"
+//	@Param			body	body		autoLayoutCanvasRequest	false	"Optional layout engine configuration"
+//	@Success		200		{object}	autoLayoutCanvasResponse
+//	@Failure		400		{object}	map[string]string	"Invalid parameters"
+//	@Failure		404		{object}	map[string]string	"Canvas not found"
+//	@Failure		500		{object}	map[string]string	"Internal server error repositioning nodes"
+//	@Router			/api/kiwi/canvas/auto-layout [post]
 func (h *Handlers) AutoLayoutCanvas(c echo.Context) error {
 	path, err := requireCanvasPath(c)
 	if err != nil {

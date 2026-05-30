@@ -17,11 +17,26 @@ type canvasGenerateRequest struct {
 	Colorize   *bool  `json:"colorize,omitempty"`
 }
 
-// GenerateCanvas builds a positioned .canvas.json from the knowledge graph
-// using Graphviz layout algorithms. Reads wiki-links between pages, computes
-// optimal positions, and writes a .canvas.json file.
+type canvasGenerateResponse struct {
+	Path      string `json:"path"`
+	ETag      string `json:"etag"`
+	NodeCount int    `json:"node_count"`
+	EdgeCount int    `json:"edge_count"`
+}
+
+// GenerateCanvas godoc
 //
-// POST /api/kiwi/canvas/generate
+//	@Summary		Generate canvas from link graph
+//	@Description	Builds a spatially positioned JSON Canvas (.canvas.json) file based on wiki-links between pages in the knowledge graph.
+//	@Tags			canvas
+//	@Security		BearerAuth
+//	@Param			X-Actor	header		string					false	"Actor identity performing the generate operation"
+//	@Param			body	body		canvasGenerateRequest	true	"Configuration parameters for canvas generation"
+//	@Success		200		{object}	canvasGenerateResponse
+//	@Failure		400		{object}	map[string]string	"Invalid request body"
+//	@Failure		500		{object}	map[string]string	"Internal server error generating or writing canvas"
+//	@Failure		503		{object}	map[string]string	"Link index not available"
+//	@Router			/api/kiwi/canvas/generate [post]
 func (h *Handlers) GenerateCanvas(c echo.Context) error {
 	var req canvasGenerateRequest
 	if err := c.Bind(&req); err != nil {

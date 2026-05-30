@@ -23,9 +23,14 @@ func SetAssets(f fs.FS) {
 	assets = f
 }
 
-// Handler returns an Echo handler that serves the UI. Any path that isn't a
-// real asset falls back to index.html so client-side routing keeps working.
-// /api/* and /health are carved out by Echo before this handler runs.
+// Handler godoc
+//
+//	@Summary		Serve React Web UI assets
+//	@Description	Serves the embedded React UI files (Javascript, CSS, images, etc.) from `ui/dist`. Falls back to index.html for client-side routing on other non-API requests.
+//	@Tags			ui
+//	@Param			path	path		string	true	"Path to the asset"
+//	@Success		200	{file}		string	"HTML, JS, CSS, or image assets"
+//	@Router			/{path} [get]
 func Handler() echo.HandlerFunc {
 	if assets == nil {
 		return notBuiltHandler("no UI assets registered (SetAssets was not called)")

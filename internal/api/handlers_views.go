@@ -3,11 +3,35 @@ package api
 import (
 	"net/http"
 
+	"github.com/kiwifs/kiwifs/internal/dataview"
 	"github.com/kiwifs/kiwifs/internal/views"
 	"github.com/labstack/echo/v4"
 )
 
-// ListViews returns all view definitions
+var _ = (*dataview.QueryResult)(nil) // type-check import for swagger docs
+
+type listViewsResponse struct {
+	Views []views.View `json:"views"`
+}
+
+type saveViewResponse struct {
+	Status string     `json:"status"`
+	View   views.View `json:"view"`
+}
+
+type deleteViewResponse struct {
+	Status string `json:"status"`
+}
+
+// ListViews godoc
+//
+//	@Summary		List all views
+//	@Description	Retrieves all view definitions, which include layouts and DQL query details.
+//	@Tags			views
+//	@Security		BearerAuth
+//	@Success		200	{object}	listViewsResponse
+//	@Failure		500	{object}	map[string]string	"Internal server error retrieving views"
+//	@Router			/api/kiwi/views [get]
 func (h *Handlers) ListViews(c echo.Context) error {
 	viewsList, err := views.List(h.root)
 	if err != nil {
@@ -16,7 +40,17 @@ func (h *Handlers) ListViews(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"views": viewsList})
 }
 
-// GetView returns a single view definition
+// GetView godoc
+//
+//	@Summary		Get a view
+//	@Description	Retrieves the configuration of a single view by its name.
+//	@Tags			views
+//	@Security		BearerAuth
+//	@Param			name	path		string	true	"View name"
+//	@Success		200		{object}	views.View
+//	@Failure		400		{object}	map[string]string	"View name required"
+//	@Failure		404		{object}	map[string]string	"View not found"
+//	@Router			/api/kiwi/views/{name} [get]
 func (h *Handlers) GetView(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
@@ -30,7 +64,18 @@ func (h *Handlers) GetView(c echo.Context) error {
 	return c.JSON(http.StatusOK, view)
 }
 
-// SaveView creates or updates a view definition
+// SaveView godoc
+//
+//	@Summary		Save a view
+//	@Description	Creates a new view or updates an existing view by name.
+//	@Tags			views
+//	@Security		BearerAuth
+//	@Param			name	path		string		true	"View name"
+//	@Param			view	body		views.View	true	"View configuration data"
+//	@Success		200		{object}	saveViewResponse
+//	@Failure		400		{object}	map[string]string	"View name required or invalid request body"
+//	@Failure		500		{object}	map[string]string	"Internal server error saving view"
+//	@Router			/api/kiwi/views/{name} [put]
 func (h *Handlers) SaveView(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
@@ -50,7 +95,17 @@ func (h *Handlers) SaveView(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"status": "saved", "view": view})
 }
 
-// DeleteView removes a view definition
+// DeleteView godoc
+//
+//	@Summary		Delete a view
+//	@Description	Deletes a view definition by name.
+//	@Tags			views
+//	@Security		BearerAuth
+//	@Param			name	path		string	true	"View name"
+//	@Success		200		{object}	deleteViewResponse
+//	@Failure		400		{object}	map[string]string	"View name required"
+//	@Failure		500		{object}	map[string]string	"Internal server error deleting view"
+//	@Router			/api/kiwi/views/{name} [delete]
 func (h *Handlers) DeleteView(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
@@ -64,7 +119,20 @@ func (h *Handlers) DeleteView(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"status": "deleted"})
 }
 
-// ExecuteView runs a view's query using the dataview executor
+// ExecuteView godoc
+//
+//	@Summary		Execute a view
+//	@Description	Executes the query associated with the view using the dataview query engine, applying formulas to computed columns.
+//	@Tags			views
+//	@Security		BearerAuth
+//	@Param			name	path		string	true	"View name"
+//	@Param			limit	query		int		false	"Limit results (default 50)"
+//	@Param			offset	query		int		false	"Offset results (default 0)"
+//	@Success		200		{object}	dataview.QueryResult
+//	@Failure		400		{object}	map[string]string	"View name required or query evaluation error"
+//	@Failure		404		{object}	map[string]string	"View not found"
+//	@Failure		503		{object}	map[string]string	"Dataview executor not available"
+//	@Router			/api/kiwi/views/{name}/execute [get]
 func (h *Handlers) ExecuteView(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {

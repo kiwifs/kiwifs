@@ -16,8 +16,8 @@ type QueryParams struct {
 
 // QueryResult contains the filtered subset.
 type QueryResult struct {
-	Nodes []json.RawMessage `json:"nodes"`
-	Edges []json.RawMessage `json:"edges"`
+	Nodes []json.RawMessage `json:"nodes" swaggertype:"array,object"`
+	Edges []json.RawMessage `json:"edges" swaggertype:"array,object"`
 }
 
 // Query filters a canvas document and returns matching elements.
