@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Copy, Download, MoreHorizontal, Move, Printer, Trash2 } from "lucide-react";
+import { Copy, Download, FileDown, Loader2, MoreHorizontal, Move, Trash2 } from "lucide-react";
 import { api } from "@kw/lib/api";
 import { stem } from "@kw/lib/paths";
+import { exportPdf } from "@kw/lib/typstCompiler";
+import matter from "gray-matter";
 import { Button } from "@kw/components/ui/button";
 import {
   Popover,
@@ -34,6 +36,7 @@ export function PageActions({ path, onDeleted, onDuplicated, onMoved }: Props) {
   const [newPath, setNewPath] = useState("");
   const [dupPath, setDupPath] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleDelete() {
@@ -87,7 +90,7 @@ export function PageActions({ path, onDeleted, onDuplicated, onMoved }: Props) {
     }
   }
 
-  async function handleExport() {
+  async function handleExportMarkdown() {
     setMenuOpen(false);
     try {
       const { content } = await api.readFile(path);
@@ -101,6 +104,38 @@ export function PageActions({ path, onDeleted, onDuplicated, onMoved }: Props) {
     } catch (e) {
       console.error("Export failed:", e);
       alert("Failed to export page. Please try again.");
+    }
+  }
+
+  async function handleExportPdf() {
+    setPdfBusy(true);
+    try {
+      const { content } = await api.readFile(path);
+      let md = content;
+      if (md.startsWith("{")) {
+        try { md = JSON.parse(md).content ?? md; } catch {}
+      }
+      try {
+        const parsed = matter(md);
+        md = parsed.content;
+        if (typeof parsed.data?.title === "string" && parsed.data.title) {
+          md = `# ${parsed.data.title}\n\n${md}`;
+        }
+      } catch {}
+      const pdfBytes = await exportPdf(md);
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = stem(path) + ".pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("PDF export failed:", e);
+      alert("Failed to export PDF. Please try again.");
+    } finally {
+      setPdfBusy(false);
+      setMenuOpen(false);
     }
   }
 
@@ -136,16 +171,13 @@ export function PageActions({ path, onDeleted, onDuplicated, onMoved }: Props) {
           <MenuButton
             icon={<Download className="h-3.5 w-3.5" />}
             label="Export as Markdown"
-            onClick={handleExport}
+            onClick={handleExportMarkdown}
           />
           <MenuButton
-            icon={<Printer className="h-3.5 w-3.5" />}
-            label="Print / Save as PDF"
-            onClick={() => {
-              setMenuOpen(false);
-              // Delay so the popover fully unmounts before the print dialog opens
-              setTimeout(() => window.print(), 300);
-            }}
+            icon={pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+            label={pdfBusy ? "Generating PDF…" : "Export as PDF"}
+            onClick={handleExportPdf}
+            disabled={pdfBusy}
           />
           <div className="h-px bg-border my-1" />
           <MenuButton
