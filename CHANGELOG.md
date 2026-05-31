@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.9](https://github.com/kiwifs/kiwifs/compare/v0.19.8...v0.19.9) (2026-05-31)
+
+
+### Features
+
+* replace Print/Save as PDF with Typst-powered Export as PDF ([#196](https://github.com/kiwifs/kiwifs/issues/196)) ([3e90d0e](https://github.com/kiwifs/kiwifs/commit/3e90d0e5afe62a5a4d648213b53d7a6fc7290102))
+
 ## [0.19.8](https://github.com/kiwifs/kiwifs/compare/v0.19.7...v0.19.8) (2026-05-30)
 
 
