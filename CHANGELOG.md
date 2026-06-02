@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.10](https://github.com/kiwifs/kiwifs/compare/v0.19.9...v0.19.10) (2026-06-02)
+
+
+### Features
+
+* **tree:** add ordered drag-and-drop navigation ([#205](https://github.com/kiwifs/kiwifs/issues/205)) ([0640192](https://github.com/kiwifs/kiwifs/commit/0640192a5511ec385c0a68eb74cfe2e4a46e88e2))
+
 ## [0.19.9](https://github.com/kiwifs/kiwifs/compare/v0.19.8...v0.19.9) (2026-05-31)
 
 
