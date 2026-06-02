@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.11](https://github.com/kiwifs/kiwifs/compare/v0.19.10...v0.19.11) (2026-06-02)
+
+
+### Features
+
+* **ui:** add page watch/unwatch button ([#207](https://github.com/kiwifs/kiwifs/issues/207)) ([e06c356](https://github.com/kiwifs/kiwifs/commit/e06c356ac288799efc3fbe4e7d060a5618f3dce3))
+
 ## [0.19.10](https://github.com/kiwifs/kiwifs/compare/v0.19.9...v0.19.10) (2026-06-02)
 
 
