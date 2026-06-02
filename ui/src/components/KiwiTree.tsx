@@ -56,22 +56,13 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@kw/components/ui/context-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@kw/components/ui/dialog";
-import { Button } from "@kw/components/ui/button";
-import { Input } from "@kw/components/ui/input";
-import { Label } from "@kw/components/ui/label";
 import { type TreeRevealRequest } from "@kw/lib/treeReveal";
 import { createTreePageDragData } from "@kw/lib/kanbanDnd";
 import { shouldApplyTreeLoad } from "@kw/lib/treeRefresh";
 import { applyOptimisticTreeMove } from "@kw/lib/treeReorder";
 import { useFileOpsStore } from "@kw/stores/fileOpsStore";
+import { useKiwiTreeUiStore, type ConfirmDialog, type PromptDialog } from "@kw/stores/kiwiTreeUiStore";
+import { KiwiTreeDialogs } from "@kw/components/tree/KiwiTreeDialogs";
 
 type Props = {
   activePath: string | null;
@@ -110,13 +101,6 @@ function isKiwiConfig(name: string): boolean {
 }
 
 const FOLDER_EXPAND_DELAY_MS = 600;
-
-type OsDragTarget = {
-  /** Path of the row to visually highlight (always a folder, or "" for root). */
-  rowPath: string;
-  /** Directory path that files will actually be uploaded to. */
-  dropDir: string;
-};
 
 function isOsFileDrag(e: React.DragEvent): boolean {
   return e.dataTransfer.types.includes("Files");
@@ -245,20 +229,6 @@ async function patchSiblingOrder(entries: FlatNode[]): Promise<void> {
   await Promise.all(updates);
 }
 
-type PromptDialog = {
-  title: string;
-  description: string;
-  value: string;
-  onConfirm: (value: string) => void;
-};
-
-type ConfirmDialog = {
-  title: string;
-  description: string;
-  destructive?: boolean;
-  onConfirm: () => void;
-};
-
 export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
   {
     activePath,
@@ -288,20 +258,23 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
   const pendingScrollTopRef = useRef<number | null>(null);
   const lastOptimisticTreeMutationAtRef = useRef(0);
 
-  const [dupOpen, setDupOpen] = useState(false);
-  const [dupSource, setDupSource] = useState("");
-  const [dupTarget, setDupTarget] = useState("");
-  const [dupBusy, setDupBusy] = useState(false);
-
-  const [promptDialog, setPromptDialog] = useState<PromptDialog | null>(null);
-  const [promptValue, setPromptValue] = useState("");
-  const [alertMessage, setAlertMessage] = useState<string | null>(null);
-  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null);
-
-  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const dupSource = useKiwiTreeUiStore((state) => state.dupSource);
+  const dupTarget = useKiwiTreeUiStore((state) => state.dupTarget);
+  const openDupDialog = useKiwiTreeUiStore((state) => state.openDupDialog);
+  const closeDupDialog = useKiwiTreeUiStore((state) => state.closeDupDialog);
+  const setDupBusy = useKiwiTreeUiStore((state) => state.setDupBusy);
+  const openPromptDialog = useKiwiTreeUiStore((state) => state.openPromptDialog);
+  const setAlertMessage = useKiwiTreeUiStore((state) => state.setAlertMessage);
+  const openConfirmDialog = useKiwiTreeUiStore((state) => state.openConfirmDialog);
+  const uploadStatus = useKiwiTreeUiStore((state) => state.uploadStatus);
+  const setUploadStatus = useKiwiTreeUiStore((state) => state.setUploadStatus);
   const [containerHeight, setContainerHeight] = useState(0);
-  const [dragTarget, setDragTarget] = useState<OsDragTarget | null>(null);
-  const [fileDragActive, setFileDragActive] = useState(false);
+  const dragTarget = useKiwiTreeUiStore((state) => state.dragTarget);
+  const setDragTarget = useKiwiTreeUiStore((state) => state.setDragTarget);
+  const updateDragTarget = useKiwiTreeUiStore((state) => state.updateDragTarget);
+  const fileDragActive = useKiwiTreeUiStore((state) => state.fileDragActive);
+  const setFileDragActive = useKiwiTreeUiStore((state) => state.setFileDragActive);
+  const resetFileDragUi = useKiwiTreeUiStore((state) => state.resetFileDragUi);
   const fileDragDepthRef = useRef(0);
   const dragExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
@@ -359,17 +332,6 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
     roRef.current = ro;
   }, []);
 
-  function openPromptDialog(d: PromptDialog) {
-    setPromptValue(d.value);
-    setPromptDialog(d);
-  }
-
-  function openDupDialog(srcPath: string) {
-    setDupSource(srcPath);
-    setDupTarget(srcPath.replace(/\.md$/i, "-copy.md"));
-    setDupOpen(true);
-  }
-
   function handleDuplicate() {
     let target = dupTarget.trim();
     if (!target) return;
@@ -379,7 +341,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
       .readFile(dupSource)
       .then(({ content }) =>
         api.writeFile(target, content).then(() => {
-          setDupOpen(false);
+          closeDupDialog();
           onDuplicated?.(target);
         }),
       )
@@ -566,10 +528,9 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
 
   const resetFileDrag = useCallback(() => {
     fileDragDepthRef.current = 0;
-    setFileDragActive(false);
-    setDragTarget(null);
+    resetFileDragUi();
     clearDragExpandTimer();
-  }, [clearDragExpandTimer]);
+  }, [clearDragExpandTimer, resetFileDragUi]);
 
   useEffect(() => {
     const onDragEnd = () => resetFileDrag();
@@ -712,7 +673,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
       // not individual files. For files, that's their parent folder row.
       // For root-level files (dropDir=""), rowPath="" triggers the container highlight.
       const highlightRow = isDir ? nodePath : dropDir;
-      setDragTarget((prev) => {
+      updateDragTarget((prev) => {
         if (prev?.rowPath !== highlightRow) {
           if (isDir) scheduleFolderExpand(nodePath, isOpen);
           else clearDragExpandTimer();
@@ -720,7 +681,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
         return { rowPath: highlightRow, dropDir };
       });
     },
-    [scheduleFolderExpand, clearDragExpandTimer],
+    [scheduleFolderExpand, clearDragExpandTimer, updateDragTarget],
   );
 
   const handleNodeDrop = useCallback(
@@ -914,7 +875,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
             onMoved={onMoved}
             onDeleted={onDeleted}
             openPromptDialog={openPromptDialog}
-            openConfirmDialog={setConfirmDialog}
+            openConfirmDialog={openConfirmDialog}
             enableKanbanDrag={enableKanbanDrag}
             pushOp={pushOp}
             root={root}
@@ -928,133 +889,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
         )}
       </Tree>
 
-      {/* Dialogs */}
-      <Dialog open={dupOpen} onOpenChange={setDupOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Duplicate page</DialogTitle>
-            <DialogDescription>
-              Enter the path for the new copy.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <Label htmlFor="tree-dup-path">New path</Label>
-            <Input
-              id="tree-dup-path"
-              autoFocus
-              value={dupTarget}
-              onChange={(e) => setDupTarget(e.target.value)}
-              className="font-mono"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleDuplicate();
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDupOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleDuplicate}
-              disabled={dupBusy || !dupTarget.trim()}
-            >
-              {dupBusy ? "Duplicating..." : "Duplicate"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!promptDialog}
-        onOpenChange={(open) => {
-          if (!open) setPromptDialog(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{promptDialog?.title}</DialogTitle>
-            <DialogDescription>{promptDialog?.description}</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <Input
-              autoFocus
-              value={promptValue}
-              onChange={(e) => setPromptValue(e.target.value)}
-              className="font-mono"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && promptValue.trim() && promptDialog) {
-                  promptDialog.onConfirm(promptValue.trim());
-                  setPromptDialog(null);
-                }
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPromptDialog(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (promptValue.trim() && promptDialog) {
-                  promptDialog.onConfirm(promptValue.trim());
-                  setPromptDialog(null);
-                }
-              }}
-              disabled={!promptValue.trim()}
-            >
-              Confirm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!alertMessage}
-        onOpenChange={(open) => {
-          if (!open) setAlertMessage(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Conflict</DialogTitle>
-            <DialogDescription>{alertMessage}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setAlertMessage(null)}>OK</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!confirmDialog}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDialog(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{confirmDialog?.title}</DialogTitle>
-            <DialogDescription>{confirmDialog?.description}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmDialog(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant={confirmDialog?.destructive ? "destructive" : "default"}
-              onClick={() => {
-                confirmDialog?.onConfirm();
-                setConfirmDialog(null);
-              }}
-            >
-              Confirm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <KiwiTreeDialogs onDuplicate={handleDuplicate} />
     </div>
   );
 });
