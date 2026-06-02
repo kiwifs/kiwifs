@@ -6,6 +6,7 @@ export type TreeEntry = {
   name: string;
   isDir: boolean;
   size?: number;
+  order?: number;
   children?: TreeEntry[];
 };
 
@@ -130,6 +131,28 @@ export type SpaceMeta = {
 
 const DEFAULT_ACTOR = "human:web-ui";
 
+export class ApiError extends Error {
+  status: number;
+  statusText: string;
+  body: string;
+  url: string;
+
+  constructor(status: number, statusText: string, body: string, url: string) {
+    super(`${status} ${statusText}: ${body || url}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.statusText = statusText;
+    this.body = body;
+    this.url = url;
+  }
+}
+
+export function apiErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) return error.body || error.message;
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 let _baseOverride: string | null = null;
 let _extraHeaders: Record<string, string> = {};
 
@@ -208,7 +231,7 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}: ${text || url}`);
+    throw new ApiError(res.status, res.statusText, text, url);
   }
   const ct = res.headers.get("content-type") || "";
   if (ct.includes("application/json")) {
@@ -352,6 +375,23 @@ export const api = {
       method: "PUT",
       headers,
       body: content,
+    });
+  },
+
+  async patchFrontmatter(path: string, fields: Record<string, unknown>): Promise<{ path: string; etag: string }> {
+    const qs = new URLSearchParams({ path });
+    return request(`${kiwiBase()}/file/frontmatter?${qs}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Actor": actor(), ..._extraHeaders },
+      body: JSON.stringify({ fields }),
+    });
+  },
+
+  async patchTreeOrder(orders: Record<string, number>): Promise<{ updated: number }> {
+    return request(`${kiwiBase()}/tree/order`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-Actor": actor(), ..._extraHeaders },
+      body: JSON.stringify({ orders }),
     });
   },
 
@@ -591,17 +631,13 @@ export const api = {
   async renameDir(
     oldDir: string,
     newDir: string,
-    files: string[],
-  ): Promise<void> {
-    for (const f of files) {
-      const rel = f.slice(oldDir.length);
-      const target = newDir + rel;
-      const { content } = await this.readFile(f);
-      await this.writeFile(target, content);
-    }
-    for (const f of files) {
-      await this.deleteFile(f).catch(() => {});
-    }
+    _files?: string[],
+  ): Promise<{ from: string; to: string; renamed: number }> {
+    return request(`${kiwiBase()}/rename-dir`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from: oldDir.replace(/\/+$/, ""), to: newDir.replace(/\/+$/, "") }),
+    });
   },
 
   async uploadAssets(files: File[], dir: string): Promise<string[]> {

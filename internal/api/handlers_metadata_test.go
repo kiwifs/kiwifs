@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -137,5 +138,73 @@ func TestReadFile_MetadataOnly_NestedYAML(t *testing.T) {
 	}
 	if entry["id"] != "test-123" {
 		t.Fatalf("derived-from[0].id = %v, want test-123", entry["id"])
+	}
+}
+
+func TestPatchFrontmatterUpdatesFields(t *testing.T) {
+	s := buildTestServer(t)
+	mustPutFile(t, s, "doc.md", "---\ntitle: Doc\n---\n# Doc\n")
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/kiwi/file/frontmatter?path=doc.md", strings.NewReader(`{"fields":{"order":3}}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH frontmatter: %d %s", rec.Code, rec.Body.String())
+	}
+	if etag := rec.Header().Get("ETag"); etag == "" {
+		t.Fatal("expected ETag header")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/kiwi/file?path=doc.md", nil)
+	rec = httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET patched file: %d %s", rec.Code, rec.Body.String())
+	}
+	got := rec.Body.String()
+	if !strings.Contains(got, "title: Doc") || !strings.Contains(got, "order: 3") {
+		t.Fatalf("patched content missing expected frontmatter:\n%s", got)
+	}
+}
+
+func TestPatchFrontmatterRejectsNonMarkdown(t *testing.T) {
+	s := buildTestServer(t)
+	mustPutFile(t, s, "data.json", `{"key":"value"}`)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/kiwi/file/frontmatter?path=data.json", strings.NewReader(`{"fields":{"order":1}}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for non-markdown frontmatter patch, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPatchTreeOrderUpdatesDirectoryOrder(t *testing.T) {
+	s := buildTestServer(t)
+	mustPutFile(t, s, "zeta/page.md", "# Zeta\n")
+	mustPutFile(t, s, "alpha/page.md", "# Alpha\n")
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/kiwi/tree/order", strings.NewReader(`{"orders":{"zeta":1,"alpha":2}}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH tree order: %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/kiwi/tree?path=/", nil)
+	rec = httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET tree: %d %s", rec.Code, rec.Body.String())
+	}
+	var tree treeEntry
+	if err := json.Unmarshal(rec.Body.Bytes(), &tree); err != nil {
+		t.Fatal(err)
+	}
+	if len(tree.Children) < 2 || tree.Children[0].Name != "zeta" || tree.Children[1].Name != "alpha" {
+		t.Fatalf("directory order not reflected in tree: %#v", tree.Children)
 	}
 }

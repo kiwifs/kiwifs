@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  forwardRef,
+  type SetStateAction,
+} from "react";
 import { Tree, NodeApi, type NodeRendererProps } from "react-arborist";
 import { useDraggable } from "@dnd-kit/core";
 import { getCurrentSpace } from "../lib/api";
@@ -37,8 +47,8 @@ import {
   Rss,
 } from "lucide-react";
 import { cn } from "@kw/lib/cn";
-import { api, type TreeEntry } from "@kw/lib/api";
-import { isMarkdown, isCanvasFile, isExcalidrawFile, stem, stripTrailingSlash, dirOf } from "@kw/lib/paths";
+import { api, apiErrorMessage, type TreeEntry } from "@kw/lib/api";
+import { isMarkdown, isCanvasFile, isExcalidrawFile, stem, stripTrailingSlash, dirOf, basename } from "@kw/lib/paths";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -59,6 +69,8 @@ import { Input } from "@kw/components/ui/input";
 import { Label } from "@kw/components/ui/label";
 import { type TreeRevealRequest } from "@kw/lib/treeReveal";
 import { createTreePageDragData } from "@kw/lib/kanbanDnd";
+import { shouldApplyTreeLoad } from "@kw/lib/treeRefresh";
+import { applyOptimisticTreeMove } from "@kw/lib/treeReorder";
 import { useFileOpsStore } from "@kw/stores/fileOpsStore";
 
 type Props = {
@@ -69,7 +81,7 @@ type Props = {
   onCreateChild?: (folder: string) => void;
   onDeleted?: () => void;
   onDuplicated?: (newPath: string) => void;
-  onMoved?: (newPath: string) => void;
+  onMoved?: (newPath: string, options?: { refresh?: boolean }) => void;
   enableKanbanDrag?: boolean;
   filterQuery?: string;
   compactFolders?: boolean;
@@ -183,6 +195,56 @@ function findEntry(root: TreeEntry, path: string): TreeEntry | null {
   return null;
 }
 
+type MoveArgs = {
+  dragIds: string[];
+  dragNodes: NodeApi<FlatNode>[];
+  parentId: string | null;
+  parentNode: NodeApi<FlatNode> | null;
+  index: number;
+};
+
+function destinationChildrenAfterMove(args: MoveArgs, rootNodes: FlatNode[], replacements?: Map<string, FlatNode>): FlatNode[] {
+  const children = (args.parentNode?.children?.map((child) => child.data) || rootNodes).slice();
+  let insertAt = Math.max(0, Math.min(args.index, children.length));
+
+  for (const dragNode of args.dragNodes) {
+    const replacement = replacements?.get(dragNode.id);
+    const moving = replacement || dragNode.data;
+    children.splice(insertAt, 0, moving);
+    const originalIndex = children.findIndex((child, i) => i !== insertAt && child.id === dragNode.id);
+    if (originalIndex >= 0) {
+      children.splice(originalIndex, 1);
+      if (originalIndex < insertAt) insertAt -= 1;
+    }
+    insertAt += 1;
+  }
+
+  return children;
+}
+
+async function patchSiblingOrder(entries: FlatNode[]): Promise<void> {
+  const orderableEntries = entries.filter((entry) => !entry.virtualDir && (entry.isDir || isMarkdown(entry.id)));
+  const directoryOrders: Record<string, number> = {};
+  const markdownUpdates: Promise<unknown>[] = [];
+
+  orderableEntries.forEach((entry, i) => {
+    const order = i + 1;
+    if (entry.order === order) return;
+    const cleanPath = stripTrailingSlash(entry.id);
+    if (entry.isDir) {
+      directoryOrders[cleanPath] = order;
+    } else {
+      markdownUpdates.push(api.patchFrontmatter(cleanPath, { order }));
+    }
+  });
+
+  const updates: Promise<unknown>[] = markdownUpdates;
+  if (Object.keys(directoryOrders).length > 0) {
+    updates.push(api.patchTreeOrder(directoryOrders));
+  }
+  await Promise.all(updates);
+}
+
 type PromptDialog = {
   title: string;
   description: string;
@@ -223,6 +285,8 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const treeRef = useRef<any>(null);
+  const pendingScrollTopRef = useRef<number | null>(null);
+  const lastOptimisticTreeMutationAtRef = useRef(0);
 
   const [dupOpen, setDupOpen] = useState(false);
   const [dupSource, setDupSource] = useState("");
@@ -247,6 +311,34 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
   useImperativeHandle(ref, () => ({
     collapseAll: () => treeRef.current?.closeAll(),
   }));
+
+  const saveTreeScroll = useCallback(() => {
+    const listEl = treeRef.current?.listEl?.current as HTMLDivElement | null | undefined;
+    if (listEl) pendingScrollTopRef.current = listEl.scrollTop;
+  }, []);
+
+  const setRootPreservingScroll = useCallback(
+    (next: SetStateAction<TreeEntry | null>) => {
+      saveTreeScroll();
+      setRoot(next);
+    },
+    [saveTreeScroll],
+  );
+
+  useLayoutEffect(() => {
+    const top = pendingScrollTopRef.current;
+    if (top == null) return;
+    pendingScrollTopRef.current = null;
+
+    const restore = () => {
+      const listEl = treeRef.current?.listEl?.current as HTMLDivElement | null | undefined;
+      if (listEl) listEl.scrollTop = top;
+    };
+
+    restore();
+    const raf = window.requestAnimationFrame(restore);
+    return () => window.cancelAnimationFrame(raf);
+  }, [root, containerHeight]);
 
   // Callback ref: attach ResizeObserver whenever the container div mounts.
   // This solves the race where the first render shows TreeSkeleton (root=null)
@@ -296,14 +388,21 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
   }
 
   useEffect(() => {
+    const requestStartedAt = Date.now();
     api
       .tree("/")
       .then((t) => {
-        setRoot(t);
+        if (!shouldApplyTreeLoad({
+          requestStartedAt,
+          lastLocalMutationAt: lastOptimisticTreeMutationAtRef.current,
+        })) {
+          return;
+        }
+        setRootPreservingScroll(t);
         setError(null);
       })
       .catch((e) => setError(String(e)));
-  }, [refreshKey, retryCount]);
+  }, [refreshKey, retryCount, setRootPreservingScroll]);
 
   // Reveal support: open parents when reveal request comes in
   useEffect(() => {
@@ -324,7 +423,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
       treeRef.current?.scrollTo(activePath);
     }, 30);
     return () => clearTimeout(t);
-  }, [activePath, autoReveal, refreshKey]);
+  }, [activePath, autoReveal]);
 
   const data = useMemo(() => {
     if (!root) return [];
@@ -343,29 +442,55 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
   }, []);
 
   const handleMove = useCallback(
-    async (args: {
-      dragIds: string[];
-      parentId: string | null;
-      index: number;
-    }) => {
+    async (args: MoveArgs) => {
       const src = args.dragIds[0];
-      if (!src) return;
-      const fileName = src.split("/").pop()!;
-      const destDir = args.parentId || "";
+      const sourceNode = args.dragNodes[0]?.data;
+      if (!src || !sourceNode || !root) return;
+      const cleanSrc = stripTrailingSlash(src);
+      const fileName = basename(cleanSrc);
+      const destDir = args.parentId ? stripTrailingSlash(args.parentId) : "";
       const dest = destDir ? `${destDir}/${fileName}` : fileName;
-      if (src === dest) return;
+      const previousRoot = root;
+
+      if (sourceNode.isDir && dest.startsWith(`${cleanSrc}/`)) {
+        console.warn("Cannot move a folder inside itself:", { from: cleanSrc, to: dest });
+        return;
+      }
+
+      lastOptimisticTreeMutationAtRef.current = Date.now();
+      setRootPreservingScroll(applyOptimisticTreeMove(root, args));
 
       try {
-        const { content } = await api.readFile(src);
+        if (cleanSrc === dest) {
+          await patchSiblingOrder(destinationChildrenAfterMove(args, data));
+          onMoved?.("", { refresh: false });
+          return;
+        }
+
+        if (sourceNode.isDir) {
+          await api.renameDir(cleanSrc, dest);
+          const movedNode: FlatNode = { ...sourceNode, id: dest, name: fileName };
+          await patchSiblingOrder(destinationChildrenAfterMove(args, data, new Map([[src, movedNode]])));
+          onMoved?.(dest);
+          return;
+        }
+
+        const { content } = await api.readFile(cleanSrc);
         await api.writeFile(dest, content);
-        await api.deleteFile(src);
-        pushOp({ type: "move", from: src, to: dest, content });
+        await api.deleteFile(cleanSrc);
+        pushOp({ type: "move", from: cleanSrc, to: dest, content });
+
+        const movedNode: FlatNode = { ...sourceNode, id: dest, name: fileName };
+        await patchSiblingOrder(destinationChildrenAfterMove(args, data, new Map([[src, movedNode]])));
         onMoved?.(dest);
       } catch (e) {
-        console.error("Move failed:", e);
+        setRootPreservingScroll(previousRoot);
+        const detail = apiErrorMessage(e);
+        console.error("Move/reorder failed:", e);
+        setAlertMessage(`Move/reorder failed. The tree was restored. ${detail}`);
       }
     },
-    [onMoved, pushOp],
+    [data, onMoved, pushOp, root, setRootPreservingScroll],
   );
 
   const handleRename = useCallback(
@@ -377,10 +502,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
       if (args.node.data.isDir) {
         const newPath = dir ? `${dir}/${newName}` : newName;
         if (newPath === oldPath) return;
-        const entry = root ? findEntry(root, oldPath) : null;
-        if (!entry) return;
-        const files = collectFiles(entry);
-        await api.renameDir(oldPath, newPath, files);
+        await api.renameDir(oldPath, newPath);
         onMoved?.(newPath);
       } else {
         if (isMarkdown(oldPath) && !newName.endsWith(".md")) newName += ".md";
@@ -763,7 +885,14 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
         selectionFollowsFocus
         searchTerm={filterQuery.trim()}
         searchMatch={treeSearchMatch}
-        disableDrag={enableKanbanDrag}
+        disableDrag={(data) => enableKanbanDrag && !data.isDir && isMarkdown(data.id)}
+        disableDrop={({ parentNode, dragNodes }) =>
+          dragNodes.some((dragNode) => {
+            const dragId = stripTrailingSlash(dragNode.id);
+            const parentId = parentNode?.id ? stripTrailingSlash(parentNode.id) : "";
+            return dragNode.data.virtualDir || (dragNode.data.isDir && parentId.startsWith(`${dragId}/`));
+          })
+        }
         disableEdit={(d) => isKiwiConfig(d.name) || !!d.virtualDir}
         renderCursor={DropCursor}
         onMove={handleMove}
@@ -936,7 +1065,7 @@ type TreeNodeProps = NodeRendererProps<FlatNode> & {
   onSelect: (path: string) => void;
   onCreateChild?: (folder: string) => void;
   openDupDialog: (srcPath: string) => void;
-  onMoved?: (newPath: string) => void;
+  onMoved?: (newPath: string, options?: { refresh?: boolean }) => void;
   onDeleted?: () => void;
   openPromptDialog: (d: PromptDialog) => void;
   openConfirmDialog: (d: ConfirmDialog) => void;
@@ -1223,11 +1352,8 @@ function TreeNode({
                 value: path,
                 onConfirm: async (newPath) => {
                   if (newPath === path) return;
-                  const entry = findEntry(root, path);
-                  if (!entry) return;
-                  const files = collectFiles(entry);
                   const cleanPath = newPath.replace(/\/+$/, "");
-                  await api.renameDir(path, cleanPath, files);
+                  await api.renameDir(path, cleanPath);
                   onMoved?.(cleanPath);
                 },
               });
@@ -1514,10 +1640,10 @@ function TreeNode({
             if (enableKanbanDrag) kanbanDraggable.setNodeRef(el);
           }}
           className="h-full w-full"
-          draggable
           onDragStart={(e) => {
+            // Let react-arborist own the native tree drag. We only attach the
+            // page path payload so canvas drops can still consume tree drags.
             e.dataTransfer.setData("application/kiwi-path", path);
-            e.dataTransfer.effectAllowed = "copyLink";
           }}
           {...(enableKanbanDrag ? { ...kanbanDraggable.attributes, ...kanbanDraggable.listeners } : {})}
         >

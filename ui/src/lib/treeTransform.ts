@@ -15,6 +15,7 @@ export type FlatNode = {
   isNested?: boolean;
   /** Matched by exclude pattern — dimmed in UI */
   excluded?: boolean;
+  order?: number;
   children?: FlatNode[];
 };
 
@@ -53,6 +54,10 @@ function compareEntries(a: TreeEntry, b: TreeEntry, mode: TreeSortMode): number 
   const bKiwi = isKiwiConfig(b.name) ? 0 : 1;
   if (aKiwi !== bKiwi) return aKiwi - bKiwi;
 
+  if (a.order != null && b.order != null && a.order !== b.order) return a.order - b.order;
+  if (a.order != null && b.order == null) return -1;
+  if (a.order == null && b.order != null) return 1;
+
   if (mode === "type") {
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
   }
@@ -66,6 +71,7 @@ function fileToFlat(entry: TreeEntry, opts: TransformOpts, extra?: Partial<FlatN
     name: entry.name,
     isDir: false,
     excluded: isTreePathExcluded(path, opts.excludePatterns),
+    order: entry.order,
     ...extra,
   };
 }
@@ -114,6 +120,7 @@ function applyFileNesting(entries: TreeEntry[], opts: TransformOpts): FlatNode[]
       isDir: true,
       virtualDir: true,
       excluded: isTreePathExcluded(md.path, opts.excludePatterns),
+      order: md.order,
       children: nestedFiles.map((f) =>
         fileToFlat(f, opts, { isNested: true }),
       ),
@@ -127,6 +134,9 @@ function applyFileNesting(entries: TreeEntry[], opts: TransformOpts): FlatNode[]
 
   return out.sort((a, b) => {
     if (a.excluded !== b.excluded) return a.excluded ? 1 : -1;
+    if (a.order != null && b.order != null && a.order !== b.order) return a.order - b.order;
+    if (a.order != null && b.order == null) return -1;
+    if (a.order == null && b.order != null) return 1;
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
     return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
   });
@@ -174,6 +184,7 @@ function dirToFlat(entry: TreeEntry, opts: TransformOpts): FlatNode {
     name: entry.name,
     isDir: true,
     excluded: isTreePathExcluded(path, opts.excludePatterns),
+    order: entry.order,
     children: entry.children ? transformChildren(entry.children, opts) : undefined,
   };
 }
@@ -198,7 +209,7 @@ export function buildFlatTree(
     enableFileNesting: opts.enableFileNesting ?? true,
     excludePatterns: opts.excludePatterns ?? DEFAULT_EXCLUDE,
   };
-  return (root.children || []).map((c) =>
+  return sortEntries(root.children || [], full.sortMode).map((c) =>
     c.isDir ? compactEntry(c, full) : fileToFlat(c, full),
   );
 }

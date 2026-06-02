@@ -18,6 +18,7 @@ import { undoFileOp } from "@kw/stores/fileOpsStore";
 import type { KiwiTreeHandle } from "./components/KiwiTree";
 import { AppSidebar } from "./components/AppSidebar";
 import type { TreeSortMode } from "./lib/treeTransform";
+import { shouldRefreshTreeImmediately } from "./lib/treeRefresh";
 import { usePublishedPagesStore } from "./stores/publishedPagesStore";
 import { KiwiPage } from "./components/KiwiPage";
 import { KiwiEditor } from "./components/KiwiEditor";
@@ -134,8 +135,43 @@ export default function App() {
   const editorRef = useRef<{ save: () => Promise<void>; toggleMode?: () => void } | null>(null);
   const [spaceKey, setSpaceKey] = useState(0);
   const refreshPublishedPages = usePublishedPagesStore((state) => state.refresh);
+  const treeReconcileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLocalTreeMutationAtRef = useRef(0);
+  const suppressTreeEventsUntilRef = useRef(0);
   const stateRef = useRef({ editing, activePath, graphOpen, historyOpen, dataOpen, basesOpen, canvasOpen, whiteboardOpen, timelineOpen, kanbanOpen });
   stateRef.current = { editing, activePath, graphOpen, historyOpen, dataOpen, basesOpen, canvasOpen, whiteboardOpen, timelineOpen, kanbanOpen };
+
+  const scheduleTreeReconcile = useCallback((delayMs = 800) => {
+    if (treeReconcileTimerRef.current) {
+      clearTimeout(treeReconcileTimerRef.current);
+    }
+    treeReconcileTimerRef.current = setTimeout(() => {
+      treeReconcileTimerRef.current = null;
+      setRefreshKey((k) => k + 1);
+    }, delayMs);
+  }, []);
+
+  const refreshTree = useCallback((options?: { background?: boolean; reconcile?: boolean }) => {
+    if (options?.background) {
+      const now = Date.now();
+      lastLocalTreeMutationAtRef.current = now;
+      if (options.reconcile === false) {
+        suppressTreeEventsUntilRef.current = now + 1_000;
+        return;
+      }
+      scheduleTreeReconcile();
+      return;
+    }
+    setRefreshKey((k) => k + 1);
+  }, [scheduleTreeReconcile]);
+
+  useEffect(() => {
+    return () => {
+      if (treeReconcileTimerRef.current) {
+        clearTimeout(treeReconcileTimerRef.current);
+      }
+    };
+  }, []);
 
   // Prevent browser from navigating to a file:// URL when OS files are
   // dropped anywhere on the page.  react-dnd's HTML5Backend (inside
@@ -253,7 +289,19 @@ const handleSpaceSwitch = useCallback(() => {
 
   useEffect(() => {
     const es = new EventSource(sseUrl());
-    const bump = () => setRefreshKey((k) => k + 1);
+    const bump = () => {
+      const now = Date.now();
+      if (now < suppressTreeEventsUntilRef.current) return;
+      if (shouldRefreshTreeImmediately({
+        now,
+        lastLocalMutationAt: lastLocalTreeMutationAtRef.current,
+        suppressWindowMs: 1_000,
+      })) {
+        setRefreshKey((k) => k + 1);
+        return;
+      }
+      scheduleTreeReconcile();
+    };
     const events = ["write", "delete", "bulk", "comment.add", "comment.delete"];
     events.forEach((name) => es.addEventListener(name, bump));
     es.onerror = () => {};
@@ -261,7 +309,7 @@ const handleSpaceSwitch = useCallback(() => {
       events.forEach((name) => es.removeEventListener(name, bump));
       es.close();
     };
-  }, [spaceKey]);
+  }, [scheduleTreeReconcile, spaceKey]);
 
   useEffect(() => {
     // Support both /page/{path} (new) and #/{path} (legacy) on initial load.
@@ -512,7 +560,7 @@ const handleSpaceSwitch = useCallback(() => {
             onTreeFilterChange={setTreeFilter}
             onTreeSortModeChange={setTreeSortMode}
             onActivePathChange={setActivePath}
-            onTreeRefresh={() => setRefreshKey((key) => key + 1)}
+            onTreeRefresh={refreshTree}
           />
 
           {/* Sidebar resize handle (desktop only) */}

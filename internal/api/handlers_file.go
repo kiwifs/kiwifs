@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/kiwifs/kiwifs/internal/analytics"
 	"github.com/kiwifs/kiwifs/internal/config"
+	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/storage"
@@ -77,6 +79,7 @@ func toTreeEntry(st *storage.TreeEntry) *treeEntry {
 		Name:  st.Name,
 		IsDir: st.IsDir,
 		Size:  st.Size,
+		Order: st.Order,
 	}
 	for _, c := range st.Children {
 		e.Children = append(e.Children, toTreeEntry(c))
@@ -199,6 +202,110 @@ func pageViewSource(c echo.Context) string {
 		source = "api"
 	}
 	return source
+}
+
+type treeOrderWriter interface {
+	WriteTreeOrder(ctx context.Context, updates map[string]int) error
+}
+
+type patchTreeOrderRequest struct {
+	Orders map[string]int `json:"orders"`
+}
+
+func (h *Handlers) PatchTreeOrder(c echo.Context) error {
+	writer, ok := h.store.(treeOrderWriter)
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotImplemented, "tree order metadata is not supported by this storage backend")
+	}
+	var req patchTreeOrderRequest
+	if err := bindJSON(c, &req); err != nil {
+		return err
+	}
+	if len(req.Orders) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "orders is required")
+	}
+	cleaned := make(map[string]int, len(req.Orders))
+	for path, order := range req.Orders {
+		clean := strings.Trim(strings.TrimSpace(path), "/")
+		if clean == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "directory path is required")
+		}
+		st, err := h.store.Stat(c.Request().Context(), clean)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		}
+		if !st.IsDir {
+			return echo.NewHTTPError(http.StatusBadRequest, "tree order path must be a directory")
+		}
+		cleaned[clean] = order
+	}
+	if err := writer.WriteTreeOrder(c.Request().Context(), cleaned); err != nil {
+		if errors.Is(err, storage.ErrPathDenied) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindWrite, Detail: "tree order patch"})
+	return c.JSON(http.StatusOK, map[string]int{"updated": len(cleaned)})
+}
+
+type patchFrontmatterRequest struct {
+	Fields map[string]any `json:"fields"`
+}
+
+func (h *Handlers) PatchFrontmatter(c echo.Context) error {
+	path, err := requirePath(c)
+	if err != nil {
+		return err
+	}
+	if !storage.IsKnowledgeFile(path) {
+		return echo.NewHTTPError(http.StatusBadRequest, "frontmatter patch requires a markdown file")
+	}
+	var req patchFrontmatterRequest
+	if err := bindJSON(c, &req); err != nil {
+		return err
+	}
+	if len(req.Fields) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "fields is required")
+	}
+	content, err := readFileOr404(c.Request().Context(), h.store, path)
+	if err != nil {
+		return err
+	}
+	for key, value := range req.Fields {
+		content, err = markdown.SetFrontmatterField(content, key, normalizeFrontmatterPatchValue(value))
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+	}
+	actor := sanitizeActor(c.Request().Header.Get("X-Actor"))
+	res, err := h.pipe.Write(c.Request().Context(), path, content, actor)
+	if err != nil {
+		if errors.Is(err, storage.ErrPathDenied) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		if errors.Is(err, pipeline.ErrTransitionDenied) {
+			return echo.NewHTTPError(http.StatusConflict, err.Error())
+		}
+		if errors.Is(err, pipeline.ErrValidationFailed) {
+			return echo.NewHTTPError(http.StatusUnprocessableEntity, err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	c.Response().Header().Set("ETag", fmt.Sprintf(`"%s"`, res.ETag))
+	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindWrite, Path: path, ETag: res.ETag, Detail: "frontmatter patch"})
+	return c.JSON(http.StatusOK, map[string]string{"path": res.Path, "etag": res.ETag})
+}
+
+func normalizeFrontmatterPatchValue(v any) any {
+	switch x := v.(type) {
+	case float64:
+		n := int(x)
+		if float64(n) == x {
+			return n
+		}
+	}
+	return v
 }
 
 // Readlink godoc

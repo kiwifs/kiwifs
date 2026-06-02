@@ -56,6 +56,41 @@ func TestLocalListHidesDotDirs(t *testing.T) {
 	}
 }
 
+func TestBuildTreeSortsByFrontmatterOrder(t *testing.T) {
+	dir := t.TempDir()
+	l, err := NewLocal(dir)
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	ctx := context.Background()
+	files := map[string]string{
+		"zeta.md":  "# Zeta\n",
+		"beta.md":  "---\norder: 2\n---\n# Beta\n",
+		"alpha.md": "---\norder: 1\n---\n# Alpha\n",
+	}
+	for path, content := range files {
+		if err := l.Write(ctx, path, []byte(content)); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "folder"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := BuildTree(ctx, l, "/", 1)
+	if err != nil {
+		t.Fatalf("build tree: %v", err)
+	}
+	got := make([]string, 0, len(tree.Children))
+	for _, child := range tree.Children {
+		got = append(got, child.Name)
+	}
+	want := []string{"alpha.md", "beta.md", "folder", "zeta.md"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("children = %v, want %v", got, want)
+	}
+}
+
 func TestLocalRejectsSymlinkEscape(t *testing.T) {
 	dir := t.TempDir()
 	l, _ := NewLocal(dir)

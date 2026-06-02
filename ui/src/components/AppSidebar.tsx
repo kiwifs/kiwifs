@@ -48,7 +48,7 @@ type AppSidebarProps = {
   onTreeFilterChange: (value: string) => void;
   onTreeSortModeChange: Dispatch<SetStateAction<TreeSortMode>>;
   onActivePathChange: (path: string | null) => void;
-  onTreeRefresh: () => void;
+  onTreeRefresh: (options?: { background?: boolean; reconcile?: boolean }) => void;
 };
 
 export function AppSidebar({
@@ -245,8 +245,8 @@ export function AppSidebar({
                 onTreeRefresh();
                 onNavigate(path);
               }}
-              onMoved={(path) => {
-                onTreeRefresh();
+              onMoved={(path, options) => {
+                onTreeRefresh({ background: true, reconcile: options?.refresh === false ? false : undefined });
                 if (path) onNavigate(path);
               }}
               enableKanbanDrag={kanbanOpen}
