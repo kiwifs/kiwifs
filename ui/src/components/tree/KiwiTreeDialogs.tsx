@@ -15,6 +15,32 @@ type Props = {
   onDuplicate: () => void;
 };
 
+/**
+ * Returns the duplicate dialog submit label without JSX-level ternaries.
+ *
+ * @param dupBusy - Whether the duplicate request is currently running.
+ * @returns Submit button label.
+ */
+const duplicateSubmitLabel = (dupBusy: boolean): string => {
+  if (dupBusy) {
+    return "Duplicating...";
+  }
+  return "Duplicate";
+};
+
+/**
+ * Returns the confirmation button variant from the dialog metadata.
+ *
+ * @param destructive - Whether the action is destructive.
+ * @returns Button variant understood by the shared button component.
+ */
+const confirmButtonVariant = (destructive: boolean | undefined): "default" | "destructive" => {
+  if (destructive) {
+    return "destructive";
+  }
+  return "default";
+};
+
 export function KiwiTreeDialogs({ onDuplicate }: Props) {
   const dupOpen = useKiwiTreeUiStore((state) => state.dupOpen);
   const dupTarget = useKiwiTreeUiStore((state) => state.dupTarget);
@@ -63,7 +89,7 @@ export function KiwiTreeDialogs({ onDuplicate }: Props) {
           <DialogFooter>
             <Button variant="outline" onClick={closeDupDialog}>Cancel</Button>
             <Button onClick={onDuplicate} disabled={dupBusy || !dupTarget.trim()}>
-              {dupBusy ? "Duplicating..." : "Duplicate"}
+              {duplicateSubmitLabel(dupBusy)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -111,7 +137,7 @@ export function KiwiTreeDialogs({ onDuplicate }: Props) {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={closeConfirmDialog}>Cancel</Button>
-            <Button variant={confirmDialog?.destructive ? "destructive" : "default"} onClick={submitConfirm}>
+            <Button variant={confirmButtonVariant(confirmDialog?.destructive)} onClick={submitConfirm}>
               Confirm
             </Button>
           </DialogFooter>

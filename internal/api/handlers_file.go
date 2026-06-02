@@ -141,13 +141,7 @@ func (h *Handlers) ReadFile(c echo.Context) error {
 	etag := fmt.Sprintf(`"%s"`, rawETag)
 	c.Response().Header().Set("ETag", etag)
 	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindRead, Path: path, ETag: rawETag})
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == ".md" || ext == ".markdown" {
-		c.Response().Header().Set("Cache-Control", "no-cache")
-	} else {
-		c.Response().Header().Set("Cache-Control", "public, max-age=3600, must-revalidate")
-		c.Response().Header().Set("Vary", "Authorization, Cookie")
-	}
+	setFileCacheHeaders(c, path)
 
 	var modTime time.Time
 	if info, serr := h.store.Stat(c.Request().Context(), path); serr == nil {
@@ -191,6 +185,18 @@ func (h *Handlers) ReadFile(c echo.Context) error {
 	}
 
 	return c.Blob(http.StatusOK, detectContentType(path, content), content)
+}
+
+// setFileCacheHeaders keeps markdown reads fresh while allowing immutable-ish assets
+// to use browser caching. The guard-clause form avoids coupling the two policies.
+func setFileCacheHeaders(c echo.Context, path string) {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == ".md" || ext == ".markdown" {
+		c.Response().Header().Set("Cache-Control", "no-cache")
+		return
+	}
+	c.Response().Header().Set("Cache-Control", "public, max-age=3600, must-revalidate")
+	c.Response().Header().Set("Vary", "Authorization, Cookie")
 }
 
 func pageViewSource(c echo.Context) string {

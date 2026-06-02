@@ -48,8 +48,20 @@ type KiwiTreeUiState = {
   resetFileDragUi: () => void;
 };
 
+/**
+ * Builds the default duplicate target path for a markdown page.
+ *
+ * @param srcPath - Source markdown path selected in the tree.
+ * @returns Copy path used to prefill the duplicate dialog.
+ */
 const duplicateTargetFor = (srcPath: string): string => srcPath.replace(/\.md$/i, "-copy.md");
 
+/**
+ * Centralizes transient Kiwi tree dialog and drag UI state.
+ *
+ * The store keeps the large tree component declarative: components dispatch
+ * named state transitions instead of passing modal state through nested props.
+ */
 export const useKiwiTreeUiStore = create<KiwiTreeUiState>((set) => ({
   dupOpen: false,
   dupSource: "",
