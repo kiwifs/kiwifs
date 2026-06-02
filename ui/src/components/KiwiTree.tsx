@@ -43,6 +43,7 @@ import {
   Plus,
   Trash2,
   Upload,
+  AlertTriangle,
   ExternalLink,
   Rss,
 } from "lucide-react";
@@ -60,6 +61,7 @@ import { type TreeRevealRequest } from "@kw/lib/treeReveal";
 import { createTreePageDragData } from "@kw/lib/kanbanDnd";
 import { shouldApplyTreeLoad } from "@kw/lib/treeRefresh";
 import { applyOptimisticTreeMove } from "@kw/lib/treeReorder";
+import { persistSiblingOrder } from "@kw/lib/treeOrderPersistence";
 import { useFileOpsStore } from "@kw/stores/fileOpsStore";
 import { useKiwiTreeUiStore, type ConfirmDialog, type PromptDialog } from "@kw/stores/kiwiTreeUiStore";
 import { KiwiTreeDialogs } from "@kw/components/tree/KiwiTreeDialogs";
@@ -204,29 +206,6 @@ function destinationChildrenAfterMove(args: MoveArgs, rootNodes: FlatNode[], rep
   }
 
   return children;
-}
-
-async function patchSiblingOrder(entries: FlatNode[]): Promise<void> {
-  const orderableEntries = entries.filter((entry) => !entry.virtualDir && (entry.isDir || isMarkdown(entry.id)));
-  const directoryOrders: Record<string, number> = {};
-  const markdownUpdates: Promise<unknown>[] = [];
-
-  orderableEntries.forEach((entry, i) => {
-    const order = i + 1;
-    if (entry.order === order) return;
-    const cleanPath = stripTrailingSlash(entry.id);
-    if (entry.isDir) {
-      directoryOrders[cleanPath] = order;
-    } else {
-      markdownUpdates.push(api.patchFrontmatter(cleanPath, { order }));
-    }
-  });
-
-  const updates: Promise<unknown>[] = markdownUpdates;
-  if (Object.keys(directoryOrders).length > 0) {
-    updates.push(api.patchTreeOrder(directoryOrders));
-  }
-  await Promise.all(updates);
 }
 
 export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
@@ -424,7 +403,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
 
       try {
         if (cleanSrc === dest) {
-          await patchSiblingOrder(destinationChildrenAfterMove(args, data));
+          await persistSiblingOrder(destinationChildrenAfterMove(args, data), api);
           onMoved?.("", { refresh: false });
           return;
         }
@@ -432,7 +411,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
         if (sourceNode.isDir) {
           await api.renameDir(cleanSrc, dest);
           const movedNode: FlatNode = { ...sourceNode, id: dest, name: fileName };
-          await patchSiblingOrder(destinationChildrenAfterMove(args, data, new Map([[src, movedNode]])));
+          await persistSiblingOrder(destinationChildrenAfterMove(args, data, new Map([[src, movedNode]])), api);
           onMoved?.(dest);
           return;
         }
@@ -443,7 +422,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
         pushOp({ type: "move", from: cleanSrc, to: dest, content });
 
         const movedNode: FlatNode = { ...sourceNode, id: dest, name: fileName };
-        await patchSiblingOrder(destinationChildrenAfterMove(args, data, new Map([[src, movedNode]])));
+        await persistSiblingOrder(destinationChildrenAfterMove(args, data, new Map([[src, movedNode]])), api);
         onMoved?.(dest);
       } catch (e) {
         setRootPreservingScroll(previousRoot);
@@ -920,6 +899,19 @@ type TreeNodeProps = NodeRendererProps<FlatNode> & {
   onPublishedChanged?: () => void;
 };
 
+function FrontmatterWarning({ path, error }: { path: string; error?: string }) {
+  if (!error) return null;
+  return (
+    <span
+      className="ml-auto inline-flex items-center text-amber-500"
+      title={`Invalid frontmatter: ${error}`}
+      aria-label={`Invalid frontmatter in ${path}`}
+    >
+      <AlertTriangle className="h-3.5 w-3.5" />
+    </span>
+  );
+}
+
 function TreeNode({
   node,
   dragHandle,
@@ -955,6 +947,7 @@ function TreeNode({
     onDrop: (e: React.DragEvent) => onNodeDrop(e, path, node.data.isDir),
   };
   const label = nodeLabel(node.data);
+  const frontmatterError = node.data.frontmatterError;
   const showChevron = node.data.isDir && (node.data.children?.length ?? 0) > 0;
   const isVirtualDir = node.data.isDir && !!node.data.virtualDir;
   const isPublished = (isVirtualDir || (!node.data.isDir && isMarkdown(path))) && (publishedPaths?.has(path) ?? false);
@@ -1071,6 +1064,7 @@ function TreeNode({
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
                 </span>
               )}
+              {!node.isEditing && <FrontmatterWarning path={path} error={frontmatterError} />}
               {onCreateChild && !node.isEditing && !isVirtual && (
                 <button
                   type="button"
@@ -1508,6 +1502,7 @@ function TreeNode({
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
               </span>
             )}
+            {!node.isEditing && <FrontmatterWarning path={path} error={frontmatterError} />}
           </TreeRowShell>
         </div>
       </ContextMenuTrigger>

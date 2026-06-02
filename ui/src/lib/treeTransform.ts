@@ -16,6 +16,7 @@ export type FlatNode = {
   /** Matched by exclude pattern — dimmed in UI */
   excluded?: boolean;
   order?: number;
+  frontmatterError?: string;
   children?: FlatNode[];
 };
 
@@ -72,6 +73,7 @@ function fileToFlat(entry: TreeEntry, opts: TransformOpts, extra?: Partial<FlatN
     isDir: false,
     excluded: isTreePathExcluded(path, opts.excludePatterns),
     order: entry.order,
+    frontmatterError: entry.frontmatterError,
     ...extra,
   };
 }
@@ -121,6 +123,7 @@ function applyFileNesting(entries: TreeEntry[], opts: TransformOpts): FlatNode[]
       virtualDir: true,
       excluded: isTreePathExcluded(md.path, opts.excludePatterns),
       order: md.order,
+      frontmatterError: md.frontmatterError,
       children: nestedFiles.map((f) =>
         fileToFlat(f, opts, { isNested: true }),
       ),

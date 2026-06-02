@@ -11,16 +11,21 @@ import (
 )
 
 type TreeEntry struct {
-	Path     string       `json:"path"`
-	Name     string       `json:"name"`
-	IsDir    bool         `json:"isDir"`
-	Size     int64        `json:"size,omitempty"`
-	Order    *int         `json:"order,omitempty"`
-	Children []*TreeEntry `json:"children,omitempty"`
+	Path             string       `json:"path"`
+	Name             string       `json:"name"`
+	IsDir            bool         `json:"isDir"`
+	Size             int64        `json:"size,omitempty"`
+	Order            *int         `json:"order,omitempty"`
+	FrontmatterError string       `json:"frontmatterError,omitempty"`
+	Children         []*TreeEntry `json:"children,omitempty"`
 }
 
 type frontmatterReader interface {
 	ReadFrontmatter(ctx context.Context, path string) (map[string]any, error)
+}
+
+type frontmatterErrorReader interface {
+	ReadFrontmatterError(ctx context.Context, path string) (string, error)
 }
 
 type treeOrderReader interface {
@@ -54,7 +59,7 @@ func BuildTree(ctx context.Context, store Storage, path string, depth int) (*Tre
 		if e.IsDir {
 			child.Order = readDirectoryOrder(ctx, store, e.Path)
 		} else {
-			child.Order = readOrder(ctx, store, e.Path)
+			child.Order, child.FrontmatterError = readOrderMetadata(ctx, store, e.Path)
 		}
 		if e.IsDir && depth > 0 {
 			sub, err := BuildTree(ctx, store, e.Path, depth-1)
@@ -95,24 +100,42 @@ func readDirectoryOrder(ctx context.Context, store Storage, path string) *int {
 }
 
 func readOrder(ctx context.Context, store Storage, path string) *int {
+	order, _ := readOrderMetadata(ctx, store, path)
+	return order
+}
+
+func readOrderMetadata(ctx context.Context, store Storage, path string) (*int, string) {
 	if !strings.HasSuffix(strings.ToLower(path), ".md") && !strings.HasSuffix(strings.ToLower(path), ".markdown") {
-		return nil
+		return nil, ""
 	}
 	if reader, ok := store.(frontmatterReader); ok {
 		fm, err := reader.ReadFrontmatter(ctx, path)
 		if err == nil {
-			return frontmatterOrder(fm["order"])
+			return frontmatterOrder(fm["order"]), readFrontmatterError(ctx, store, path)
 		}
+		return nil, err.Error()
 	}
 	content, err := store.Read(ctx, path)
 	if err != nil {
-		return nil
+		return nil, ""
 	}
 	fm, err := markdown.Frontmatter(content)
 	if err != nil {
-		return nil
+		return nil, err.Error()
 	}
-	return frontmatterOrder(fm["order"])
+	return frontmatterOrder(fm["order"]), ""
+}
+
+func readFrontmatterError(ctx context.Context, store Storage, path string) string {
+	reader, ok := store.(frontmatterErrorReader)
+	if !ok {
+		return ""
+	}
+	errText, err := reader.ReadFrontmatterError(ctx, path)
+	if err != nil {
+		return ""
+	}
+	return errText
 }
 
 func frontmatterOrder(v any) *int {

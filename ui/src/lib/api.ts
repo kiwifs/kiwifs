@@ -7,6 +7,7 @@ export type TreeEntry = {
   isDir: boolean;
   size?: number;
   order?: number;
+  frontmatterError?: string;
   children?: TreeEntry[];
 };
 

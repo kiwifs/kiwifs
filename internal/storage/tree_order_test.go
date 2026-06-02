@@ -82,3 +82,30 @@ func TestBuildTreeSortsDirectoriesByStoredOrder(t *testing.T) {
 		t.Fatalf("directory order = %s, %s; want zeta, alpha", tree.Children[0].Name, tree.Children[1].Name)
 	}
 }
+
+func TestBuildTreeMarksInvalidFrontmatterWithoutDroppingFile(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewLocal(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := []byte("---\ntitle: Broken\ntitle: Duplicate\n---\n\n# Broken\n")
+	if err := store.Write(context.Background(), "broken.md", content); err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := BuildTree(context.Background(), store, "", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tree.Children) != 1 {
+		t.Fatalf("children = %d, want 1", len(tree.Children))
+	}
+	child := tree.Children[0]
+	if child.Name != "broken.md" {
+		t.Fatalf("child name = %s, want broken.md", child.Name)
+	}
+	if child.FrontmatterError == "" {
+		t.Fatalf("expected frontmatter error on invalid markdown tree entry")
+	}
+}

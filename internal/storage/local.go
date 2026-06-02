@@ -321,6 +321,23 @@ func (l *Local) ReadFrontmatter(_ context.Context, path string) (map[string]any,
 	return map[string]any{}, nil
 }
 
+func (l *Local) ReadFrontmatterError(_ context.Context, path string) (string, error) {
+	abs, err := l.guardPath(path)
+	if err != nil {
+		return "", err
+	}
+	content, err := os.ReadFile(abs)
+	if err != nil {
+		return "", err
+	}
+	for _, issue := range markdown.LintMarkdown(content) {
+		if issue.Rule == "frontmatter-yaml-invalid" {
+			return fmt.Sprintf("%s (line %d): %s", issue.Rule, issue.Line, issue.Message), nil
+		}
+	}
+	return "", nil
+}
+
 func (l *Local) Write(_ context.Context, path string, content []byte) error {
 	abs, err := l.guardPath(path)
 	if err != nil {
