@@ -4,93 +4,136 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 )
 
-// ONNX is an in-process embedder backed by an ONNX model file on disk.
-//
-// Pure-Go ONNX inference is not yet production-ready (the community
-// packages all require CGO bindings to onnxruntime). To keep the KiwiFS
-// binary CGO-free we ship the ONNX provider as a thin dispatcher: the
-// model path is validated at construction time, and runtime inference is
-// delegated to an adapter the operator plugs in before serving.
-//
-// Typical deployment (pure-Go, no CGO):
-//   - Run a tiny sidecar that loads the .onnx file and exposes /embed over
-//     HTTP on localhost. Configure KiwiFS with provider = "http" and url =
-//     "http://127.0.0.1:PORT/embed". That keeps the "everything local,
-//     fully offline" guarantee without dragging native code into kiwifs.
-//
-// Typical deployment (CGO build):
-//   - Build with `-tags onnx` and link against onnxruntime. The build-
-//     tagged variant (not included in the default binary) satisfies
-//     InferenceFn and the provider runs entirely in-process.
-//
-// SetInferenceFn swaps in an implementation; main.go may register one at
-// init time if compiled with the appropriate tag. The default error makes
-// the limitation discoverable instead of silently degrading.
+const (
+	defaultONNXDimensions    = 384
+	defaultONNXMaxTokens     = 512
+	defaultONNXPooling       = "mean"
+	defaultONNXInputIDsName  = "input_ids"
+	defaultONNXAttentionName = "attention_mask"
+	defaultONNXOutputName    = "last_hidden_state"
+)
+
+// ONNXOptions configures the build-tagged in-process ONNX embedder. It is
+// intentionally explicit instead of overloading base_url: ONNX inference needs
+// both a model file and the matching HuggingFace tokenizer.json.
+type ONNXOptions struct {
+	ModelPath     string
+	TokenizerPath string
+	RuntimePath   string
+	Dimensions    int
+	MaxTokens     int
+	Pooling       string // mean | cls
+	Normalize     *bool
+	QueryPrefix   string
+	PassagePrefix string
+	InputIDsName  string
+	AttentionName string
+	TokenTypeName string
+	OutputName    string
+}
+
+func (o ONNXOptions) withDefaults() ONNXOptions {
+	if o.Dimensions <= 0 {
+		o.Dimensions = defaultONNXDimensions
+	}
+	if o.MaxTokens <= 0 {
+		o.MaxTokens = defaultONNXMaxTokens
+	}
+	if o.Pooling == "" {
+		o.Pooling = defaultONNXPooling
+	}
+	if o.InputIDsName == "" {
+		o.InputIDsName = defaultONNXInputIDsName
+	}
+	if o.AttentionName == "" {
+		o.AttentionName = defaultONNXAttentionName
+	}
+	if o.OutputName == "" {
+		o.OutputName = defaultONNXOutputName
+	}
+	if o.Normalize == nil {
+		v := true
+		o.Normalize = &v
+	}
+	return o
+}
+
+// ONNX is an in-process embedder backed by an ONNX model file and tokenizer on
+// disk. The default KiwiFS binary remains CGO-free; build with -tags onnx to
+// include the onnxruntime-backed implementation in onnx_runtime.go.
 type ONNX struct {
-	modelPath string
-	dims      int
-
-	mu sync.Mutex
-	fn InferenceFn
+	options ONNXOptions
+	runner  onnxRunner
 }
 
-// InferenceFn is the pluggable inference callback. Implementations produce
-// one vector per input string, preserving order, each of length Dimensions.
-type InferenceFn func(ctx context.Context, texts []string) ([][]float32, error)
-
-// onnxRegistry holds a global inference function set at init time by
-// build-tagged variants (e.g. onnx_cgo.go) that ship with ONNX runtime
-// linked in. The default build leaves this nil and returns a helpful
-// error from Embed().
-var (
-	onnxRegMu sync.Mutex
-	onnxReg   InferenceFn
-)
-
-// NewONNX constructs an ONNX embedder. modelPath must exist on disk; dims
-// is required because callers (vector store config) need it before the
-// first Embed() call.
-func NewONNX(modelPath string, dims int) (*ONNX, error) {
-	if modelPath == "" {
-		return nil, fmt.Errorf("onnx: model path is required (set search.vector.embedder.base_url to the .onnx file)")
-	}
-	if _, err := os.Stat(modelPath); err != nil {
-		return nil, fmt.Errorf("onnx: model not found at %s: %w", modelPath, err)
-	}
-	if dims <= 0 {
-		// A sensible default for the spec's all-MiniLM-L6-v2 recommendation.
-		dims = 384
-	}
-	o := &ONNX{modelPath: modelPath, dims: dims}
-	onnxRegMu.Lock()
-	o.fn = onnxReg
-	onnxRegMu.Unlock()
-	return o, nil
+type onnxRunner interface {
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
+	Close() error
 }
 
-// SetInferenceFn overrides the global inference function for this
-// embedder instance — useful in tests.
-func (o *ONNX) SetInferenceFn(fn InferenceFn) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.fn = fn
+// NewONNX constructs an ONNX embedder. In non-onnx builds this returns a clear
+// configuration error; in -tags onnx builds it loads the tokenizer and creates
+// an onnxruntime session.
+func NewONNX(options ONNXOptions) (*ONNX, error) {
+	options = options.withDefaults()
+	if options.ModelPath == "" {
+		return nil, fmt.Errorf("onnx: model_path is required")
+	}
+	if options.TokenizerPath == "" {
+		return nil, fmt.Errorf("onnx: tokenizer_path is required")
+	}
+	if _, err := os.Stat(options.ModelPath); err != nil {
+		return nil, fmt.Errorf("onnx: model not found at %s: %w", options.ModelPath, err)
+	}
+	if _, err := os.Stat(options.TokenizerPath); err != nil {
+		return nil, fmt.Errorf("onnx: tokenizer not found at %s: %w", options.TokenizerPath, err)
+	}
+	runner, err := newONNXRunner(options)
+	if err != nil {
+		return nil, err
+	}
+	return &ONNX{options: options, runner: runner}, nil
 }
 
+// Embed preserves the legacy Embedder interface. For E5-style models, callers
+// that know whether text is a document or a query should prefer EmbedDocuments
+// or EmbedQuery so prefixes are applied correctly.
 func (o *ONNX) Embed(ctx context.Context, texts []string) ([][]float32, error) {
-	o.mu.Lock()
-	fn := o.fn
-	o.mu.Unlock()
-	if fn == nil {
-		return nil, fmt.Errorf("onnx: no inference backend registered in this build — either use provider=\"ollama\" for offline embeddings, or run a local onnxruntime-server sidecar and set provider=\"http\"")
-	}
-	return fn(ctx, texts)
+	return o.runner.Embed(ctx, texts)
 }
 
-func (o *ONNX) Dimensions() int { return o.dims }
+// EmbedDocuments embeds indexed chunks with PassagePrefix, e.g. "passage: "
+// for multilingual-e5 models.
+func (o *ONNX) EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error) {
+	return o.runner.Embed(ctx, withPrefix(o.options.PassagePrefix, texts))
+}
 
-// ModelPath exposes the configured .onnx file so build-tagged inference
-// registrations can pick it up.
-func (o *ONNX) ModelPath() string { return o.modelPath }
+// EmbedQuery embeds a search query with QueryPrefix, e.g. "query: " for
+// multilingual-e5 models.
+func (o *ONNX) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
+	vecs, err := o.runner.Embed(ctx, withPrefix(o.options.QueryPrefix, []string{text}))
+	if err != nil {
+		return nil, err
+	}
+	if len(vecs) != 1 {
+		return nil, fmt.Errorf("onnx: embedder returned %d vectors for 1 input", len(vecs))
+	}
+	return vecs[0], nil
+}
+
+func (o *ONNX) Dimensions() int { return o.options.Dimensions }
+
+func (o *ONNX) Close() error { return o.runner.Close() }
+
+func withPrefix(prefix string, texts []string) []string {
+	if prefix == "" || len(texts) == 0 {
+		return texts
+	}
+	out := make([]string, len(texts))
+	for i, text := range texts {
+		out[i] = prefix + text
+	}
+	return out
+}

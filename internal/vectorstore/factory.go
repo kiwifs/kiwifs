@@ -60,10 +60,21 @@ func buildEmbedder(ctx context.Context, cfg config.EmbedderConfig) (embed.Embedd
 	case "vertex", "vertex-ai":
 		return embed.NewVertex(ctx, cfg.Project, cfg.Location, cfg.Model, cfg.CredentialsFile, cfg.Dimensions)
 	case "onnx":
-		// The model is passed via base_url so we don't need to grow the
-		// config surface just for ONNX. (Ollama and OpenAI already reuse
-		// base_url as "where the inference thing lives".)
-		return embed.NewONNX(cfg.BaseURL, cfg.Dimensions)
+		return embed.NewONNX(embed.ONNXOptions{
+			ModelPath:     cfg.ModelPath,
+			TokenizerPath: cfg.TokenizerPath,
+			RuntimePath:   cfg.RuntimePath,
+			Dimensions:    cfg.Dimensions,
+			MaxTokens:     cfg.MaxTokens,
+			Pooling:       cfg.Pooling,
+			Normalize:     cfg.Normalize,
+			QueryPrefix:   cfg.QueryPrefix,
+			PassagePrefix: cfg.PassagePrefix,
+			InputIDsName:  cfg.InputIDsName,
+			AttentionName: cfg.AttentionName,
+			TokenTypeName: cfg.TokenTypeName,
+			OutputName:    cfg.OutputName,
+		})
 	default:
 		return nil, fmt.Errorf("unknown embedder provider %q (want openai | ollama | http | cohere | voyage | bedrock | vertex | onnx)", cfg.Provider)
 	}

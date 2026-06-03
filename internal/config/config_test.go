@@ -224,3 +224,43 @@ overlap = 80
 		t.Fatalf("chunk = %d/%d, want 800/80", cfg.Search.Vector.Chunk.Size, cfg.Search.Vector.Chunk.Overlap)
 	}
 }
+
+func TestONNXEmbedderTOML(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[search.vector.embedder]
+provider = "onnx"
+model_path = "/models/multilingual-e5-small/onnx/model.onnx"
+tokenizer_path = "/models/multilingual-e5-small/onnx/tokenizer.json"
+runtime_path = "/opt/onnxruntime/lib/libonnxruntime.so.1.25.0"
+dimensions = 384
+max_tokens = 512
+pooling = "mean"
+normalize = true
+query_prefix = "query: "
+passage_prefix = "passage: "
+input_ids_name = "input_ids"
+attention_name = "attention_mask"
+output_name = "last_hidden_state"
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	emb := cfg.Search.Vector.Embedder
+	if emb.Provider != "onnx" || emb.ModelPath == "" || emb.TokenizerPath == "" {
+		t.Fatalf("onnx paths not loaded: %+v", emb)
+	}
+	if emb.RuntimePath == "" || emb.Dimensions != 384 || emb.MaxTokens != 512 {
+		t.Fatalf("onnx runtime/dimension fields not loaded: %+v", emb)
+	}
+	if emb.Normalize == nil || !*emb.Normalize {
+		t.Fatalf("normalize = %v, want true", emb.Normalize)
+	}
+	if emb.QueryPrefix != "query: " || emb.PassagePrefix != "passage: " {
+		t.Fatalf("prefixes = %q/%q", emb.QueryPrefix, emb.PassagePrefix)
+	}
+}

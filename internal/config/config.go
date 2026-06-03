@@ -254,7 +254,7 @@ type VectorConfig struct {
 }
 
 type EmbedderConfig struct {
-	Provider   string            `toml:"provider"` // openai | ollama | http | cohere | voyage | bedrock | vertex
+	Provider   string            `toml:"provider"` // openai | ollama | http | cohere | voyage | bedrock | vertex | onnx
 	Model      string            `toml:"model"`
 	APIKey     string            `toml:"api_key"` // ${ENV} expansion supported
 	BaseURL    string            `toml:"base_url"`
@@ -262,6 +262,20 @@ type EmbedderConfig struct {
 	Dimensions int               `toml:"dimensions"`
 	Headers    map[string]string `toml:"headers"` // provider=http
 	Timeout    string            `toml:"timeout"` // duration string, e.g. "120s"
+
+	// provider=onnx
+	ModelPath     string `toml:"model_path"`
+	TokenizerPath string `toml:"tokenizer_path"`
+	RuntimePath   string `toml:"runtime_path"` // optional path to libonnxruntime shared library
+	MaxTokens     int    `toml:"max_tokens"`
+	Pooling       string `toml:"pooling"`   // mean | cls
+	Normalize     *bool  `toml:"normalize"` // default true
+	QueryPrefix   string `toml:"query_prefix"`
+	PassagePrefix string `toml:"passage_prefix"`
+	InputIDsName  string `toml:"input_ids_name"`
+	AttentionName string `toml:"attention_name"`
+	TokenTypeName string `toml:"token_type_name"`
+	OutputName    string `toml:"output_name"`
 
 	// provider=bedrock
 	Region string `toml:"region"`

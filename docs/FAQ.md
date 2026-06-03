@@ -159,7 +159,12 @@ Three tiers, configurable at startup:
 
 ### Can I run vector search without an API key?
 
-Yes. Use Ollama (`provider = "ollama"`) with sqlite-vec as the vector store. Ollama runs locally on your machine, and sqlite-vec is embedded in the binary. No external API calls, fully offline. On small CPU-only machines, set `[search.vector].worker_count` lower and `[search.vector.embedder].timeout` higher to avoid local embedding requests timing out.
+Yes. Two local options are supported:
+
+- `provider = "ollama"` with sqlite-vec. Ollama runs locally, but still requires the Ollama service to be running.
+- `provider = "onnx"` with a KiwiFS binary built using `-tags onnx`. This loads an ONNX model and matching HuggingFace `tokenizer.json` in-process, so no API key or embedding service is required. For Korean/Japanese/Chinese search, prefer a multilingual model such as `intfloat/multilingual-e5-small` and configure `query_prefix = "query: "` plus `passage_prefix = "passage: "`.
+
+On small CPU-only machines, set `[search.vector].worker_count` lower and `[search.vector.embedder].timeout` higher for service-backed embedders.
 
 ### How do I rebuild the search index?
 

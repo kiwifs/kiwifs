@@ -66,7 +66,7 @@ echo "# Report" > /kiwi/r.md      Cmd+K search, backlinks, TOC
 |---|---|
 | **62 MCP tools** | Native integration with Claude, Cursor, and any MCP client. [Docs](https://docs.kiwifs.com/concepts/mcp) |
 | **Web UI** | Block editor with wiki links, backlinks, knowledge graph, and dark mode. Embedded in the binary via `go:embed` — no separate frontend to deploy. [Browse components](https://demo.kiwifs.com/storybook/) |
-| **Full-text + vector search** | BM25 via SQLite FTS5. Pluggable vector: OpenAI, Ollama, Cohere + sqlite-vec, Qdrant, pgvector, Pinecone. [Docs](https://docs.kiwifs.com/concepts/search) |
+| **Full-text + vector search** | BM25 via SQLite FTS5. Pluggable vector: OpenAI, Ollama, ONNX, Cohere + sqlite-vec, Qdrant, pgvector, Pinecone. [Docs](https://docs.kiwifs.com/concepts/search) |
 | **Git versioning** | Every write is an atomic commit. Blame, diff, point-in-time restore. [Docs](https://docs.kiwifs.com/concepts/versioning) |
 | **DQL queries** | SQL-like queries over frontmatter. `TABLE`, `LIST`, `COUNT`, `WHERE`, `SORT`, `GROUP BY`. [Docs](https://docs.kiwifs.com/concepts/dql) |
 | **6 access protocols** | REST, MCP, NFS, S3, WebDAV, FUSE. All flow through one storage layer. [Docs](https://docs.kiwifs.com/concepts/agent-interface) |

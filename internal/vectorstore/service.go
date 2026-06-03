@@ -231,7 +231,7 @@ func (s *Service) Index(ctx context.Context, path string, content []byte) error 
 	if len(parts) == 0 {
 		return s.store.RemoveByPath(ctx, path)
 	}
-	vectors, err := s.embedder.Embed(ctx, parts)
+	vectors, err := embedDocuments(ctx, s.embedder, parts)
 	if err != nil {
 		return fmt.Errorf("embed: %w", err)
 	}
@@ -264,14 +264,43 @@ func (s *Service) Search(ctx context.Context, query string, topK int) ([]Result,
 	if topK <= 0 {
 		topK = DefaultTopK
 	}
-	vecs, err := s.embedder.Embed(ctx, []string{query})
+	vec, err := embedQuery(ctx, s.embedder, query)
 	if err != nil {
 		return nil, fmt.Errorf("embed query: %w", err)
+	}
+	return s.store.Search(ctx, vec, topK)
+}
+
+// documentEmbedder lets providers such as E5-style ONNX models distinguish
+// indexed passages from search queries while keeping the public Embedder
+// interface backward compatible for existing providers.
+type documentEmbedder interface {
+	EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error)
+}
+
+type queryEmbedder interface {
+	EmbedQuery(ctx context.Context, text string) ([]float32, error)
+}
+
+func embedDocuments(ctx context.Context, e embed.Embedder, texts []string) ([][]float32, error) {
+	if de, ok := e.(documentEmbedder); ok {
+		return de.EmbedDocuments(ctx, texts)
+	}
+	return e.Embed(ctx, texts)
+}
+
+func embedQuery(ctx context.Context, e embed.Embedder, text string) ([]float32, error) {
+	if qe, ok := e.(queryEmbedder); ok {
+		return qe.EmbedQuery(ctx, text)
+	}
+	vecs, err := e.Embed(ctx, []string{text})
+	if err != nil {
+		return nil, err
 	}
 	if len(vecs) != 1 {
 		return nil, fmt.Errorf("embedder returned %d vectors for 1 input", len(vecs))
 	}
-	return s.store.Search(ctx, vecs[0], topK)
+	return vecs[0], nil
 }
 
 // Reindex walks the knowledge root and re-embeds every indexable file.
@@ -321,4 +350,3 @@ func isMarkdown(path string) bool {
 	lower := strings.ToLower(path)
 	return strings.HasSuffix(lower, ".md") || strings.HasSuffix(lower, ".mdx")
 }
-

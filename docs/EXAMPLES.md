@@ -310,6 +310,19 @@ timeout = "120s"
 [search.vector.store]
 provider = "sqlite-vec"          # sqlite-vec | qdrant | pgvector | pinecone | weaviate | milvus
 
+# Fully local ONNX alternative (requires a binary built with `go build -tags onnx`):
+# [search.vector.embedder]
+# provider = "onnx"
+# model_path = "~/.kiwi/models/multilingual-e5-small/onnx/model.onnx"
+# tokenizer_path = "~/.kiwi/models/multilingual-e5-small/onnx/tokenizer.json"
+# runtime_path = "/opt/onnxruntime/lib/libonnxruntime.so.1.25.0"  # optional if lib is discoverable
+# dimensions = 384
+# max_tokens = 512
+# pooling = "mean"
+# normalize = true
+# query_prefix = "query: "
+# passage_prefix = "passage: "
+
 [versioning]
 strategy = "git"                 # git | cow | none
 
@@ -318,6 +331,28 @@ type = "none"                    # none | apikey | perspace | oidc
 ```
 
 CLI flags override config: `kiwifs serve --port 4000 --search sqlite --versioning git`.
+
+---
+
+### ONNX local embedder
+
+Build KiwiFS with ONNX support when you want vector search without API keys or a running embedding service:
+
+```bash
+go build -tags onnx -o kiwifs .
+```
+
+Download an ONNX Runtime shared library that matches `github.com/yalue/onnxruntime_go` and point `runtime_path` at it if it is not on the system library path. For CJK-friendly search, use a multilingual model such as `intfloat/multilingual-e5-small` rather than an English-only MiniLM model:
+
+```bash
+mkdir -p ~/.kiwi/models/multilingual-e5-small
+# Download these files from HuggingFace:
+#   intfloat/multilingual-e5-small/onnx/model.onnx
+#   intfloat/multilingual-e5-small/tokenizer.json
+# Some exports place tokenizer.json under onnx/; keep tokenizer_path aligned with the file you download.
+```
+
+E5 models expect different prefixes for indexed passages and search queries. Configure both prefixes so reindexing stores `passage: ...` vectors and search embeds `query: ...`.
 
 ---
 
