@@ -11,7 +11,15 @@ import {
 const meta: Meta<typeof KiwiEditor> = {
   title: "Editing/KiwiEditor",
   component: KiwiEditor,
-  parameters: { layout: "fullscreen" },
+  parameters: {
+    layout: "fullscreen",
+    docs: {
+      description: {
+        component:
+          "Accessibility: verify keyboard-only navigation, visible focus indicators, named visual/source editor regions, save-status live announcements, and axe results for the editor modes.",
+      },
+    },
+  },
   args: {
     path: "pages/frontmatter.md",
     tree: mockTree,
@@ -25,42 +33,66 @@ export default meta;
 type Story = StoryObj<typeof KiwiEditor>;
 
 export const MarkdownEditor: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Use this story for visual editor accessibility checks: Tab reaches breadcrumbs, title, mode switch, actions, frontmatter toggle, and the named Markdown visual editor region. Save-status text is exposed as a polite live region.",
+      },
+    },
+  },
   decorators: [
     (Story) => (
       <MockApiProvider overrides={{ fileContent: mockMarkdownRich }}>
-        <div className="h-screen bg-background text-foreground">
+        <main className="h-screen bg-background text-foreground">
           <Story />
-        </div>
+        </main>
       </MockApiProvider>
     ),
   ],
 };
 
 export const ExcalidrawEditor: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Use this story for Excalidraw editor accessibility checks, including named KiwiFS action buttons and patched labels for third-party Excalidraw menu controls.",
+      },
+    },
+  },
   args: {
     path: "diagrams/architecture.excalidraw.md",
   },
   decorators: [
     (Story) => (
       <MockApiProvider overrides={{ fileContent: mockMarkdownExcalidraw }}>
-        <div className="h-screen bg-background text-foreground">
+        <main className="h-screen bg-background text-foreground">
           <Story />
-        </div>
+        </main>
       </MockApiProvider>
     ),
   ],
 };
 
 export const NewPage: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Use this story to verify empty-page editor focus order, visible focus indicators, and save-status announcements before content exists.",
+      },
+    },
+  },
   args: {
     path: "new-page.md",
   },
   decorators: [
     (Story) => (
       <MockApiProvider overrides={{ fileContent: "" }}>
-        <div className="h-screen bg-background text-foreground">
+        <main className="h-screen bg-background text-foreground">
           <Story />
-        </div>
+        </main>
       </MockApiProvider>
     ),
   ],
@@ -69,6 +101,14 @@ export const NewPage: Story = {
 /** Open editor with Source mode preference (set localStorage before mount). */
 export const SourceModePreferred: Story = {
   ...MarkdownEditor,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Use this story for source editor accessibility checks: the CodeMirror content region has a Markdown source editor name and supports keyboard save shortcuts.",
+      },
+    },
+  },
   decorators: [
     (Story) => {
       try {
@@ -78,9 +118,9 @@ export const SourceModePreferred: Story = {
       }
       return (
         <MockApiProvider overrides={{ fileContent: mockMarkdownRich }}>
-          <div className="h-screen bg-background text-foreground">
+          <main className="h-screen bg-background text-foreground">
             <Story />
-          </div>
+          </main>
         </MockApiProvider>
       );
     },

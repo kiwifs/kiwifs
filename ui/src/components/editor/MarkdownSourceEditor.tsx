@@ -4,7 +4,7 @@ import { autocompletion, type CompletionSource } from "@codemirror/autocomplete"
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { type Extension } from "@codemirror/state";
-import { keymap } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { cn } from "@kw/lib/cn";
 import { markdownEditorExtensions } from "./markdownLanguage";
 import { markdownEditorTheme } from "./markdownEditorTheme";
@@ -60,6 +60,10 @@ export function MarkdownSourceEditor({
         override: completionSources,
         activateOnTyping: true,
         closeOnBlur: true,
+      }),
+      EditorView.contentAttributes.of({
+        "aria-label": "Markdown source editor",
+        "aria-multiline": "true",
       }),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
       saveKeymap,

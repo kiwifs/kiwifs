@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LZString from "lz-string";
 import "@excalidraw/excalidraw/index.css";
 
@@ -107,6 +107,7 @@ function appStateForExcalidraw(appState: Record<string, any> = {}): Record<strin
 export function ExcalidrawMarkdownEditor({ markdown, onChange }: EditorProps) {
   const initialScene = useMemo(() => parseExcalidrawMarkdown(markdown), [markdown]);
   const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const handleChange = useCallback((elements: readonly any[], appState: Record<string, any>, files: Record<string, any>) => {
     if (!initialScene) return;
@@ -127,6 +128,26 @@ export function ExcalidrawMarkdownEditor({ markdown, onChange }: EditorProps) {
     }
   }, [initialScene, markdown, onChange]);
 
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+
+    const labelExcalidrawControls = () => {
+      root
+        .querySelectorAll<HTMLButtonElement>(".main-menu-trigger")
+        .forEach((button) => {
+          if (!button.getAttribute("aria-label")) {
+            button.setAttribute("aria-label", "Open Excalidraw main menu");
+          }
+        });
+    };
+
+    labelExcalidrawControls();
+    const observer = new MutationObserver(labelExcalidrawControls);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   if (!initialScene) {
     return (
       <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
@@ -136,7 +157,7 @@ export function ExcalidrawMarkdownEditor({ markdown, onChange }: EditorProps) {
   }
 
   return (
-    <div className="kiwi-excalidraw-editor h-[70vh] min-h-[520px] overflow-hidden rounded-lg border border-border bg-background">
+    <div ref={containerRef} className="kiwi-excalidraw-editor h-[70vh] min-h-[520px] overflow-hidden rounded-lg border border-border bg-background">
       {error && (
         <div className="border-b border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {error}

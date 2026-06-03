@@ -453,6 +453,13 @@
 .kiwi-blocknote {
   filter: var(--kiwi-blocknote-filter);
 }
+.kiwi-blocknote .tiptap:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.kiwi-blocknote .bn-block-content[data-content-type="quote"] blockquote {
+  color: var(--foreground);
+}
 
 /* Wiki link pills in editor */
 .kiwi-editor-wikilink {

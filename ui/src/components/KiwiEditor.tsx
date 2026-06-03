@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { BlockNoteEditor, filterSuggestionItems } from "@blocknote/core";
 import {
@@ -340,6 +340,7 @@ function ExcalidrawEditorInner({
                   disabled={saving || saveStatus === "clean"}
                   size="sm"
                   variant={saveStatus === "dirty" ? "default" : "outline"}
+                  aria-label="Save and close editor"
                 >
                   <Save className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{saving ? "Saving…" : "Save & Close"}</span>
@@ -400,6 +401,8 @@ function EditorInner({
   const [modeSwitchOpen, setModeSwitchOpen] = useState(false);
   const [pendingSwitchTarget, setPendingSwitchTarget] = useState<EditorMode | null>(null);
   const [visualParseError, setVisualParseError] = useState<string | null>(null);
+  const titleHeadingId = useId();
+  const frontmatterId = useId();
 
   const frontmatterSplit = useMemo(() => splitFrontmatter(initialMd), [initialMd]);
   const [fmText, setFmText] = useState<string>(() => frontmatterToText(frontmatterSplit.frontmatter));
@@ -455,6 +458,8 @@ function EditorInner({
     if (!editor) return;
     const pm = (editor as any)._tiptapEditor?.view;
     if (!pm) return;
+    pm.dom.setAttribute("aria-label", "Markdown visual editor");
+    pm.dom.setAttribute("aria-multiline", "true");
     const state = pm.state;
     if (state.plugins.some((p: any) => p.key === (wikiLinkPluginKey as any).key)) return;
     const newState = state.reconfigure({
@@ -703,11 +708,13 @@ function EditorInner({
           <div className="mb-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
               <div className="min-w-0 flex-1">
+                <h1 id={titleHeadingId} className="sr-only">
+                  {displayTitle}
+                </h1>
                 <Input
                   value={titleInputValue}
                   onChange={(e) => handleTitleChange(e.target.value)}
                   aria-label="Page title"
-                  title="Updates the frontmatter title field"
                   className="w-full min-w-0 h-auto border-transparent bg-transparent px-0 py-0 text-xl sm:text-2xl font-bold tracking-tight text-foreground leading-tight shadow-none focus-visible:border-input focus-visible:px-2 focus-visible:py-1"
                 />
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -730,6 +737,7 @@ function EditorInner({
                   disabled={!canSave}
                   size="sm"
                   variant={saveStatus === "dirty" ? "default" : "outline"}
+                  aria-label="Save and close editor"
                 >
                   <Save className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{saving ? "Saving…" : "Save & Close"}</span>
@@ -756,16 +764,20 @@ function EditorInner({
               <button
                 type="button"
                 onClick={() => setFmOpen((v) => !v)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                aria-expanded={fmOpen}
+                aria-controls={frontmatterId}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 {fmOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 Frontmatter
-                {fmText.trim() && <span className="ml-1 text-[10px] opacity-60">(has data)</span>}
+                {fmText.trim() && <span className="ml-1 text-xs text-muted-foreground">(has data)</span>}
               </button>
               {fmOpen && (
                 <Textarea
+                  id={frontmatterId}
                   value={fmText}
                   onChange={(e) => handleFrontmatterTextChange(e.target.value)}
+                  aria-label="Frontmatter YAML"
                   placeholder={"title: My Page\ntags:\n  - draft"}
                   className="mt-2 font-mono text-xs min-h-[80px] resize-y"
                   rows={Math.max(3, fmText.split("\n").length)}
@@ -909,8 +921,9 @@ function EditorModeToggle({
         type="button"
         disabled={disabled}
         aria-pressed={mode === "visual"}
+        aria-label="Switch to visual editor mode"
         className={cn(
-          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           mode === "visual"
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground",
@@ -924,8 +937,9 @@ function EditorModeToggle({
         type="button"
         disabled={disabled}
         aria-pressed={mode === "source"}
+        aria-label="Switch to source editor mode"
         className={cn(
-          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors",
+          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           mode === "source"
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground",
@@ -986,37 +1000,40 @@ function EditorModeSwitchDialog({
 }
 
 function SaveIndicator({ status }: { status: SaveStatus }) {
+  const className = "flex items-center gap-1 text-xs";
+  const liveProps = { role: "status", "aria-live": "polite", "aria-atomic": true } as const;
+
   switch (status) {
     case "dirty":
       return (
-        <span className="flex items-center gap-1 text-xs text-amber-500">
+        <span {...liveProps} className={cn(className, "text-amber-700 dark:text-amber-400")}>
           <Circle className="h-2.5 w-2.5 fill-current" />
           Unsaved
         </span>
       );
     case "saving":
       return (
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <span {...liveProps} className={cn(className, "text-muted-foreground")}>
           <Loader2 className="h-3 w-3 animate-spin" />
           Saving…
         </span>
       );
     case "saved":
       return (
-        <span className="flex items-center gap-1 text-xs text-green-500">
+        <span {...liveProps} className={cn(className, "text-green-700 dark:text-green-400")}>
           <Check className="h-3 w-3" />
           Saved
         </span>
       );
     case "error":
       return (
-        <span className="flex items-center gap-1 text-xs text-destructive">
+        <span {...liveProps} className={cn(className, "text-destructive")}>
           <XCircle className="h-3 w-3" />
           Error
         </span>
       );
     default:
-      return null;
+      return <span {...liveProps} className="sr-only">No unsaved changes</span>;
   }
 }
 
