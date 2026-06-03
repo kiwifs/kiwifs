@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.13](https://github.com/kiwifs/kiwifs/compare/v0.19.12...v0.19.13) (2026-06-03)
+
+
+### Bug Fixes
+
+* **ui:** defer visual editor aria-label until view DOM is ready ([#218](https://github.com/kiwifs/kiwifs/issues/218)) ([0682cb7](https://github.com/kiwifs/kiwifs/commit/0682cb78e598b0bc20b496eef36b585cf78fe6c4))
+
 ## [0.19.12](https://github.com/kiwifs/kiwifs/compare/v0.19.11...v0.19.12) (2026-06-03)
 
 
