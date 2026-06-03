@@ -34,7 +34,8 @@ var rulesExportCmd = &cobra.Command{
 	Short: "Export rules in a harness-specific format",
 	Example: `  kiwifs rules export --format cursor
   kiwifs rules export --format claude
-  kiwifs rules export --format agents`,
+  kiwifs rules export --format skill
+  kiwifs rules sync --format skill`,
 	RunE: rulesExport,
 }
 
@@ -56,10 +57,9 @@ func init() {
 		c.Flags().String("api-key", "", "API key for remote server")
 	}
 
-	rulesExportCmd.Flags().String("format", "cursor", "Export format: cursor, claude, agents, openclaw")
-	rulesSyncCmd.Flags().String("format", "cursor", "Export format: cursor, claude, agents, openclaw")
-	rulesSyncCmd.Flags().StringP("output", "o", "", "Output file path (required)")
-	_ = rulesSyncCmd.MarkFlagRequired("output")
+	rulesExportCmd.Flags().String("format", "cursor", "Export format: cursor, claude, agents, openclaw, skill")
+	rulesSyncCmd.Flags().String("format", "cursor", "Export format: cursor, claude, agents, openclaw, skill")
+	rulesSyncCmd.Flags().StringP("output", "o", "", "Output file path (defaults to .cursor/skills/team-wiki/SKILL.md for --format skill)")
 }
 
 func rulesShow(cmd *cobra.Command, args []string) error {
@@ -134,7 +134,15 @@ func rulesExport(cmd *cobra.Command, args []string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	fmt.Print(localFormatRules(string(raw), format))
+	content := localFormatRules(string(raw), format)
+	if format == "skill" {
+		const skillPath = ".cursor/skills/team-wiki/SKILL.md"
+		if err := writeRulesOutput(skillPath, content); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Wrote %s (%d bytes)\n", skillPath, len(content))
+	}
+	fmt.Print(content)
 	return nil
 }
 
@@ -143,6 +151,12 @@ func rulesSync(cmd *cobra.Command, args []string) error {
 	apiKey, _ := cmd.Flags().GetString("api-key")
 	format, _ := cmd.Flags().GetString("format")
 	output, _ := cmd.Flags().GetString("output")
+	if output == "" && format == "skill" {
+		output = ".cursor/skills/team-wiki/SKILL.md"
+	}
+	if output == "" {
+		return fmt.Errorf("--output is required (except for --format skill, which defaults to .cursor/skills/team-wiki/SKILL.md)")
+	}
 
 	var content string
 	if remote != "" {
@@ -159,17 +173,21 @@ func rulesSync(cmd *cobra.Command, args []string) error {
 		content = localFormatRules(string(raw), format)
 	}
 
-	dir := dirOf(output)
+	if err := writeRulesOutput(output, content); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "Wrote %s (%d bytes)\n", output, len(content))
+	return nil
+}
+
+func writeRulesOutput(path, content string) error {
+	dir := dirOf(path)
 	if dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
 	}
-	if err := os.WriteFile(output, []byte(content), 0o644); err != nil {
-		return err
-	}
-	fmt.Fprintf(os.Stderr, "Wrote %s (%d bytes)\n", output, len(content))
-	return nil
+	return os.WriteFile(path, []byte(content), 0o644)
 }
 
 func dirOf(path string) string {
@@ -223,9 +241,37 @@ func localFormatRules(raw, format string) string {
 		return localFormatAgents(userRules)
 	case "openclaw":
 		return localFormatOpenClaw(userRules)
+	case "skill":
+		return localFormatSkill(userRules)
 	default:
 		return raw
 	}
+}
+
+func localFormatSkill(userRules string) string {
+	var sb strings.Builder
+	sb.WriteString("# Team Wiki Skill\n\n")
+	sb.WriteString("Use when the user asks about team processes, architecture, onboarding, or anything documented in the team wiki.\n\n")
+	sb.WriteString("## How to use\n\n")
+	sb.WriteString("1. Search the wiki: use `kiwi_search` with relevant keywords\n")
+	sb.WriteString("2. Read results: use `kiwi_read` to get full page content\n")
+	sb.WriteString("3. Synthesize an answer from the wiki content — prefer wiki facts over guessing\n\n")
+	sb.WriteString("## Wiki structure\n\n")
+	sb.WriteString("- Use `kiwi_tree` to browse folders and discover where topics live\n")
+	sb.WriteString("- Call `kiwi_context` for schema, playbook, index, and `.kiwi/rules.md`\n")
+	sb.WriteString("- Pages are markdown files in the KiwiFS workspace; links use wiki-style paths\n\n")
+	sb.WriteString("## Example queries\n\n")
+	sb.WriteString("- \"How does our deployment process work?\" → `kiwi_search(\"deployment\")`\n")
+	sb.WriteString("- \"What are our coding standards?\" → `kiwi_search(\"coding standards\")`\n")
+	sb.WriteString("- \"Where is onboarding documented?\" → `kiwi_search(\"onboarding\")` then `kiwi_read` the best match\n\n")
+	if userRules != "" {
+		sb.WriteString("## User rules\n\n")
+		sb.WriteString(userRules)
+		if !strings.HasSuffix(userRules, "\n") {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
 }
 
 func localFormatCursor(userRules string) string {

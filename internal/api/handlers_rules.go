@@ -20,7 +20,7 @@ import (
 //	@Tags			rules
 //	@Security		BearerAuth
 //	@Produce		plain
-//	@Param			format	query		string	false	"Format option (cursor, claude, agents, openclaw)"
+//	@Param			format	query		string	false	"Format option (cursor, claude, agents, openclaw, skill)"
 //	@Success		200		{string}	string
 //	@Failure		500		{object}	map[string]string
 //	@Router			/api/kiwi/rules [get]
@@ -108,9 +108,37 @@ func formatRules(raw, format string) string {
 		return formatAgents(userRules)
 	case "openclaw":
 		return formatOpenClaw(userRules)
+	case "skill":
+		return formatSkill(userRules)
 	default:
 		return raw
 	}
+}
+
+func formatSkill(userRules string) string {
+	var sb strings.Builder
+	sb.WriteString("# Team Wiki Skill\n\n")
+	sb.WriteString("Use when the user asks about team processes, architecture, onboarding, or anything documented in the team wiki.\n\n")
+	sb.WriteString("## How to use\n\n")
+	sb.WriteString("1. Search the wiki: use `kiwi_search` with relevant keywords\n")
+	sb.WriteString("2. Read results: use `kiwi_read` to get full page content\n")
+	sb.WriteString("3. Synthesize an answer from the wiki content — prefer wiki facts over guessing\n\n")
+	sb.WriteString("## Wiki structure\n\n")
+	sb.WriteString("- Use `kiwi_tree` to browse folders and discover where topics live\n")
+	sb.WriteString("- Call `kiwi_context` for schema, playbook, index, and `.kiwi/rules.md`\n")
+	sb.WriteString("- Pages are markdown files in the KiwiFS workspace; links use wiki-style paths\n\n")
+	sb.WriteString("## Example queries\n\n")
+	sb.WriteString("- \"How does our deployment process work?\" → `kiwi_search(\"deployment\")`\n")
+	sb.WriteString("- \"What are our coding standards?\" → `kiwi_search(\"coding standards\")`\n")
+	sb.WriteString("- \"Where is onboarding documented?\" → `kiwi_search(\"onboarding\")` then `kiwi_read` the best match\n\n")
+	if userRules != "" {
+		sb.WriteString("## User rules\n\n")
+		sb.WriteString(userRules)
+		if !strings.HasSuffix(userRules, "\n") {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
 }
 
 func formatCursor(userRules string) string {

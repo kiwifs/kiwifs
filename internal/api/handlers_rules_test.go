@@ -98,3 +98,29 @@ func TestRules_FormatClaude(t *testing.T) {
 		t.Error("claude format should mention tools")
 	}
 }
+
+func TestRules_FormatSkill(t *testing.T) {
+	s, dir := buildSQLiteTestServer(t)
+
+	kiwiDir := filepath.Join(dir, ".kiwi")
+	os.MkdirAll(kiwiDir, 0755)
+	os.WriteFile(filepath.Join(kiwiDir, "rules.md"), []byte("- Check the wiki before answering"), 0644)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/kiwi/rules?format=skill", nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "# Team Wiki Skill") {
+		t.Error("skill format should contain title")
+	}
+	if !strings.Contains(body, "kiwi_search") || !strings.Contains(body, "kiwi_read") {
+		t.Error("skill format should reference search/read tools")
+	}
+	if !strings.Contains(body, "Check the wiki before answering") {
+		t.Error("skill format should contain user rules")
+	}
+}
