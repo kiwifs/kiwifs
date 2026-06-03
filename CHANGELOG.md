@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.14](https://github.com/kiwifs/kiwifs/compare/v0.19.13...v0.19.14) (2026-06-03)
+
+
+### Bug Fixes
+
+* **ui:** keep frontmatter panel in DOM for valid aria-controls target ([#220](https://github.com/kiwifs/kiwifs/issues/220)) ([a7a0a71](https://github.com/kiwifs/kiwifs/commit/a7a0a711181a4e7fba31e0ca04070567d4ff29f2))
+
 ## [0.19.13](https://github.com/kiwifs/kiwifs/compare/v0.19.12...v0.19.13) (2026-06-03)
 
 
