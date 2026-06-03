@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.19.12](https://github.com/kiwifs/kiwifs/compare/v0.19.11...v0.19.12) (2026-06-03)
+
+
+### Features
+
+* **search:** add ONNX local embedder ([#213](https://github.com/kiwifs/kiwifs/issues/213)) ([165b871](https://github.com/kiwifs/kiwifs/commit/165b8716d6a2b3a78179645a326461b2f3f3821c))
+* **ui:** add watch dialog with API-backed persistence and channel selection ([d462875](https://github.com/kiwifs/kiwifs/commit/d4628753ab4abb0dfac0ec16a1b7259e438d5ace))
+* **ui:** green active state for host page action buttons ([b70756a](https://github.com/kiwifs/kiwifs/commit/b70756a54c7e6f8659ea98a0cd574c9d0063c4ef))
+
+
+### Bug Fixes
+
+* **importer:** handle Confluence inline elements, task lists, and formatting ([#212](https://github.com/kiwifs/kiwifs/issues/212)) ([9e83581](https://github.com/kiwifs/kiwifs/commit/9e83581e26a59437fab1bd5d998234dd794bfe92))
+* **importer:** preserve Unicode in slugs and use KiwiFS callout format ([#211](https://github.com/kiwifs/kiwifs/issues/211)) ([38bcef7](https://github.com/kiwifs/kiwifs/commit/38bcef7ff9e1c49d67e54df5b34abf7a86265799))
+* **importer:** use correct REST endpoint for Confluence attachment downloads ([#210](https://github.com/kiwifs/kiwifs/issues/210)) ([6a0c9f7](https://github.com/kiwifs/kiwifs/commit/6a0c9f72f16e2b9b6f48ae2854b50754145b84d1))
+* **search:** stabilize rollup test with wider time margin ([c132cdc](https://github.com/kiwifs/kiwifs/commit/c132cdcd49062de69310e69a7710def554b81f10))
+* **ui:** improve editor accessibility and keyboard navigation ([#214](https://github.com/kiwifs/kiwifs/issues/214)) ([e5a8bc3](https://github.com/kiwifs/kiwifs/commit/e5a8bc34ec2ba2aa2b7e9355819951eb5963aaec))
+* **ui:** simplify watch dialog, remove per-page channel selection ([8a0b506](https://github.com/kiwifs/kiwifs/commit/8a0b506961f86bca54bde2fd1917c76da0c463d5))
+* **ui:** use tree-level scrollTo instead of node-level ([b7a5ccd](https://github.com/kiwifs/kiwifs/commit/b7a5ccdccb12c5690d60b52686abe66f3d8949e5))
+* update watch dialog hint text for header integrations ([8a62f2a](https://github.com/kiwifs/kiwifs/commit/8a62f2a4ab8c27d8f7e178c796c798080716f06b))
+
 ## [0.19.11](https://github.com/kiwifs/kiwifs/compare/v0.19.10...v0.19.11) (2026-06-02)
 
 
