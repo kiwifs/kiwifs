@@ -88,6 +88,7 @@ type confluenceAttachmentResponse struct {
 		FileSize  int64  `json:"fileSize"`
 		Links     struct {
 			Download string `json:"download"`
+			Self     string `json:"self"`
 		} `json:"_links"`
 	} `json:"results"`
 	Links struct {
@@ -260,8 +261,10 @@ func (s *ConfluenceAPISource) fetchAttachments(ctx context.Context, pageID strin
 	}
 
 	for _, att := range resp.Results {
-		downloadURL := s.baseURL + att.Links.Download
-		attData, err := s.downloadAttachment(ctx, downloadURL)
+		// Use the proper REST API download endpoint (works with API token auth)
+		// Format: /rest/api/content/{pageId}/child/attachment/{attachmentId}/download
+		downloadPath := fmt.Sprintf("/rest/api/content/%s/child/attachment/%s/download", pageID, att.ID)
+		attData, err := s.downloadAttachment(ctx, s.baseURL+downloadPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to download attachment %q: %v\n", att.Title, err)
 			continue
@@ -285,7 +288,19 @@ func (s *ConfluenceAPISource) downloadAttachment(ctx context.Context, downloadUR
 	}
 	req.SetBasicAuth(s.email, s.token)
 
-	resp, err := s.client.Do(req)
+	// Use a client that follows redirects and re-sends auth
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Preserve auth header across redirects
+			if len(via) > 0 {
+				req.SetBasicAuth(s.email, s.token)
+			}
+			return nil
+		},
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
