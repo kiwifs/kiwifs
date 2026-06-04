@@ -31,6 +31,15 @@ on the Kanban board and queryable via DQL.
 | `claimed-at` | datetime | Set automatically by claim endpoint |
 | `lease-expires` | datetime | Set automatically by claim endpoint |
 
+## Kanban workflow (default)
+
+New workspaces created with `kiwifs init --template tasks` include:
+
+- `.kiwi/workflows/tasks.json` — states `backlog` → `todo` → `in_progress` → `review` → `done`, plus terminal `cancelled`, with WIP limits on `in_progress` (5) and `review` (3)
+- `.kiwi/templates/task.md` — starter frontmatter using `workflow: tasks` and `state: backlog`
+
+Pages on the board use **`workflow`** and **`state`** frontmatter (see `internal/workflow/workflow.go`). The legacy `status` field remains supported for DQL and imports.
+
 ## Status Lifecycle
 
 ```

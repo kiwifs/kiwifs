@@ -1,0 +1,23 @@
+{
+  "name": "tasks",
+  "states": [
+    { "name": "backlog", "color": "#6b7280" },
+    { "name": "todo", "color": "#3b82f6" },
+    { "name": "in_progress", "color": "#f59e0b", "wip_limit": 5 },
+    { "name": "review", "color": "#8b5cf6", "wip_limit": 3 },
+    { "name": "done", "color": "#22c55e", "terminal": true },
+    { "name": "cancelled", "color": "#ef4444", "terminal": true }
+  ],
+  "transitions": [
+    { "from": "backlog", "to": "todo" },
+    { "from": "backlog", "to": "cancelled" },
+    { "from": "todo", "to": "in_progress" },
+    { "from": "todo", "to": "cancelled" },
+    { "from": "in_progress", "to": "review" },
+    { "from": "in_progress", "to": "todo" },
+    { "from": "in_progress", "to": "cancelled" },
+    { "from": "review", "to": "done" },
+    { "from": "review", "to": "in_progress" },
+    { "from": "review", "to": "cancelled" }
+  ]
+}

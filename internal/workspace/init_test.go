@@ -60,6 +60,25 @@ func TestInitBlankTemplate(t *testing.T) {
 	}
 }
 
+func TestInitTasksTemplateIncludesWorkflow(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "tasks-ws")
+	if err := Init(root, "tasks"); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{
+		".kiwi/workflows/tasks.json",
+		"tasks/example-task.md",
+	} {
+		if _, err := os.Stat(filepath.Join(root, p)); err != nil {
+			t.Fatalf("missing %s: %v", p, err)
+		}
+	}
+	if _, err := fs.Stat(templates, "templates/workflow/task.md"); err != nil {
+		t.Fatalf("embedded task template missing: %v", err)
+	}
+}
+
 func TestKnowledgeTemplateEmbedded(t *testing.T) {
 	t.Parallel()
 	paths := []string{
