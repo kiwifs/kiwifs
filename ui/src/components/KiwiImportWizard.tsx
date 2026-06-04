@@ -2,10 +2,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, AlertCircle, RefreshCw,
   Cloud, FolderOpen, FileText, Database, ChevronDown,
-  ChevronRight, Eye, Import, Check, X, Upload, Info,
+  ChevronRight, Eye, Import, Check, X, Upload, Info, SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { api, type AirbyteSpecProperty, type AirbyteSpecResponse, type AirbyteStream } from "../lib/api";
+import {
+  api,
+  type AirbyteSpecProperty,
+  type AirbyteSpecResponse,
+  type AirbyteStream,
+  type ImportFieldMapping,
+  type ImportPreviewRequest,
+  type ImportPreviewResponse,
+  type ImportRunRequest,
+  type ImportRunResponse,
+} from "../lib/api";
 import { SourceIcon } from "./SourceIcon";
 import {
   IMPORT_SOURCE_OPTIONS as SOURCE_OPTIONS,
@@ -53,6 +63,33 @@ const DB_DEFAULTS: Record<string, { port: number; protocol: string; placeholder:
 
 /** Sources that support browser file upload via the /import/upload endpoint */
 const UPLOADABLE_SOURCES = new Set(["csv", "json", "jsonl", "yaml", "excel", "sqlite"]);
+
+/** Structured sources that support the field-mapping wizard step */
+const FIELD_MAPPING_SOURCES = new Set([
+  "csv", "json", "jsonl", "yaml", "excel", "sqlite",
+  "postgres", "mysql", "mongodb", "firestore",
+]);
+
+function supportsFieldMapping(sourceType: SourceType | null): boolean {
+  return sourceType != null && FIELD_MAPPING_SOURCES.has(sourceType);
+}
+
+function inferFieldType(value: unknown): ImportFieldMapping["type"] {
+  if (typeof value === "boolean") return "boolean";
+  if (typeof value === "number") return "number";
+  if (typeof value === "string") {
+    const s = value.trim();
+    const low = s.toLowerCase();
+    if (low === "true" || low === "false") return "boolean";
+    if (s !== "" && !Number.isNaN(Number(s))) return "number";
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return "date";
+  }
+  return "string";
+}
+
+function extractSourceFields(frontmatter: Record<string, unknown>): string[] {
+  return Object.keys(frontmatter).filter((k) => !k.startsWith("_")).sort();
+}
 
 const FILE_ACCEPT: Record<string, string> = {
   csv: ".csv,text/csv",
@@ -105,6 +142,7 @@ type WizardState = {
   selectedTable: string;
   prefix: string;
   idColumn: string;
+  fieldMappings: ImportFieldMapping[];
   previews: { path: string; frontmatter: Record<string, unknown>; body_preview: string }[];
   importResult: { imported: number; skipped: number; archived?: number; errors: string[] } | null;
 };
@@ -121,6 +159,7 @@ const initialState: WizardState = {
   browsedTables: [], browseLoading: false,
   selectedStreams: [], selectedTable: "",
   prefix: "", idColumn: "",
+  fieldMappings: [],
   previews: [], importResult: null,
 };
 
@@ -273,26 +312,101 @@ export function KiwiImportWizard({ onClose, onComplete }: { onClose: () => void;
     finally { setLoading(false); }
   };
 
+  const importPrefix = state.prefix || state.selectedTable || state.sourceType || "";
+  const activeMappings = state.fieldMappings.filter((m) => !m.skip && m.target);
+
+  const buildSourceParams = useCallback((extra?: Record<string, unknown>): Record<string, unknown> => {
+    const params: Record<string, unknown> = { from: state.sourceType, prefix: importPrefix, ...extra };
+    if (state.idColumn) params.id_column = state.idColumn;
+    if (activeMappings.length > 0) params.field_mappings = activeMappings;
+    if (isAirbyteSourceType(state.sourceType)) {
+      params.via = "airbyte";
+      params.airbyte_config = state.airbyteConfig;
+      if (state.selectedStreams.length > 0) params.streams = state.selectedStreams;
+    } else if (state.sourceType === "markdown" || state.sourceType === "obsidian") {
+      params.path = state.path;
+    } else if (state.sourceType === "postgres" || state.sourceType === "mysql") {
+      params.dsn = getEffectiveDSN();
+      params.table = state.table;
+      if (state.query) params.query = state.query;
+    } else if (state.sourceType === "mongodb") {
+      params.uri = getEffectiveURI();
+      params.database = state.useConnectionString ? state.database : state.dbName;
+      params.collection = state.collection;
+    } else if (state.sourceType === "firestore") {
+      params.project = state.project;
+      params.collection = state.collection;
+      if (state.credentials) params.credentials = JSON.parse(state.credentials);
+    } else if (["csv", "json", "jsonl", "yaml", "excel"].includes(state.sourceType!)) {
+      params.file = state.file;
+    } else if (state.sourceType === "sqlite") {
+      params.db = state.db;
+      params.table = state.selectedTable;
+    }
+    return params;
+  }, [state, importPrefix, activeMappings, getEffectiveDSN, getEffectiveURI]);
+
+  const fetchPreviewRecords = useCallback(async (limit: number, applyMappings = true) => {
+    const mappings = applyMappings && activeMappings.length > 0 ? activeMappings : undefined;
+    if (isUploadable && state.uploadedFile) {
+      const resp = await api.importUpload({
+        file: state.uploadedFile,
+        from: state.sourceType!,
+        mode: "preview",
+        prefix: importPrefix,
+        id_column: state.idColumn || undefined,
+        table: state.sourceType === "sqlite" ? state.selectedTable : undefined,
+        field_mappings: mappings,
+      }) as ImportPreviewResponse;
+      return resp.records;
+    }
+    const params = buildSourceParams({ limit });
+    if (!applyMappings) delete params.field_mappings;
+    const resp = await api.importPreview(params as ImportPreviewRequest);
+    return resp.records;
+  }, [state, isUploadable, importPrefix, activeMappings, buildSourceParams]);
+
+  const loadSourceFields = async () => {
+    const records = await fetchPreviewRecords(1, false);
+    if (records.length === 0) {
+      update({ fieldMappings: [] });
+      return;
+    }
+    const keys = extractSourceFields(records[0].frontmatter);
+    const mappings: ImportFieldMapping[] = keys.map((source) => ({
+      source,
+      target: source,
+      type: inferFieldType(records[0].frontmatter[source]),
+      skip: false,
+    }));
+    update({ fieldMappings: mappings });
+  };
+
+  const handleReloadFields = async () => {
+    setLoading(true); setError(null);
+    try { await loadSourceFields(); }
+    catch (err) { setError(friendlyError(String(err), "import")); }
+    finally { setLoading(false); }
+  };
+
+  const handleConfigureContinue = async () => {
+    if (supportsFieldMapping(state.sourceType)) {
+      setLoading(true); setError(null);
+      try {
+        await loadSourceFields();
+        update({ step: 4 });
+      } catch (err) { setError(friendlyError(String(err), "import")); }
+      finally { setLoading(false); }
+      return;
+    }
+    await handlePreview();
+  };
+
   const handlePreview = async () => {
     setLoading(true); setError(null);
     try {
-      let previews: typeof state.previews;
-      if (isUploadable && state.uploadedFile) {
-        const resp = await api.importUpload({ file: state.uploadedFile, from: state.sourceType!, mode: "preview", prefix: state.prefix || state.selectedTable || state.sourceType!, id_column: state.idColumn || undefined, table: state.sourceType === "sqlite" ? state.selectedTable : undefined }) as any;
-        previews = resp.records;
-      } else {
-        const params: Record<string, unknown> = { from: state.sourceType, limit: 5 };
-        if (isAirbyteSourceType(state.sourceType)) { params.via = "airbyte"; params.airbyte_config = state.airbyteConfig; if (state.selectedStreams.length > 0) params.streams = state.selectedStreams; }
-        else if (state.sourceType === "markdown" || state.sourceType === "obsidian") params.path = state.path;
-        else if (state.sourceType === "postgres" || state.sourceType === "mysql") { params.dsn = getEffectiveDSN(); params.table = state.table; if (state.query) params.query = state.query; }
-        else if (state.sourceType === "mongodb") { params.uri = getEffectiveURI(); params.database = state.useConnectionString ? state.database : state.dbName; params.collection = state.collection; }
-        else if (state.sourceType === "firestore") { params.project = state.project; params.collection = state.collection; if (state.credentials) params.credentials = JSON.parse(state.credentials); }
-        else if (["csv", "json", "jsonl", "yaml", "excel"].includes(state.sourceType!)) params.file = state.file;
-        else if (state.sourceType === "sqlite") { params.db = state.db; params.table = state.selectedTable; }
-        const resp = await api.importPreview(params as any);
-        previews = resp.records;
-      }
-      const previewStep = isAirbyteSourceType(state.sourceType) ? 5 : 4;
+      const previews = await fetchPreviewRecords(5);
+      const previewStep = isAirbyteSourceType(state.sourceType) ? 5 : (supportsFieldMapping(state.sourceType) ? 5 : 4);
       update({ previews, step: previewStep });
     } catch (err) { setError(friendlyError(String(err), "import")); }
     finally { setLoading(false); }
@@ -303,18 +417,17 @@ export function KiwiImportWizard({ onClose, onComplete }: { onClose: () => void;
     try {
       let result: { imported: number; skipped: number; archived?: number; errors: string[] };
       if (isUploadable && state.uploadedFile) {
-        result = (await api.importUpload({ file: state.uploadedFile, from: state.sourceType!, mode: "import", prefix: state.prefix || state.selectedTable || state.sourceType!, id_column: state.idColumn || undefined, table: state.sourceType === "sqlite" ? state.selectedTable : undefined })) as any;
+        result = (await api.importUpload({
+          file: state.uploadedFile,
+          from: state.sourceType!,
+          mode: "import",
+          prefix: importPrefix,
+          id_column: state.idColumn || undefined,
+          table: state.sourceType === "sqlite" ? state.selectedTable : undefined,
+          field_mappings: activeMappings.length > 0 ? activeMappings : undefined,
+        })) as ImportRunResponse;
       } else {
-        const params: Record<string, unknown> = { from: state.sourceType, prefix: state.prefix || state.selectedTable || state.sourceType };
-        if (state.idColumn) params.id_column = state.idColumn;
-        if (isAirbyteSourceType(state.sourceType)) { params.via = "airbyte"; params.airbyte_config = state.airbyteConfig; if (state.selectedStreams.length > 0) params.streams = state.selectedStreams; }
-        else if (state.sourceType === "markdown" || state.sourceType === "obsidian") params.path = state.path;
-        else if (state.sourceType === "postgres" || state.sourceType === "mysql") { params.dsn = getEffectiveDSN(); params.table = state.table; if (state.query) params.query = state.query; }
-        else if (state.sourceType === "mongodb") { params.uri = getEffectiveURI(); params.database = state.useConnectionString ? state.database : state.dbName; params.collection = state.collection; }
-        else if (state.sourceType === "firestore") { params.project = state.project; params.collection = state.collection; if (state.credentials) params.credentials = JSON.parse(state.credentials); }
-        else if (["csv", "json", "jsonl", "yaml", "excel"].includes(state.sourceType!)) params.file = state.file;
-        else if (state.sourceType === "sqlite") { params.db = state.db; params.table = state.selectedTable; }
-        result = await api.importRun(params as any);
+        result = await api.importRun(buildSourceParams() as ImportRunRequest);
       }
       update({ importResult: result, step: totalSteps });
     } catch (err) { setError(friendlyError(String(err), "import")); }
@@ -322,7 +435,8 @@ export function KiwiImportWizard({ onClose, onComplete }: { onClose: () => void;
   };
 
   const isAirbyte = isAirbyteSourceType(state.sourceType);
-  const totalSteps = isAirbyte ? 6 : 5;
+  const hasFieldMapping = supportsFieldMapping(state.sourceType);
+  const totalSteps = isAirbyte ? 6 : (hasFieldMapping ? 6 : 5);
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -400,15 +514,28 @@ export function KiwiImportWizard({ onClose, onComplete }: { onClose: () => void;
 
       {/* Step 3 */}
       {state.step === 3 && isAirbyte && <StreamSelectionStep state={state} update={update} onNext={() => update({ selectedTable: state.selectedStreams[0] || state.airbyteStreams[0]?.name || state.sourceType || "data", step: 4 })} />}
-      {state.step === 3 && !isAirbyte && <ConfigureStep state={state} update={update} onBack={() => update({ step: 2 })} onPreview={handlePreview} loading={loading} />}
+      {state.step === 3 && !isAirbyte && (
+        <ConfigureStep state={state} update={update} onBack={() => update({ step: 2 })} onContinue={handleConfigureContinue} showMappingNext={hasFieldMapping} loading={loading} />
+      )}
       {/* Step 4 */}
-      {state.step === 4 && isAirbyte && <ConfigureStep state={state} update={update} onBack={() => update({ step: 3 })} onPreview={handlePreview} loading={loading} />}
-      {state.step === 4 && !isAirbyte && <PreviewStep state={state} onBack={() => update({ step: 3 })} onImport={handleImport} loading={loading} />}
+      {state.step === 4 && isAirbyte && (
+        <ConfigureStep state={state} update={update} onBack={() => update({ step: 3 })} onContinue={handlePreview} showMappingNext={false} loading={loading} />
+      )}
+      {state.step === 4 && !isAirbyte && hasFieldMapping && (
+        <FieldMappingStep state={state} update={update} onBack={() => update({ step: 3 })} onPreview={handlePreview} onReload={handleReloadFields} loading={loading} />
+      )}
+      {state.step === 4 && !isAirbyte && !hasFieldMapping && (
+        <PreviewStep state={state} onBack={() => update({ step: 3 })} onImport={handleImport} loading={loading} />
+      )}
       {/* Step 5 */}
-      {state.step === 5 && isAirbyte && <PreviewStep state={state} onBack={() => update({ step: 4 })} onImport={handleImport} loading={loading} />}
-      {state.step === 5 && !isAirbyte && state.importResult && <ResultsStep result={state.importResult} sourceType={state.sourceType} onComplete={onComplete} />}
+      {state.step === 5 && (isAirbyte || hasFieldMapping) && (
+        <PreviewStep state={state} onBack={() => update({ step: 4 })} onImport={handleImport} loading={loading} />
+      )}
+      {state.step === 5 && !isAirbyte && !hasFieldMapping && state.importResult && (
+        <ResultsStep result={state.importResult} sourceType={state.sourceType} onComplete={onComplete} />
+      )}
       {/* Step 6 */}
-      {state.step === 6 && isAirbyte && state.importResult && <ResultsStep result={state.importResult} sourceType={state.sourceType} onComplete={onComplete} />}
+      {state.step === 6 && state.importResult && <ResultsStep result={state.importResult} sourceType={state.sourceType} onComplete={onComplete} />}
     </div>
   );
 }
@@ -544,7 +671,10 @@ function StreamSelectionStep({ state, update, onNext }: { state: WizardState; up
    Configure Step
    ═══════════════════════════════════════════════════════════ */
 
-function ConfigureStep({ state, update, onBack, onPreview, loading }: { state: WizardState; update: (p: Partial<WizardState>) => void; onBack: () => void; onPreview: () => void; loading: boolean }) {
+function ConfigureStep({ state, update, onBack, onContinue, showMappingNext, loading }: {
+  state: WizardState; update: (p: Partial<WizardState>) => void; onBack: () => void;
+  onContinue: () => void; showMappingNext: boolean; loading: boolean;
+}) {
   const prefix = state.prefix || state.selectedTable;
   return (
     <div className="space-y-4">
@@ -561,7 +691,83 @@ function ConfigureStep({ state, update, onBack, onPreview, loading }: { state: W
       </label>
       <div className="flex justify-end gap-2 pt-3">
         <Button variant="outline" size="sm" onClick={onBack}>Back</Button>
-        <Button size="sm" onClick={onPreview} disabled={loading}>{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Eye className="h-3.5 w-3.5 mr-1.5" />}Preview</Button>
+        <Button size="sm" onClick={onContinue} disabled={loading}>
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : showMappingNext ? <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" /> : <Eye className="h-3.5 w-3.5 mr-1.5" />}
+          {showMappingNext ? "Map fields" : "Preview"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function FieldMappingStep({ state, update, onBack, onPreview, onReload, loading }: {
+  state: WizardState; update: (p: Partial<WizardState>) => void; onBack: () => void;
+  onPreview: () => void; onReload: () => Promise<void>; loading: boolean;
+}) {
+  const setMapping = (index: number, patch: Partial<ImportFieldMapping>) => {
+    const next = state.fieldMappings.map((m, i) => (i === index ? { ...m, ...patch } : m));
+    update({ fieldMappings: next });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-medium">Field mapping</h2>
+          <p className="text-sm text-muted-foreground mt-1">Map source fields to frontmatter keys, set types, or skip fields you do not want imported.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void onReload()} disabled={loading}>
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Reload
+        </Button>
+      </div>
+      {state.fieldMappings.length === 0 ? (
+        <div className="text-sm text-muted-foreground border border-dashed border-border rounded-lg p-6 text-center">
+          No fields detected. Check your source configuration and try reloading.
+        </div>
+      ) : (
+        <div className="border border-border rounded-lg overflow-hidden">
+          <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 px-3 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+            <span>Source field</span>
+            <span>Frontmatter key</span>
+            <span>Type</span>
+            <span className="text-center w-14">Skip</span>
+          </div>
+          <div className="max-h-64 overflow-auto divide-y divide-border">
+            {state.fieldMappings.map((m, i) => (
+              <div key={m.source} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 px-3 py-2 items-center text-sm">
+                <span className="font-mono text-xs truncate" title={m.source}>{m.source}</span>
+                <input
+                  type="text"
+                  value={m.target}
+                  disabled={m.skip}
+                  onChange={(e) => setMapping(i, { target: e.target.value })}
+                  className="rounded-md border border-border bg-background px-2 py-1 text-xs font-mono disabled:opacity-50"
+                />
+                <select
+                  value={m.type || "string"}
+                  disabled={m.skip}
+                  onChange={(e) => setMapping(i, { type: e.target.value as ImportFieldMapping["type"] })}
+                  className="rounded-md border border-border bg-background px-2 py-1 text-xs disabled:opacity-50"
+                >
+                  <option value="string">string</option>
+                  <option value="number">number</option>
+                  <option value="date">date</option>
+                  <option value="boolean">boolean</option>
+                </select>
+                <label className="flex justify-center w-14">
+                  <input type="checkbox" checked={!!m.skip} onChange={(e) => setMapping(i, { skip: e.target.checked })} className="rounded" />
+                </label>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="outline" size="sm" onClick={onBack}>Back</Button>
+        <Button size="sm" onClick={onPreview} disabled={loading || state.fieldMappings.every((m) => m.skip)}>
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Eye className="h-3.5 w-3.5 mr-1.5" />}
+          Preview
+        </Button>
       </div>
     </div>
   );

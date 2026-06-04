@@ -34,13 +34,14 @@ type Source interface {
 
 // Options controls the import pipeline behaviour.
 type Options struct {
-	Prefix   string // path prefix in kiwifs (default: table/collection name)
-	IDColumn string // column to use as filename (default: auto-detect primary key)
-	Columns  []string
-	DryRun   bool
-	Limit    int
-	Actor    string
-	FullSync bool // when true, files not seen in this run are archived (tombstoned)
+	Prefix         string // path prefix in kiwifs (default: table/collection name)
+	IDColumn       string // column to use as filename (default: auto-detect primary key)
+	Columns        []string
+	FieldMappings  []FieldMapping
+	DryRun         bool
+	Limit          int
+	Actor          string
+	FullSync       bool // when true, files not seen in this run are archived (tombstoned)
 }
 
 // Stats is returned by Run with import counts.
@@ -95,6 +96,9 @@ func Run(ctx context.Context, src Source, pipe *pipeline.Pipeline, opts Options)
 			fields := rec.Fields
 			if len(opts.Columns) > 0 {
 				fields = filterColumns(fields, opts.Columns)
+			}
+			if len(opts.FieldMappings) > 0 {
+				fields = ApplyFieldMappings(fields, opts.FieldMappings)
 			}
 
 			pk := rec.PrimaryKey
