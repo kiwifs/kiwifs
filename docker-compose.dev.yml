@@ -5,7 +5,7 @@
 #
 # Backend: Go with air (hot-reload on .go file changes)
 # Frontend: Vite dev server with HMR on port 5173
-# KiwiFS accessible at http://localhost:3333 (API) and http://localhost:5173 (UI with HMR)
+# KiwiFS: API http://localhost:3333, UI http://localhost:5173, MCP http://localhost:8181/mcp
 
 services:
   backend:
@@ -16,18 +16,40 @@ services:
       - "3333:3333"
     volumes:
       - .:/app
+      - ./contrib/dev-knowledge:/app/knowledge
       - go-mod:/go/pkg/mod
       - go-build:/root/.cache/go-build
     working_dir: /app
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      KIWI_PGVECTOR_DSN: postgresql://kiwi:kiwi@db:5432/kiwi
     command: >
       air -c .air.toml
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3333/health"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8181:8181"
+    volumes:
+      - .:/app
+      - ./contrib/dev-knowledge:/app/knowledge
+      - go-mod:/go/pkg/mod
+    working_dir: /app
+    command: >
+      go run . mcp --root /app/knowledge --http --port 8181
+    depends_on:
+      backend:
+        condition: service_healthy
 
   frontend:
     image: node:22-alpine

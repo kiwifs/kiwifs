@@ -38,7 +38,7 @@ make dev-docker
 # or: docker compose -f docker-compose.dev.yml up
 ```
 
-This starts the Go backend with [air](https://github.com/air-verse/air) (auto-rebuilds on `.go` changes) and the Vite frontend with HMR. Access the UI at `http://localhost:5173` and the API at `http://localhost:3333`.
+This starts the Go backend with [air](https://github.com/air-verse/air) (auto-rebuilds on `.go` changes), the Vite frontend with HMR, PostgreSQL/pgvector, a pre-seeded sample knowledge base under `contrib/dev-knowledge`, and the MCP HTTP endpoint. Access the UI at `http://localhost:5173`, the API at `http://localhost:3333`, and MCP at `http://localhost:8181/mcp`.
 
 ### Project structure
 
