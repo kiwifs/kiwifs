@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.15](https://github.com/kiwifs/kiwifs/compare/v0.19.14...v0.19.15) (2026-06-04)
+
+
+### Features
+
+* **rules:** add Cursor team-wiki skill export format ([#222](https://github.com/kiwifs/kiwifs/issues/222)) ([80c8e50](https://github.com/kiwifs/kiwifs/commit/80c8e50f3640bf2d6869aa436dce5fd07dd54ada))
+
 ## [0.19.14](https://github.com/kiwifs/kiwifs/compare/v0.19.13...v0.19.14) (2026-06-03)
 
 
