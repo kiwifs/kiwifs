@@ -103,10 +103,10 @@ func appendTaskProgress(content, agent, message string) string {
 	rest := content[after:]
 	nextH2 := strings.Index(rest, "\n## ")
 	if nextH2 >= 0 {
-		before := content[:idx+after+nextH2]
-		middle := strings.TrimRight(rest[:nextH2], "\n") + "\n\n" + entry
+		// Insert new entry between existing progress entries and the next H2 section
+		progressContent := strings.TrimRight(rest[:nextH2], "\n")
 		tail := rest[nextH2:]
-		return strings.TrimRight(before, "\n") + middle + tail
+		return content[:after] + progressContent + "\n\n" + entry + tail
 	}
 	return strings.TrimRight(content, "\n") + "\n\n" + entry
 }
