@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.17](https://github.com/kiwifs/kiwifs/compare/v0.19.16...v0.19.17) (2026-06-04)
+
+
+### Bug Fixes
+
+* **import:** use native JSON types for schema inference ([#233](https://github.com/kiwifs/kiwifs/issues/233)) ([8a2aaec](https://github.com/kiwifs/kiwifs/commit/8a2aaecedfbba85c9cb2f0bb0172e268c611c3d9))
+
 ## [0.19.16](https://github.com/kiwifs/kiwifs/compare/v0.19.15...v0.19.16) (2026-06-04)
 
 
