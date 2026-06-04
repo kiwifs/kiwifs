@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.19.16](https://github.com/kiwifs/kiwifs/compare/v0.19.15...v0.19.16) (2026-06-04)
+
+
+### Features
+
+* **kanban:** show blocked-by dependencies on workflow board ([#230](https://github.com/kiwifs/kiwifs/issues/230)) ([ebda43e](https://github.com/kiwifs/kiwifs/commit/ebda43e1a267e81e0e5fda88e9251892b29866e8))
+* **mcp:** add kiwi_task_create and kiwi_task_progress tools ([#225](https://github.com/kiwifs/kiwifs/issues/225)) ([7c6f896](https://github.com/kiwifs/kiwifs/commit/7c6f8964876ce5c1e0f4ace7efb925e1c3f47d9d))
+* **workspace:** ship default tasks workflow and task template ([#224](https://github.com/kiwifs/kiwifs/issues/224)) ([55f27ce](https://github.com/kiwifs/kiwifs/commit/55f27ce8157369f50702a9baa1c906cb284b756d))
+
+
+### Bug Fixes
+
+* **mcp:** correct appendTaskProgress slice indexing that duplicated content ([#228](https://github.com/kiwifs/kiwifs/issues/228)) ([cca26bf](https://github.com/kiwifs/kiwifs/commit/cca26bf1e94cc7ffe5d1165f9bb9ae618141a88f))
+
 ## [0.19.15](https://github.com/kiwifs/kiwifs/compare/v0.19.14...v0.19.15) (2026-06-04)
 
 
