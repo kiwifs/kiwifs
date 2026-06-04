@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/kiwifs/kiwifs/internal/bootstrap"
@@ -74,10 +75,15 @@ func init() {
 	importCmd.Flags().String("index", "", "index name (elasticsearch)")
 	importCmd.Flags().Bool("api", false, "use live API mode (confluence)")
 	importCmd.Flags().String("space", "", "space key (confluence API mode)")
+	importCmd.Flags().Bool("infer-schema", false, "infer JSON Schema from csv/json/jsonl sample and print to stdout")
 }
 
 func runImport(cmd *cobra.Command, _ []string) error {
 	from, _ := cmd.Flags().GetString("from")
+	inferSchema, _ := cmd.Flags().GetBool("infer-schema")
+	if inferSchema {
+		return runInferSchema(cmd, from)
+	}
 	root, _ := cmd.Flags().GetString("root")
 
 	src, err := buildSource(cmd, from)
@@ -344,4 +350,32 @@ func buildSource(cmd *cobra.Command, from string) (importer.Source, error) {
 	default:
 		return nil, fmt.Errorf("unknown source type: %s (supported: markdown, postgres, mysql, firestore, sqlite, mongodb, csv, json, jsonl, yaml, excel, notion, airtable, gsheets, obsidian, confluence, dynamodb, redis, elasticsearch)", from)
 	}
+}
+
+func runInferSchema(cmd *cobra.Command, from string) error {
+	file, _ := cmd.Flags().GetString("file")
+	if file == "" {
+		return fmt.Errorf("--file is required with --infer-schema")
+	}
+	var rows []map[string]string
+	var err error
+	switch from {
+	case "csv":
+		rows, err = importer.SampleCSVRows(file, 100)
+	case "json", "jsonl":
+		rows, err = importer.SampleJSONRows(file, 100)
+	default:
+		return fmt.Errorf("--infer-schema supports --from csv, json, jsonl (got %q)", from)
+	}
+	if err != nil {
+		return err
+	}
+	name := strings.TrimSuffix(file, filepath.Ext(file))
+	props := importer.InferFieldTypes(rows)
+	out, err := importer.SchemaDocument(name, props)
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(out))
+	return nil
 }

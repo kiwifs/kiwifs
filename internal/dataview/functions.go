@@ -68,6 +68,7 @@ var funcRegistry = map[string]FuncCompiler{
 	"regexreplace": compileRegexReplace,
 	"dateformat": compileDateFormat,
 	"round":      compileRound,
+	"days_ago":   compileDaysAgo,
 }
 
 func init() {
@@ -168,6 +169,17 @@ func compileDateFormat(args []compiledArg) (string, []any, error) {
 	sql := fmt.Sprintf("strftime(%s, %s)", args[1].SQL, args[0].SQL)
 	var params []any
 	params = append(params, args[1].Params...)
+	params = append(params, args[0].Params...)
+	return sql, params, nil
+}
+
+func compileDaysAgo(args []compiledArg) (string, []any, error) {
+	if len(args) != 1 {
+		return "", nil, fmt.Errorf("days_ago() requires 1 argument (number of days)")
+	}
+	// Arg SQL is a numeric literal or bound value; offset is embedded in SQLite datetime modifier.
+	sql := fmt.Sprintf("datetime('now', '-' || CAST(%s AS TEXT) || ' days')", args[0].SQL)
+	var params []any
 	params = append(params, args[0].Params...)
 	return sql, params, nil
 }
