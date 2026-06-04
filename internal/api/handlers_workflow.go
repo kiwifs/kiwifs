@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -511,6 +512,16 @@ func (h *Handlers) AdvanceWorkflow(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusConflict, err.Error())
 	}
 
+	if req.TargetState == "in_progress" {
+		if blocked, reason := h.pageBlockedByDeps(c.Request().Context(), w, fm, req.Path); blocked {
+			msg := "card is blocked and cannot move to in_progress"
+			if reason != "" {
+				msg += ": " + reason
+			}
+			return echo.NewHTTPError(http.StatusConflict, msg)
+		}
+	}
+
 	// Update frontmatter: state + auto-stamp modified time on transition.
 	updated, err := setFrontmatterFields(content, map[string]string{
 		"state":    req.TargetState,
@@ -571,6 +582,15 @@ func (h *Handlers) WorkflowBoard(c echo.Context) error {
 		board[s.Name] = []map[string]any{}
 	}
 
+	type boardPageDraft struct {
+		entry map[string]any
+		fm    map[string]any
+		path  string
+		state string
+	}
+	pageMeta := make(map[string]workflowPageMeta)
+	var drafts []boardPageDraft
+
 	err = storage.WalkAll(c.Request().Context(), h.store, "/", func(e storage.Entry) error {
 		if !strings.HasSuffix(e.Path, ".md") {
 			return nil
@@ -583,22 +603,25 @@ func (h *Handlers) WorkflowBoard(c echo.Context) error {
 		if fmErr != nil || fm == nil {
 			return nil
 		}
-		pageWF, _ := fm["workflow"].(string)
+
+		title := pageStem(e.Path)
+		if t, ok := fm["title"].(string); ok && t != "" {
+			title = t
+		}
 		pageState, _ := fm["state"].(string)
+		pageStatus, _ := fm["status"].(string)
+		pageMeta[normalizeMetaPath(e.Path)] = workflowPageMeta{
+			path: e.Path, state: pageState, status: pageStatus, title: title,
+		}
+
+		pageWF, _ := fm["workflow"].(string)
 		if pageWF != wfName || pageState == "" {
 			return nil
 		}
 		entry := map[string]any{
 			"path":  e.Path,
 			"state": pageState,
-		}
-
-		// Title with fallback to filename stem when frontmatter title is
-		// missing, so cards never render blank.
-		if title, ok := fm["title"].(string); ok && title != "" {
-			entry["title"] = title
-		} else {
-			entry["title"] = pageStem(e.Path)
+			"title": title,
 		}
 		if priority, ok := fm["priority"]; ok {
 			entry["priority"] = priority
@@ -624,15 +647,6 @@ func (h *Handlers) WorkflowBoard(c echo.Context) error {
 			entry["ordinal"] = *ord
 		}
 
-		// Blocked status — a card can be flagged as blocked without moving
-		// it to a different column.
-		if blocked, ok := fm["blocked"].(bool); ok && blocked {
-			entry["blocked"] = true
-		}
-		if reason, ok := fm["block_reason"].(string); ok && reason != "" {
-			entry["block_reason"] = reason
-		}
-
 		// Dependencies — references to other pages this card depends on.
 		if deps := extractStringList(fm, "depends_on"); len(deps) > 0 {
 			entry["depends_on"] = deps
@@ -652,19 +666,21 @@ func (h *Handlers) WorkflowBoard(c echo.Context) error {
 			entry["modified"] = e.ModTime.Format(time.RFC3339)
 		}
 
-		// Case-insensitive column matching: resolve pageState to the
-		// canonical column name so cards with slightly different casing
-		// still land in the correct column.
-		canonState := resolveStateName(w, pageState)
-		if workflowHasState(w, canonState) {
-			board[canonState] = append(board[canonState], entry)
-		} else {
-			board["__unmatched__"] = append(board["__unmatched__"], entry)
-		}
+		drafts = append(drafts, boardPageDraft{entry: entry, fm: fm, path: e.Path, state: pageState})
 		return nil
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	for _, d := range drafts {
+		applyBlockedStatus(w, pageMeta, d.fm, d.path, d.entry)
+		canonState := resolveStateName(w, d.state)
+		if workflowHasState(w, canonState) {
+			board[canonState] = append(board[canonState], d.entry)
+		} else {
+			board["__unmatched__"] = append(board["__unmatched__"], d.entry)
+		}
 	}
 
 	// Sort each column's cards by ordinal (ascending). Cards without an
@@ -1014,4 +1030,154 @@ func cardDescription(body string) string {
 		s = string(runes[:maxLen]) + "…"
 	}
 	return s
+}
+
+// workflowPageMeta holds fields used to resolve blocked-by dependencies.
+type workflowPageMeta struct {
+	path   string
+	state  string
+	status string
+	title  string
+}
+
+func normalizeMetaPath(p string) string {
+	return filepath.ToSlash(p)
+}
+
+// extractBlockedByList reads blocked-by (schema) or blocked_by (alias).
+func extractBlockedByList(fm map[string]any) []string {
+	if refs := extractStringList(fm, "blocked-by"); len(refs) > 0 {
+		return refs
+	}
+	return extractStringList(fm, "blocked_by")
+}
+
+func resolveBlockerPath(ref, fromPath string) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return ""
+	}
+	if strings.HasPrefix(ref, "/") {
+		return normalizeMetaPath(strings.TrimPrefix(ref, "/"))
+	}
+	// blocked-by entries are usually project-root paths (e.g. tasks/foo.md).
+	if strings.Contains(ref, "/") && !strings.HasPrefix(ref, ".") {
+		return normalizeMetaPath(ref)
+	}
+	if strings.HasPrefix(ref, ".") {
+		return normalizeMetaPath(filepath.Join(filepath.Dir(fromPath), ref))
+	}
+	return normalizeMetaPath(filepath.Join(filepath.Dir(fromPath), ref))
+}
+
+func lookupPageMeta(meta map[string]workflowPageMeta, ref, fromPath string) (workflowPageMeta, bool) {
+	base := resolveBlockerPath(ref, fromPath)
+	candidates := []string{base}
+	if !strings.HasSuffix(base, ".md") {
+		candidates = append(candidates, base+".md")
+	}
+	for _, p := range candidates {
+		if m, ok := meta[normalizeMetaPath(p)]; ok {
+			return m, true
+		}
+	}
+	return workflowPageMeta{}, false
+}
+
+func workflowPageTerminal(w workflow.Workflow, state, status string) bool {
+	if status == "done" || status == "cancelled" {
+		return true
+	}
+	for _, s := range w.States {
+		if s.Name == state && s.Terminal {
+			return true
+		}
+	}
+	return state == "done" || state == "cancelled"
+}
+
+func computeBlockedStatus(
+	w workflow.Workflow,
+	meta map[string]workflowPageMeta,
+	fm map[string]any,
+	pagePath string,
+) (bool, string) {
+	refs := extractBlockedByList(fm)
+	if len(refs) == 0 {
+		if blocked, ok := fm["blocked"].(bool); ok && blocked {
+			reason, _ := fm["block_reason"].(string)
+			return true, reason
+		}
+		return false, ""
+	}
+	var blockers []string
+	for _, ref := range refs {
+		blocker, ok := lookupPageMeta(meta, ref, pagePath)
+		if !ok {
+			continue
+		}
+		if !workflowPageTerminal(w, blocker.state, blocker.status) {
+			blockers = append(blockers, blocker.title)
+		}
+	}
+	if len(blockers) == 0 {
+		return false, ""
+	}
+	return true, strings.Join(blockers, ", ")
+}
+
+func applyBlockedStatus(
+	w workflow.Workflow,
+	meta map[string]workflowPageMeta,
+	fm map[string]any,
+	pagePath string,
+	entry map[string]any,
+) {
+	if blocked, reason := computeBlockedStatus(w, meta, fm, pagePath); blocked {
+		entry["blocked"] = true
+		if reason != "" {
+			entry["block_reason"] = reason
+		}
+	}
+}
+
+func (h *Handlers) pageBlockedByDeps(
+	ctx context.Context,
+	w workflow.Workflow,
+	fm map[string]any,
+	pagePath string,
+) (bool, string) {
+	refs := extractBlockedByList(fm)
+	if len(refs) == 0 {
+		if blocked, ok := fm["blocked"].(bool); ok && blocked {
+			reason, _ := fm["block_reason"].(string)
+			return true, reason
+		}
+		return false, ""
+	}
+	meta := make(map[string]workflowPageMeta)
+	_ = storage.WalkAll(ctx, h.store, "/", func(e storage.Entry) error {
+		if !strings.HasSuffix(e.Path, ".md") {
+			return nil
+		}
+		content, readErr := h.store.Read(ctx, e.Path)
+		if readErr != nil {
+			return nil
+		}
+		bfm, berr := markdown.Frontmatter(content)
+		if berr != nil || bfm == nil {
+			return nil
+		}
+		title := pageStem(e.Path)
+		if t, ok := bfm["title"].(string); ok && t != "" {
+			title = t
+		}
+		state, _ := bfm["state"].(string)
+		status, _ := bfm["status"].(string)
+		meta[normalizeMetaPath(e.Path)] = workflowPageMeta{
+			path: e.Path, state: state, status: status, title: title,
+		}
+		return nil
+	})
+	return computeBlockedStatus(w, meta, fm, pagePath)
 }

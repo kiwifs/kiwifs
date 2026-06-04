@@ -783,6 +783,13 @@ export function createKanbanStore() {
 
       if (targetState === sourceState) return;
 
+      const draggedPage = columns
+        .flatMap((col) => col.pages)
+        .find((page) => page.path === pagePath);
+      if (draggedPage?.blocked && targetState === "in_progress") {
+        return;
+      }
+
       if (isTreePageDragData(dragData)) {
         try {
           await api.assignWorkflow(pagePath, activeWorkflow, targetState);

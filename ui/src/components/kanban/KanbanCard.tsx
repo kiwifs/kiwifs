@@ -6,9 +6,15 @@ import {
   AlignLeft,
   CalendarClock,
   AlertTriangle,
-  Ban,
+  Lock,
   Link2,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@kw/components/ui/tooltip";
 import { createKanbanCardDragData } from "@kw/lib/kanbanDnd";
 import {
   tagColor,
@@ -28,7 +34,9 @@ const BASE_CARD_CLASS =
   "group flex flex-col overflow-hidden rounded-lg border bg-card px-3 py-2.5 text-sm cursor-grab active:cursor-grabbing hover:border-border/70 hover:bg-accent/30 transition-colors duration-150";
 
 function getCardClassName(isBlocked: boolean): string {
-  if (isBlocked) return `${BASE_CARD_CLASS} border-destructive/50 bg-destructive/[0.03]`;
+  if (isBlocked) {
+    return `${BASE_CARD_CLASS} border-border/50 bg-muted/30 opacity-60`;
+  }
   return `${BASE_CARD_CLASS} border-border/40`;
 }
 
@@ -89,17 +97,25 @@ export function KanbanCard({ page, onNavigate }: Props) {
   const hasMetaIcons = hasDescription || validDue || pStyle || isBlocked || hasDeps;
   const hasMembers = !!page.author;
 
+  const blockTooltip = isBlocked
+    ? (page.block_reason ? `Blocked by: ${page.block_reason}` : "Blocked")
+    : undefined;
+
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={getCardClassName(isBlocked)}
-    >
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            {...listeners}
+            className={getCardClassName(isBlocked)}
+            title={blockTooltip}
+          >
       {isBlocked && (
-        <div className="flex items-center gap-1 mb-1 text-destructive text-[11px] font-medium">
-          <Ban className="h-3 w-3 shrink-0" />
+        <div className="flex items-center gap-1 mb-1 text-muted-foreground text-[11px] font-medium">
+          <Lock className="h-3 w-3 shrink-0" />
           <span className="truncate">{page.block_reason || "Blocked"}</span>
         </div>
       )}
@@ -208,6 +224,14 @@ export function KanbanCard({ page, onNavigate }: Props) {
           </div>
         </div>
       )}
-    </div>
+          </div>
+        </TooltipTrigger>
+        {isBlocked && blockTooltip && (
+          <TooltipContent side="top" className="max-w-xs text-xs">
+            {blockTooltip}
+          </TooltipContent>
+        )}
+      </Tooltip>
+    </TooltipProvider>
   );
 }
