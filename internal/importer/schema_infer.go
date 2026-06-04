@@ -100,6 +100,87 @@ func inferColumnType(vals []string) string {
 	return "string"
 }
 
+// InferFieldTypesNative inspects native Go values (from JSON decode) and
+// returns a JSON-Schema-style property map that correctly handles null,
+// boolean, number, array, and object types without the lossy string
+// conversion that InferFieldTypes performs.
+func InferFieldTypesNative(rows []map[string]any) map[string]any {
+	if len(rows) == 0 {
+		return map[string]any{}
+	}
+	cols := make(map[string][]any)
+	for _, row := range rows {
+		for k, v := range row {
+			cols[k] = append(cols[k], v)
+		}
+	}
+	props := make(map[string]any, len(cols))
+	for name, vals := range cols {
+		props[name] = map[string]any{"type": inferNativeType(vals)}
+	}
+	return props
+}
+
+func inferNativeType(vals []any) string {
+	allBool, allInt, allNum, allStr, allArr := true, true, true, true, true
+	nonNull := 0
+	for _, v := range vals {
+		if v == nil {
+			continue
+		}
+		nonNull++
+		switch val := v.(type) {
+		case bool:
+			allInt = false
+			allNum = false
+			allStr = false
+			allArr = false
+			_ = val
+		case float64:
+			allBool = false
+			allArr = false
+			if val != float64(int64(val)) {
+				allInt = false
+			}
+		case string:
+			allBool = false
+			allInt = false
+			allNum = false
+			allArr = false
+		case []any:
+			allBool = false
+			allInt = false
+			allNum = false
+			allStr = false
+			_ = val
+		case map[string]any:
+			return "object"
+		default:
+			allBool = false
+			allArr = false
+		}
+	}
+	if nonNull == 0 {
+		return "string"
+	}
+	if allBool {
+		return "boolean"
+	}
+	if allInt {
+		return "integer"
+	}
+	if allNum {
+		return "number"
+	}
+	if allArr {
+		return "array"
+	}
+	if allStr {
+		return "string"
+	}
+	return "string"
+}
+
 // SchemaDocument wraps inferred properties as JSON Schema.
 func SchemaDocument(name string, props map[string]any) ([]byte, error) {
 	doc := map[string]any{

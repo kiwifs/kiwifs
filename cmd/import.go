@@ -357,21 +357,26 @@ func runInferSchema(cmd *cobra.Command, from string) error {
 	if file == "" {
 		return fmt.Errorf("--file is required with --infer-schema")
 	}
-	var rows []map[string]string
-	var err error
+	name := strings.TrimSuffix(file, filepath.Ext(file))
+
+	var props map[string]any
 	switch from {
 	case "csv":
-		rows, err = importer.SampleCSVRows(file, 100)
+		rows, err := importer.SampleCSVRows(file, 100)
+		if err != nil {
+			return err
+		}
+		props = importer.InferFieldTypes(rows)
 	case "json", "jsonl":
-		rows, err = importer.SampleJSONRows(file, 100)
+		rows, err := importer.SampleJSONRowsNative(file, 100)
+		if err != nil {
+			return err
+		}
+		props = importer.InferFieldTypesNative(rows)
 	default:
 		return fmt.Errorf("--infer-schema supports --from csv, json, jsonl (got %q)", from)
 	}
-	if err != nil {
-		return err
-	}
-	name := strings.TrimSuffix(file, filepath.Ext(file))
-	props := importer.InferFieldTypes(rows)
+
 	out, err := importer.SchemaDocument(name, props)
 	if err != nil {
 		return err
