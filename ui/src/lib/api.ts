@@ -847,7 +847,7 @@ export const api = {
   async importUpload(opts: {
     file: File;
     from: string;
-    mode: "preview" | "import";
+    mode: "preview" | "import" | "infer-fields";
     prefix?: string;
     id_column?: string;
     table?: string;
@@ -887,6 +887,14 @@ export const api = {
 
   async importPreview(params: ImportPreviewRequest): Promise<ImportPreviewResponse> {
     return request(`${kiwiBase()}/import/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+  },
+
+  async importInferFields(params: Omit<ImportPreviewRequest, "limit" | "field_mappings">): Promise<ImportInferFieldsResponse> {
+    return request(`${kiwiBase()}/import/infer-fields`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
@@ -1075,6 +1083,10 @@ export type ImportPreviewRequest = {
 
 export type ImportPreviewResponse = {
   records: { path: string; frontmatter: Record<string, unknown>; body_preview: string }[];
+};
+
+export type ImportInferFieldsResponse = {
+  fields: ImportFieldMapping[];
 };
 
 export type ImportRunRequest = {

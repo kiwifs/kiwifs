@@ -11,6 +11,7 @@ import {
   type AirbyteSpecResponse,
   type AirbyteStream,
   type ImportFieldMapping,
+  type ImportInferFieldsResponse,
   type ImportPreviewRequest,
   type ImportPreviewResponse,
   type ImportRunRequest,
@@ -72,23 +73,6 @@ const FIELD_MAPPING_SOURCES = new Set([
 
 function supportsFieldMapping(sourceType: SourceType | null): boolean {
   return sourceType != null && FIELD_MAPPING_SOURCES.has(sourceType);
-}
-
-function inferFieldType(value: unknown): ImportFieldMapping["type"] {
-  if (typeof value === "boolean") return "boolean";
-  if (typeof value === "number") return "number";
-  if (typeof value === "string") {
-    const s = value.trim();
-    const low = s.toLowerCase();
-    if (low === "true" || low === "false") return "boolean";
-    if (s !== "" && !Number.isNaN(Number(s))) return "number";
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return "date";
-  }
-  return "string";
-}
-
-function extractSourceFields(frontmatter: Record<string, unknown>): string[] {
-  return Object.keys(frontmatter).filter((k) => !k.startsWith("_")).sort();
 }
 
 const FILE_ACCEPT: Record<string, string> = {
@@ -346,6 +330,25 @@ export function KiwiImportWizard({ onClose, onComplete }: { onClose: () => void;
     return params;
   }, [state, importPrefix, activeMappings, getEffectiveDSN, getEffectiveURI]);
 
+  const fetchInferredFields = useCallback(async (): Promise<ImportFieldMapping[]> => {
+    if (isUploadable && state.uploadedFile) {
+      const resp = await api.importUpload({
+        file: state.uploadedFile,
+        from: state.sourceType!,
+        mode: "infer-fields",
+        prefix: importPrefix,
+        id_column: state.idColumn || undefined,
+        table: state.sourceType === "sqlite" ? state.selectedTable : undefined,
+      }) as unknown as ImportInferFieldsResponse;
+      return resp.fields.map((f) => ({ ...f, skip: false }));
+    }
+    const params = buildSourceParams();
+    delete params.field_mappings;
+    delete params.limit;
+    const resp = await api.importInferFields(params as Omit<ImportPreviewRequest, "limit" | "field_mappings">);
+    return resp.fields.map((f) => ({ ...f, skip: false }));
+  }, [state, isUploadable, importPrefix, buildSourceParams]);
+
   const fetchPreviewRecords = useCallback(async (limit: number, applyMappings = true) => {
     const mappings = applyMappings && activeMappings.length > 0 ? activeMappings : undefined;
     if (isUploadable && state.uploadedFile) {
@@ -367,18 +370,7 @@ export function KiwiImportWizard({ onClose, onComplete }: { onClose: () => void;
   }, [state, isUploadable, importPrefix, activeMappings, buildSourceParams]);
 
   const loadSourceFields = async () => {
-    const records = await fetchPreviewRecords(1, false);
-    if (records.length === 0) {
-      update({ fieldMappings: [] });
-      return;
-    }
-    const keys = extractSourceFields(records[0].frontmatter);
-    const mappings: ImportFieldMapping[] = keys.map((source) => ({
-      source,
-      target: source,
-      type: inferFieldType(records[0].frontmatter[source]),
-      skip: false,
-    }));
+    const mappings = await fetchInferredFields();
     update({ fieldMappings: mappings });
   };
 
@@ -714,7 +706,7 @@ function FieldMappingStep({ state, update, onBack, onPreview, onReload, loading 
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-medium">Field mapping</h2>
-          <p className="text-sm text-muted-foreground mt-1">Map source fields to frontmatter keys, set types, or skip fields you do not want imported.</p>
+          <p className="text-sm text-muted-foreground mt-1">Map source fields to frontmatter keys. Types are inferred from up to 100 sample rows — adjust or skip fields as needed.</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void onReload()} disabled={loading}>
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Reload

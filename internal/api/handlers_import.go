@@ -635,8 +635,68 @@ func (h *Handlers) ImportPreview(c echo.Context) error {
 		limit = 5
 	}
 
-	// Build an importRequest to reuse buildAPISource
-	ir := importRequest{
+	ir := previewToImportRequest(req)
+	ir.Prefix = req.Prefix
+	ir.IDColumn = req.IDColumn
+	ir.Columns = req.Columns
+	ir.FieldMappings = req.FieldMappings
+	ir.Limit = limit
+
+	src, err := buildAPISource(ir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	defer src.Close()
+
+	previews, err := streamImportPreviews(c.Request().Context(), src, limit, recordPreviewOptsFromRequest(req))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, previewResponse{Records: previews})
+}
+
+type inferFieldsResponse struct {
+	Fields []importer.InferredField `json:"fields"`
+}
+
+// ImportInferFields godoc
+//
+//	@Summary		Infer import field types
+//	@Description	Samples records from a source and returns suggested field mappings with detected types.
+//	@Tags			import
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		previewRequest	true	"Infer-fields request (same shape as preview)"
+//	@Success		200		{object}	inferFieldsResponse
+//	@Failure		400		{object}	map[string]string	"Invalid request body or source configuration details"
+//	@Failure		500		{object}	map[string]string	"Internal server or sampling error"
+//	@Router			/api/kiwi/import/infer-fields [post]
+func (h *Handlers) ImportInferFields(c echo.Context) error {
+	var req previewRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if req.From == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "from is required")
+	}
+
+	ir := previewToImportRequest(req)
+	src, err := buildAPISource(ir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	defer src.Close()
+
+	fields, err := inferFieldsFromSource(c.Request().Context(), src)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, inferFieldsResponse{Fields: fields})
+}
+
+func previewToImportRequest(req previewRequest) importRequest {
+	return importRequest{
 		From:          req.From,
 		DSN:           req.DSN,
 		URI:           req.URI,
@@ -650,28 +710,19 @@ func (h *Handlers) ImportPreview(c echo.Context) error {
 		Project:       req.Project,
 		Credentials:   req.Credentials,
 		APIKey:        req.APIKey,
-		Prefix:        req.Prefix,
-		IDColumn:      req.IDColumn,
-		Columns:       req.Columns,
-		FieldMappings: req.FieldMappings,
-		Limit:         limit,
 		AirbyteConfig: req.AirbyteConfig,
 		AirbyteImage:  req.AirbyteImage,
 		Streams:       req.Streams,
 		Via:           req.Via,
 	}
+}
 
-	src, err := buildAPISource(ir)
+func inferFieldsFromSource(ctx context.Context, src importer.Source) ([]importer.InferredField, error) {
+	rows, err := importer.SampleSourceFields(ctx, src, 100)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return nil, err
 	}
-	defer src.Close()
-
-	previews, err := streamImportPreviews(c.Request().Context(), src, limit, recordPreviewOptsFromRequest(req))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	return c.JSON(http.StatusOK, previewResponse{Records: previews})
+	return importer.InferMappingFields(rows), nil
 }
 
 func recordPreviewOptsFromRequest(req previewRequest) importer.RecordPreviewOpts {
@@ -1500,6 +1551,20 @@ func (h *Handlers) ImportUpload(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, previewResponse{Records: previews})
+	}
+
+	if mode == "infer-fields" {
+		apiSrc, err := buildAPISource(ir)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		defer apiSrc.Close()
+
+		fields, err := inferFieldsFromSource(c.Request().Context(), apiSrc)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(http.StatusOK, inferFieldsResponse{Fields: fields})
 	}
 
 	// Run actual import

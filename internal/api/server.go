@@ -536,6 +536,7 @@ func (s *Server) setupRoutes() {
 	api.POST("/import/upload", h.ImportUpload)
 	api.POST("/import/browse", h.ImportBrowse)
 	api.POST("/import/preview", h.ImportPreview)
+	api.POST("/import/infer-fields", h.ImportInferFields)
 	api.GET("/import/connections", h.ListConnections)
 	api.POST("/import/connections", h.SaveConnection)
 	api.DELETE("/import/connections/:id", h.DeleteConnection)
