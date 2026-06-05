@@ -76,6 +76,7 @@ func init() {
 	importCmd.Flags().Bool("api", false, "use live API mode (confluence)")
 	importCmd.Flags().String("space", "", "space key (confluence API mode)")
 	importCmd.Flags().Bool("infer-schema", false, "infer JSON Schema from csv/json/jsonl sample and print to stdout")
+	importCmd.Flags().Bool("save-schema", false, "save inferred schema to .kiwi/schemas/<name>.json (only with --infer-schema)")
 }
 
 func runImport(cmd *cobra.Command, _ []string) error {
@@ -357,6 +358,7 @@ func runInferSchema(cmd *cobra.Command, from string) error {
 	if file == "" {
 		return fmt.Errorf("--file is required with --infer-schema")
 	}
+	saveSchema, _ := cmd.Flags().GetBool("save-schema")
 	name := strings.TrimSuffix(file, filepath.Ext(file))
 
 	var props map[string]any
@@ -380,6 +382,18 @@ func runInferSchema(cmd *cobra.Command, from string) error {
 	out, err := importer.SchemaDocument(name, props)
 	if err != nil {
 		return err
+	}
+
+	if saveSchema {
+		dir := filepath.Join(".kiwi", "schemas")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("create %s: %w", dir, err)
+		}
+		path := filepath.Join(dir, name+".json")
+		if err := os.WriteFile(path, out, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+		fmt.Fprintf(os.Stderr, "saved schema to %s\n", path)
 	}
 	fmt.Println(string(out))
 	return nil
