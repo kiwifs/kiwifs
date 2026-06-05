@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.19](https://github.com/kiwifs/kiwifs/compare/v0.19.18...v0.19.19) (2026-06-05)
+
+
+### Bug Fixes
+
+* **update:** handle platform-suffixed binary names + add test coverage ([#244](https://github.com/kiwifs/kiwifs/issues/244)) ([cbd7203](https://github.com/kiwifs/kiwifs/commit/cbd720300740a81247bf6c650e05f84ef5a73fe3))
+
 ## [0.19.18](https://github.com/kiwifs/kiwifs/compare/v0.19.17...v0.19.18) (2026-06-05)
 
 
