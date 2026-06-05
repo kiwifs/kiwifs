@@ -121,9 +121,22 @@ func (s *ConfluenceSource) walk() error {
 		rel, _ := filepath.Rel(s.exportPath, path)
 		relPath := strings.TrimSuffix(rel, ext)
 
-		// Use hierarchy path if available, otherwise preserve directory structure
+		// Use hierarchy path if available, otherwise preserve directory structure.
+		// Prefer stable IDs (titles are not unique).
+		pageID := fmt.Sprintf("%v", meta["ajs-page-id"])
+		if pageID == "<nil>" || pageID == "" {
+			pageID = fmt.Sprintf("%v", meta["page-id"])
+		}
 		titleStr := fmt.Sprintf("%v", meta["title"])
-		if hierPath, ok := hierarchy[titleStr]; ok {
+		if pageID != "" && pageID != "<nil>" {
+			meta["confluence_page_id"] = pageID
+		}
+
+		if pageID != "" && pageID != "<nil>" {
+			if hierPath, ok := hierarchy[pageID]; ok {
+				relPath = hierPath
+			}
+		} else if hierPath, ok := hierarchy[titleStr]; ok {
 			relPath = hierPath
 		} else {
 			// Preserve the directory-based hierarchy from the export
@@ -164,12 +177,29 @@ func (s *ConfluenceSource) parseHierarchy() map[string]string {
 		idToPage[pages[i].ID] = &pages[i]
 	}
 
-	// Build hierarchy paths
+	// Detect duplicate slugs per parent (titles are not unique).
+	parentSlugCounts := make(map[string]map[string]int)
+	for _, p := range pages {
+		parent := p.ParentID
+		base := slugifyTitle(p.Title)
+		if _, ok := parentSlugCounts[parent]; !ok {
+			parentSlugCounts[parent] = make(map[string]int)
+		}
+		parentSlugCounts[parent][base]++
+	}
+
+	// Build hierarchy paths.
+	// Store both ID -> path and (best-effort) Title -> path for older exports.
 	for _, page := range pages {
 		var parts []string
 		current := &page
 		for current != nil {
-			parts = append([]string{slugifyTitle(current.Title)}, parts...)
+			base := slugifyTitle(current.Title)
+			seg := base
+			if counts, ok := parentSlugCounts[current.ParentID]; ok && counts[base] > 1 && current.ID != "" {
+				seg = fmt.Sprintf("%s-%s", base, current.ID)
+			}
+			parts = append([]string{seg}, parts...)
 			if current.ParentID == "" {
 				break
 			}
@@ -179,7 +209,16 @@ func (s *ConfluenceSource) parseHierarchy() map[string]string {
 			}
 			current = parent
 		}
-		hierarchy[page.Title] = strings.Join(parts, "/")
+		path := strings.Join(parts, "/")
+		if page.ID != "" {
+			hierarchy[page.ID] = path
+		}
+		if page.Title != "" {
+			// Only set if absent; titles can collide.
+			if _, exists := hierarchy[page.Title]; !exists {
+				hierarchy[page.Title] = path
+			}
+		}
 	}
 
 	return hierarchy
