@@ -160,6 +160,71 @@ Conflicting source of truth content, long enough to avoid the empty-page thresho
 	}
 }
 
+func TestScan_FlagsExpiredMemory(t *testing.T) {
+	store, root := buildStore(t, map[string]string{
+		"expired.md": `---
+title: Expired
+owner: alice
+status: verified
+expires_at: 2020-01-01T00:00:00Z
+reviewed: 2030-01-01
+next-review: 2040-01-01
+---
+
+Content long enough to avoid empty-page flag and hit fifty chars of body text here.
+`,
+		"fresh.md": `---
+title: Fresh
+owner: alice
+status: verified
+expires_at: 2099-01-01T00:00:00Z
+reviewed: 2030-01-01
+next-review: 2040-01-01
+---
+
+Another page with enough content to avoid the empty-page threshold easily.
+`,
+	})
+	sc := New(root, store, nil, 90)
+	res, err := sc.Scan(context.Background())
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	by := issuesByKind(res.Issues)
+	if len(by[IssueExpiredMemory]) != 1 {
+		t.Fatalf("expected 1 expired-memory, got %+v", by[IssueExpiredMemory])
+	}
+	if by[IssueExpiredMemory][0].Path != "expired.md" {
+		t.Fatalf("expected expired.md, got %s", by[IssueExpiredMemory][0].Path)
+	}
+}
+
+func TestScan_FlagsTTLExpiredMemory(t *testing.T) {
+	store, root := buildStore(t, map[string]string{
+		"ttl-expired.md": `---
+title: TTL expired
+owner: alice
+status: verified
+created: 2020-01-01T00:00:00Z
+ttl: 1h
+reviewed: 2030-01-01
+next-review: 2040-01-01
+---
+
+Content long enough to avoid empty-page flag and hit fifty chars of body text here.
+`,
+	})
+	sc := New(root, store, nil, 90)
+	res, err := sc.Scan(context.Background())
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	by := issuesByKind(res.Issues)
+	if len(by[IssueExpiredMemory]) != 1 || by[IssueExpiredMemory][0].Path != "ttl-expired.md" {
+		t.Fatalf("expected ttl-expired.md flagged, got %+v", by[IssueExpiredMemory])
+	}
+}
+
 func TestScan_HealthyCount(t *testing.T) {
 	store, root := buildStore(t, map[string]string{
 		"index.md": `---

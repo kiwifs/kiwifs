@@ -27,6 +27,7 @@ const (
 	IssueBrokenLink    = "broken-link"
 	IssueNoReviewDate  = "no-review-date"
 	IssueDecisionFound = "decision-found"
+	IssueExpiredMemory = "expired-memory"
 )
 
 type Issue struct {
@@ -89,6 +90,16 @@ func severityRank(s string) int {
 func (r *ScanResult) HasErrors() bool {
 	for _, is := range r.Issues {
 		if is.Severity == "error" {
+			return true
+		}
+	}
+	return false
+}
+
+// HasWarnings reports whether any issue has warning severity.
+func (r *ScanResult) HasWarnings() bool {
+	for _, is := range r.Issues {
+		if is.Severity == "warning" {
 			return true
 		}
 	}
@@ -230,6 +241,9 @@ func (s *Scanner) checkPage(ctx context.Context, p pageInfo, existing map[string
 
 	// Stale detection
 	issues = append(issues, s.checkStale(p)...)
+
+	// Memory expiration
+	issues = append(issues, s.checkExpiredMemory(ctx, p)...)
 
 	// No review date (has owner but no next-review)
 	if _, hasOwner := p.frontmatter["owner"]; hasOwner {
@@ -458,6 +472,69 @@ func tagOverlap(a, b []string) []string {
 		}
 	}
 	return overlap
+}
+
+func (s *Scanner) checkExpiredMemory(ctx context.Context, p pageInfo) []Issue {
+	now := time.Now().UTC()
+
+	if expiresAt, ok := fmDateField(p.frontmatter, "expires_at"); ok {
+		if now.After(expiresAt) {
+			return []Issue{{
+				Kind:       IssueExpiredMemory,
+				Path:       p.path,
+				Message:    fmt.Sprintf("memory expired at %s", expiresAt.Format(time.RFC3339)),
+				Severity:   "info",
+				Suggestion: "update or remove expires_at, or archive the page",
+			}}
+		}
+		return nil
+	}
+
+	ttlRaw, ok := p.frontmatter["ttl"].(string)
+	if !ok || strings.TrimSpace(ttlRaw) == "" {
+		return nil
+	}
+	ttl, ok := parseTTL(strings.TrimSpace(ttlRaw))
+	if !ok {
+		return nil
+	}
+
+	base, ok := fmDateField(p.frontmatter, "created")
+	if !ok {
+		if ent, err := s.store.Stat(ctx, p.path); err == nil && ent != nil && !ent.ModTime.IsZero() {
+			base = ent.ModTime.UTC()
+			ok = true
+		}
+	}
+	if !ok {
+		return nil
+	}
+	if now.After(base.Add(ttl)) {
+		return []Issue{{
+			Kind:       IssueExpiredMemory,
+			Path:       p.path,
+			Message:    fmt.Sprintf("memory TTL %s elapsed (base %s)", ttlRaw, base.Format(time.RFC3339)),
+			Severity:   "info",
+			Suggestion: "refresh the page or remove the ttl field",
+		}}
+	}
+	return nil
+}
+
+func parseTTL(raw string) (time.Duration, bool) {
+	var n int
+	var unit string
+	if _, err := fmt.Sscanf(raw, "%d%s", &n, &unit); err != nil || n <= 0 {
+		return 0, false
+	}
+	switch unit {
+	case "d":
+		return time.Duration(n) * 24 * time.Hour, true
+	case "h":
+		return time.Duration(n) * time.Hour, true
+	default:
+		return 0, false
+	}
 }
 
 func fmDateField(fm map[string]any, key string) (time.Time, bool) {

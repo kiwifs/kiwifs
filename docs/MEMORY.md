@@ -33,6 +33,17 @@ Use `memory_kind` to classify a page. Recognised values include:
 
 ---
 
+## Memory expiration: `expires_at` and `ttl`
+
+Agents can mark memories as temporary without deleting them:
+
+- **`expires_at`** — RFC3339 timestamp. When in the past, `kiwifs janitor` reports an `expired-memory` issue (info severity).
+- **`ttl`** — Relative lifetime from the page `created` date (or file mtime when `created` is absent). Supported formats: `7d`, `24h`.
+
+Expired pages are flagged for review, not auto-deleted.
+
+---
+
 ## Path convention: `episodes/`
 
 By default, any markdown under the prefix **`episodes/`** (configurable) is treated as **episodic** when `memory_kind` is not set to `semantic` or `consolidation`. That lets you drop files into a folder without always setting `memory_kind`.
