@@ -33,6 +33,36 @@ type confluenceExportAttachment struct {
 	fileName string
 }
 
+func confluenceExportPageDirForAttachment(attachmentDir string) string {
+	// attachmentDir is a relative directory in the export, e.g. "Space/Page/attachments/1234"
+	parts := strings.Split(attachmentDir, string(filepath.Separator))
+	for i := range parts {
+		if parts[i] == "attachment" || parts[i] == "attachments" {
+			if i == 0 {
+				return ""
+			}
+			return filepath.Join(parts[:i]...)
+		}
+	}
+	return filepath.Dir(attachmentDir)
+}
+
+var confluenceExportAssetLinkRe = regexp.MustCompile(`(?i)(src|href)\s*=\s*("([^"]*(?:attachments?|download/attachments)[^"]*/([^/"?#]+))"|'([^']*(?:attachments?|download/attachments)[^']*/([^/'?#]+))')`)
+
+func rewriteConfluenceExportAssetLinks(html string) string {
+	return confluenceExportAssetLinkRe.ReplaceAllStringFunc(html, func(m string) string {
+		sub := confluenceExportAssetLinkRe.FindStringSubmatch(m)
+		filename := sub[4]
+		if filename == "" {
+			filename = sub[6]
+		}
+		if filename == "" {
+			return m
+		}
+		return fmt.Sprintf(`%s="_assets/%s"`, sub[1], filename)
+	})
+}
+
 // confluenceExportEntity represents a page in the Confluence XML export manifest.
 type confluenceExportEntity struct {
 	ID       string `xml:"id,attr"`
@@ -80,7 +110,7 @@ func (s *ConfluenceSource) walk() error {
 			dir := filepath.Dir(rel)
 			if strings.Contains(dir, "attachment") || strings.Contains(dir, "attachments") {
 				s.attachments = append(s.attachments, confluenceExportAttachment{
-					pagePath: dir,
+					pagePath: confluenceExportPageDirForAttachment(dir),
 					filePath: path,
 					fileName: filepath.Base(path),
 				})
@@ -97,6 +127,7 @@ func (s *ConfluenceSource) walk() error {
 		// CDATA sections that html.Parse would strip
 		rawHTML := string(data)
 		rawHTML = convertConfluenceMacros(rawHTML)
+		rawHTML = rewriteConfluenceExportAssetLinks(rawHTML)
 
 		doc, parseErr := html.Parse(bytes.NewReader([]byte(rawHTML)))
 		if parseErr != nil {
@@ -345,7 +376,7 @@ func (s *ConfluenceSource) Stream(ctx context.Context) (<-chan Record, <-chan er
 				continue
 			}
 
-			attPath := filepath.Join(filepath.Dir(att.pagePath), "_assets", att.fileName)
+			attPath := filepath.Join(att.pagePath, "_assets", att.fileName)
 
 			fields := map[string]any{
 				"_raw_content":  string(data),
