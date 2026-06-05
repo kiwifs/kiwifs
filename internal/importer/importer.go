@@ -111,6 +111,26 @@ func Run(ctx context.Context, src Source, pipe *pipeline.Pipeline, opts Options)
 				pk = fmt.Sprintf("row_%d", count)
 			}
 
+			// Binary assets (e.g. Confluence attachments) are written as-is
+			// without the .md extension or frontmatter wrapping.
+			if isBin, _ := fields["_is_binary"].(bool); isBin {
+				if binData, ok := fields["_binary_data"].([]byte); ok {
+					binPath := fmt.Sprintf("%s/%s", prefix, sanitizePath(pk))
+					seenPaths[binPath] = true
+					if !opts.DryRun {
+						if _, err := pipe.Write(ctx, binPath, binData, actor); err != nil {
+							stats.Errors = append(stats.Errors, fmt.Sprintf("%s: %v", binPath, err))
+						} else {
+							stats.Imported++
+						}
+					} else {
+						stats.Imported++
+					}
+					count++
+					continue
+				}
+			}
+
 			path := fmt.Sprintf("%s/%s.md", prefix, sanitizePath(pk))
 			seenPaths[path] = true
 

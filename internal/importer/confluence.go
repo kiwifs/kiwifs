@@ -674,6 +674,15 @@ func convertNodeWithPlaceholders(buf *strings.Builder, n *html.Node, listDepth i
 		buf.WriteString(href)
 		buf.WriteByte(')')
 
+	case "img":
+		alt := getAttr(n, "alt")
+		src := getAttr(n, "src")
+		buf.WriteString("![")
+		buf.WriteString(alt)
+		buf.WriteString("](")
+		buf.WriteString(src)
+		buf.WriteByte(')')
+
 	case "ul":
 		buf.WriteByte('\n')
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
