@@ -56,54 +56,7 @@ func (s *GSheetsSource) Stream(ctx context.Context) (<-chan Record, <-chan error
 			return
 		}
 
-		if len(resp.Values) < 1 {
-			return
-		}
-
-		headers := make([]string, len(resp.Values[0]))
-		for i, v := range resp.Values[0] {
-			headers[i] = fmt.Sprintf("%v", v)
-		}
-
-		numericCols := detectNumericSheetColumns(resp.Values[1:], headers)
-
-		name := s.Name()
-		for i, row := range resp.Values[1:] {
-			if ctx.Err() != nil {
-				return
-			}
-
-			fields := make(map[string]any, len(headers))
-			for j, h := range headers {
-				if j >= len(row) {
-					continue
-				}
-				val := fmt.Sprintf("%v", row[j])
-				if numericCols[h] {
-					if n, err := strconv.ParseFloat(val, 64); err == nil {
-						if n == float64(int64(n)) {
-							fields[h] = int64(n)
-						} else {
-							fields[h] = n
-						}
-						continue
-					}
-				}
-				fields[h] = val
-			}
-
-			pk := fmt.Sprintf("%d", i)
-			if id, ok := fields["id"]; ok {
-				pk = fmt.Sprintf("%v", id)
-			}
-
-			rec := Record{
-				SourceID:   fmt.Sprintf("gsheets:%s:%d", name, i),
-				SourceDSN:  s.spreadsheetID,
-				Table:      name,
-				Fields:     fields,
-				PrimaryKey: pk,
-			}
+		for _, rec := range RecordsFromSheetValues(resp.Values, s.spreadsheetID, s.Name()) {
 			select {
 			case records <- rec:
 			case <-ctx.Done():
