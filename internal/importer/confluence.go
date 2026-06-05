@@ -93,6 +93,7 @@ func (s *ConfluenceSource) Name() string {
 func (s *ConfluenceSource) walk() error {
 	// Try to parse hierarchy from entities.xml (Confluence HTML export manifest)
 	hierarchy := s.parseHierarchy()
+	linkIndex := buildConfluencePageLinkIndex(s.exportPath, hierarchy)
 
 	return filepath.Walk(s.exportPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -128,6 +129,7 @@ func (s *ConfluenceSource) walk() error {
 		rawHTML := string(data)
 		rawHTML = convertConfluenceMacros(rawHTML)
 		rawHTML = rewriteConfluenceExportAssetLinks(rawHTML)
+		rawHTML = rewriteConfluenceExportPageLinks(rawHTML, linkIndex)
 
 		doc, parseErr := html.Parse(bytes.NewReader([]byte(rawHTML)))
 		if parseErr != nil {
@@ -149,30 +151,15 @@ func (s *ConfluenceSource) walk() error {
 		bodyHTML := renderHTMLNode(body)
 		md := convertMixedContent(bodyHTML)
 
-		rel, _ := filepath.Rel(s.exportPath, path)
-		relPath := strings.TrimSuffix(rel, ext)
-
-		// Use hierarchy path if available, otherwise preserve directory structure.
-		// Prefer stable IDs (titles are not unique).
+		titleStr := fmt.Sprintf("%v", meta["title"])
 		pageID := fmt.Sprintf("%v", meta["ajs-page-id"])
 		if pageID == "<nil>" || pageID == "" {
 			pageID = fmt.Sprintf("%v", meta["page-id"])
 		}
-		titleStr := fmt.Sprintf("%v", meta["title"])
 		if pageID != "" && pageID != "<nil>" {
 			meta["confluence_page_id"] = pageID
 		}
-
-		if pageID != "" && pageID != "<nil>" {
-			if hierPath, ok := hierarchy[pageID]; ok {
-				relPath = hierPath
-			}
-		} else if hierPath, ok := hierarchy[titleStr]; ok {
-			relPath = hierPath
-		} else {
-			// Preserve the directory-based hierarchy from the export
-			relPath = buildExportHierarchyPath(relPath)
-		}
+		relPath := confluencePageRelPath(s.exportPath, path, hierarchy, meta, ext)
 
 		s.pages = append(s.pages, confluencePage{
 			relPath:  relPath,
