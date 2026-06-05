@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.20](https://github.com/kiwifs/kiwifs/compare/v0.19.19...v0.19.20) (2026-06-05)
+
+
+### Features
+
+* **import:** save inferred schema to .kiwi/schemas ([#236](https://github.com/kiwifs/kiwifs/issues/236)) ([c62b221](https://github.com/kiwifs/kiwifs/commit/c62b221170aa811073044d74c3f6ff84ad3a30f5))
+
 ## [0.19.19](https://github.com/kiwifs/kiwifs/compare/v0.19.18...v0.19.19) (2026-06-05)
 
 
