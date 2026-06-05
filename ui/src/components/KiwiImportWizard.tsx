@@ -492,8 +492,6 @@ export function KiwiImportWizard({ onClose, onComplete }: { onClose: () => void;
           ) : (state.sourceType === "postgres" || state.sourceType === "mysql" || state.sourceType === "mongodb") ? (
             <NativeSourceForm sourceType={state.sourceType} state={state} update={update} onCancel={onClose} onTestConnection={handleTestConnection} onNext={() => update({ selectedTable: state.table || state.collection || state.selectedTable || "data", step: 3 })} loading={loading} />
           ) : UPLOADABLE_SOURCES.has(state.sourceType) ? (
-            <NativeSourceForm sourceType={state.sourceType} state={state} update={update} onCancel={onClose} onTestConnection={handleTestConnection} onNext={() => update({ selectedTable: state.table || state.collection || state.selectedTable || "data", step: 3 })} loading={loading} />
-          ) : UPLOADABLE_SOURCES.has(state.sourceType) ? (
             <UploadableSourceForm sourceType={state.sourceType} state={state} update={update} onCancel={onClose} onNext={() => {
               const name = state.uploadedFile?.name?.replace(/\.\w+$/, "") || state.file.split(/[/\\]/).pop()?.replace(/\.\w+$/, "") || "data";
               update({ selectedTable: state.sourceType === "sqlite" ? (state.selectedTable || "data") : name, step: 3 });

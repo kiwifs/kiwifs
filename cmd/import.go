@@ -359,7 +359,7 @@ func runInferSchema(cmd *cobra.Command, from string) error {
 		return fmt.Errorf("--file is required with --infer-schema")
 	}
 	saveSchema, _ := cmd.Flags().GetBool("save-schema")
-	name := strings.TrimSuffix(file, filepath.Ext(file))
+	name := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
 
 	var props map[string]any
 	switch from {
