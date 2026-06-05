@@ -204,10 +204,12 @@ func convertPanelMacro(input string) string {
 
 		bodyRe := regexp.MustCompile(`(?s)<ac:rich-text-body>(.*?)</ac:rich-text-body>`)
 		bodyMatch := bodyRe.FindStringSubmatch(match)
-		content := ""
+		rawContent := ""
 		if len(bodyMatch) >= 2 {
-			content = strings.TrimSpace(bodyMatch[1])
+			rawContent = strings.TrimSpace(bodyMatch[1])
 		}
+
+		content := innerHTMLToMarkdown(rawContent)
 
 		var buf strings.Builder
 		if title != "" {
