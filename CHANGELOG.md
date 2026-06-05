@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.18](https://github.com/kiwifs/kiwifs/compare/v0.19.17...v0.19.18) (2026-06-05)
+
+
+### Bug Fixes
+
+* **update:** match actual asset names and extract binary from archive ([#242](https://github.com/kiwifs/kiwifs/issues/242)) ([abbedf9](https://github.com/kiwifs/kiwifs/commit/abbedf9a4485e1afc33211650b933493553c75f6))
+
 ## [0.19.17](https://github.com/kiwifs/kiwifs/compare/v0.19.16...v0.19.17) (2026-06-04)
 
 
