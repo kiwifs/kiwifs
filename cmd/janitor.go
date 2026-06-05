@@ -4,11 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
-	"github.com/kiwifs/kiwifs/internal/janitor"
-	"github.com/kiwifs/kiwifs/internal/search"
-	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -43,30 +39,9 @@ func init() {
 }
 
 func runJanitor(cmd *cobra.Command, args []string) error {
-	root, _ := cmd.Flags().GetString("root")
-	staleDays, _ := cmd.Flags().GetInt("stale-days")
-	asJSON, _ := cmd.Flags().GetBool("json")
-
-	abs, err := filepath.Abs(root)
+	result, _, _, asJSON, err := runKnowledgeScan(cmd)
 	if err != nil {
-		return fmt.Errorf("janitor: %w", err)
-	}
-
-	store, err := storage.NewLocal(abs)
-	if err != nil {
-		return fmt.Errorf("janitor: open storage: %w", err)
-	}
-	var searcher search.Searcher
-	sq, sqerr := search.NewSQLite(abs, store)
-	if sqerr == nil {
-		defer sq.Close()
-		searcher = sq
-	}
-
-	scanner := janitor.New(abs, store, searcher, staleDays)
-	result, err := scanner.Scan(cmd.Context())
-	if err != nil {
-		return fmt.Errorf("janitor: %w", err)
+		return err
 	}
 
 	if asJSON {

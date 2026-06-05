@@ -95,6 +95,16 @@ func (r *ScanResult) HasErrors() bool {
 	return false
 }
 
+// HasWarnings reports whether any issue has warning severity.
+func (r *ScanResult) HasWarnings() bool {
+	for _, is := range r.Issues {
+		if is.Severity == "warning" {
+			return true
+		}
+	}
+	return false
+}
+
 type Scanner struct {
 	root      string
 	store     storage.Storage
