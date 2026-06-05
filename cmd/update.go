@@ -110,6 +110,17 @@ func assetNameForPlatform() string {
 	return fmt.Sprintf("kiwifs-%s-%s", runtime.GOOS, runtime.GOARCH)
 }
 
+// isKiwifsBinary returns true if name looks like the kiwifs executable.
+// Goreleaser may name it "kiwifs", "kiwifs.exe", or include the platform
+// suffix like "kiwifs-darwin-arm64".
+func isKiwifsBinary(name string) bool {
+	base := filepath.Base(name)
+	if base == "kiwifs" || base == "kiwifs.exe" {
+		return true
+	}
+	return strings.HasPrefix(base, "kiwifs-") || strings.HasPrefix(base, "kiwifs_")
+}
+
 // extractBinary pulls the kiwifs executable out of a downloaded release archive.
 // Goreleaser produces .tar.gz on Linux/macOS and .zip on Windows.
 func extractBinary(data []byte, assetName string) ([]byte, error) {
@@ -129,7 +140,7 @@ func extractBinary(data []byte, assetName string) ([]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("read tar: %w", err)
 			}
-			if filepath.Base(hdr.Name) == "kiwifs" {
+			if hdr.Typeflag == tar.TypeReg && isKiwifsBinary(hdr.Name) {
 				return io.ReadAll(tr)
 			}
 		}
@@ -141,8 +152,7 @@ func extractBinary(data []byte, assetName string) ([]byte, error) {
 			return nil, fmt.Errorf("open zip: %w", err)
 		}
 		for _, f := range zr.File {
-			base := filepath.Base(f.Name)
-			if base == "kiwifs" || base == "kiwifs.exe" {
+			if !f.FileInfo().IsDir() && isKiwifsBinary(f.Name) {
 				rc, err := f.Open()
 				if err != nil {
 					return nil, err
