@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.21](https://github.com/kiwifs/kiwifs/compare/v0.19.20...v0.19.21) (2026-06-05)
+
+
+### Bug Fixes
+
+* **import:** schema path, wizard routing, binary attachments, img tags, panel macro ([#247](https://github.com/kiwifs/kiwifs/issues/247)) ([b88f123](https://github.com/kiwifs/kiwifs/commit/b88f123823fd6205d77e666b5178f692fa3923ea))
+
 ## [0.19.20](https://github.com/kiwifs/kiwifs/compare/v0.19.19...v0.19.20) (2026-06-05)
 
 
