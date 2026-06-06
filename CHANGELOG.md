@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.25](https://github.com/kiwifs/kiwifs/compare/v0.19.24...v0.19.25) (2026-06-06)
+
+
+### Features
+
+* **search:** add scope filter to search APIs ([#271](https://github.com/kiwifs/kiwifs/issues/271)) ([b92f982](https://github.com/kiwifs/kiwifs/commit/b92f982a164521678d50af3549ddf0dd9ec34c01))
+
 ## [0.19.24](https://github.com/kiwifs/kiwifs/compare/v0.19.23...v0.19.24) (2026-06-06)
 
 
