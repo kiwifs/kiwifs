@@ -428,6 +428,29 @@ func TestToolHandlerSearchRejectsInvalidRecencyWeight(t *testing.T) {
 	}
 }
 
+func TestToolHandlerSearchScope(t *testing.T) {
+	b, tmp := setupTestBackend(t)
+	defer b.Close()
+
+	if err := os.WriteFile(filepath.Join(tmp, "alice.md"), []byte("---\nscope: user:alice\n---\n# Alice\n\nzebrabyte shared note\n"), 0o644); err != nil {
+		t.Fatalf("write alice fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "bob.md"), []byte("---\nscope: user:bob\n---\n# Bob\n\nzebrabyte shared note\n"), 0o644); err != nil {
+		t.Fatalf("write bob fixture: %v", err)
+	}
+
+	text := mustCallTool(t, handleSearch(b), "kiwi_search", map[string]any{
+		"query": "zebrabyte",
+		"scope": "user:alice",
+	})
+	if !strings.Contains(text, "alice.md") {
+		t.Fatalf("scoped search missing alice.md: %s", text)
+	}
+	if strings.Contains(text, "bob.md") {
+		t.Fatalf("scoped search included bob.md: %s", text)
+	}
+}
+
 func TestToolHandlerDelete(t *testing.T) {
 	b, _ := setupTestBackend(t)
 	defer b.Close()
@@ -606,6 +629,47 @@ func TestRemoteSearchWithRecencyAddsParam(t *testing.T) {
 	}
 	if gotRecency != "0.3" {
 		t.Fatalf("recency_weight query = %q, want 0.3", gotRecency)
+	}
+}
+
+func TestRemoteSearchScopedAddsScopeParam(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+
+	rb := NewRemoteBackend(srv.URL, "", "default")
+	if _, err := rb.SearchScoped(context.Background(), "auth", 10, 0, "docs/", "user:alice"); err != nil {
+		t.Fatalf("SearchScoped: %v", err)
+	}
+	if !strings.Contains(gotQuery, "scope=user%3Aalice") {
+		t.Fatalf("query %q missing scope", gotQuery)
+	}
+	if !strings.Contains(gotQuery, "pathPrefix=docs%2F") {
+		t.Fatalf("query %q missing pathPrefix", gotQuery)
+	}
+}
+
+func TestRemoteSearchSemanticScopedAddsScope(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+
+	rb := NewRemoteBackend(srv.URL, "", "default")
+	if _, err := rb.SearchSemanticScoped(context.Background(), "auth", 5, "user:alice"); err != nil {
+		t.Fatalf("SearchSemanticScoped: %v", err)
+	}
+	if got["scope"] != "user:alice" {
+		t.Fatalf("semantic request scope = %v, want user:alice", got["scope"])
 	}
 }
 

@@ -289,6 +289,10 @@ func (b *LocalBackend) Search(ctx context.Context, query string, limit, offset i
 	return b.searchWithOptions(ctx, query, limit, offset, pathPrefix, search.SearchOptions{})
 }
 
+func (b *LocalBackend) SearchScoped(ctx context.Context, query string, limit, offset int, pathPrefix, scope string) ([]SearchResult, error) {
+	return b.searchWithOptions(ctx, query, limit, offset, pathPrefix, search.SearchOptions{Scope: scope})
+}
+
 func (b *LocalBackend) SearchWithRecency(ctx context.Context, query string, limit, offset int, pathPrefix string, recencyWeight float64) ([]SearchResult, error) {
 	return b.searchWithOptions(ctx, query, limit, offset, pathPrefix, search.SearchOptions{RecencyWeight: recencyWeight})
 }
@@ -301,9 +305,11 @@ func (b *LocalBackend) searchWithOptions(ctx context.Context, query string, limi
 		results []search.Result
 		err     error
 	)
-	if opts.IncludeSuperseded || opts.RecencyWeight > 0 {
+	if opts.IncludeSuperseded || opts.RecencyWeight > 0 || opts.Scope != "" {
 		if os, ok := b.stack.Searcher.(search.OptionsSearcher); ok {
 			results, err = os.SearchWithOptions(ctx, query, limit, offset, pathPrefix, opts)
+		} else if opts.Scope != "" {
+			return nil, fmt.Errorf("scope search requires sqlite search backend")
 		} else {
 			results, err = b.stack.Searcher.Search(ctx, query, limit, offset, pathPrefix)
 		}
@@ -339,6 +345,10 @@ func stripMarkTags(s string) string {
 }
 
 func (b *LocalBackend) SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	return b.SearchSemanticScoped(ctx, query, limit, "")
+}
+
+func (b *LocalBackend) SearchSemanticScoped(ctx context.Context, query string, limit int, scope string) ([]SearchResult, error) {
 	if err := b.init(); err != nil {
 		return nil, err
 	}
@@ -348,9 +358,26 @@ func (b *LocalBackend) SearchSemantic(ctx context.Context, query string, limit i
 	if limit <= 0 {
 		limit = vectorstore.DefaultTopK
 	}
-	results, err := b.stack.Vectors.Search(ctx, query, limit)
+	searchLimit := limit
+	if scope != "" && searchLimit < 200 {
+		searchLimit = 200
+	}
+	results, err := b.stack.Vectors.Search(ctx, query, searchLimit)
 	if err != nil {
 		return nil, err
+	}
+	if scope != "" {
+		sf, ok := b.stack.Searcher.(search.ScopeFilterer)
+		if !ok {
+			return nil, fmt.Errorf("scope search requires sqlite search backend")
+		}
+		results, err = filterVectorResultsByScope(ctx, sf, results, scope)
+		if err != nil {
+			return nil, err
+		}
+		if len(results) > limit {
+			results = results[:limit]
+		}
 	}
 	out := make([]SearchResult, len(results))
 	for i, r := range results {
@@ -361,6 +388,31 @@ func (b *LocalBackend) SearchSemantic(ctx context.Context, query string, limit i
 		}
 	}
 	return out, nil
+}
+
+func filterVectorResultsByScope(ctx context.Context, sf search.ScopeFilterer, results []vectorstore.Result, scope string) ([]vectorstore.Result, error) {
+	if scope == "" || len(results) == 0 {
+		return results, nil
+	}
+	paths := make([]string, len(results))
+	for i, result := range results {
+		paths[i] = result.Path
+	}
+	kept, err := sf.FilterByScope(ctx, paths, scope)
+	if err != nil {
+		return nil, err
+	}
+	keep := make(map[string]bool, len(kept))
+	for _, path := range kept {
+		keep[path] = true
+	}
+	filtered := results[:0]
+	for _, result := range results {
+		if keep[result.Path] {
+			filtered = append(filtered, result)
+		}
+	}
+	return filtered, nil
 }
 
 type metaQuerier interface {

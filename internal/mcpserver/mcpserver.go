@@ -134,6 +134,7 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 				mcp.WithString("query", mcp.Required(), mcp.Description("Search query")),
 				mcp.WithNumber("limit", mcp.Description("Max results (default 20, max 50)")),
 				mcp.WithString("path_prefix", mcp.Description("Filter to a subtree like failures/")),
+				mcp.WithString("scope", mcp.Description("Filter to pages whose frontmatter scope exactly matches, e.g. user:alice")),
 				mcp.WithNumber("offset", mcp.Description("Offset for pagination (default 0)")),
 				mcp.WithNumber("recency_weight", mcp.Description("Blend recency into ranking, from 0.0 relevance-only to 1.0 recency-only")),
 				mcp.WithReadOnlyHintAnnotation(true),
@@ -343,6 +344,7 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 				mcp.WithString("query", mcp.Required(), mcp.Description("Search query")),
 				mcp.WithNumber("limit", mcp.Description("Max results (default 5)")),
 				mcp.WithNumber("threshold", mcp.Description("Minimum similarity score 0.0–1.0")),
+				mcp.WithString("scope", mcp.Description("Filter to pages whose frontmatter scope exactly matches, e.g. user:alice")),
 				mcp.WithReadOnlyHintAnnotation(true),
 				mcp.WithDestructiveHintAnnotation(false),
 			),
@@ -1034,6 +1036,14 @@ func handleWrite(b Backend) server.ToolHandlerFunc {
 	}
 }
 
+type scopedSearchBackend interface {
+	SearchScoped(ctx context.Context, query string, limit, offset int, pathPrefix, scope string) ([]SearchResult, error)
+}
+
+type scopedSemanticBackend interface {
+	SearchSemanticScoped(ctx context.Context, query string, limit int, scope string) ([]SearchResult, error)
+}
+
 func handleSearch(b Backend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := req.GetArguments()
@@ -1050,13 +1060,20 @@ func handleSearch(b Backend) server.ToolHandlerFunc {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		scope, _ := args["scope"].(string)
 		recencyWeight, err := floatArg(args, "recency_weight", 0)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		var results []SearchResult
-		if recencyWeight > 0 {
+		if scope != "" {
+			sb, ok := b.(scopedSearchBackend)
+			if !ok {
+				return mcp.NewToolResultError("scope search is not supported by this backend"), nil
+			}
+			results, err = sb.SearchScoped(ctx, query, limit+1, offset, prefix, scope)
+		} else if recencyWeight > 0 {
 			recencyBackend, ok := b.(recencySearchBackend)
 			if !ok {
 				return mcp.NewToolResultError("recency_weight is not supported by this backend"), nil
@@ -1676,8 +1693,21 @@ func handleSearchSemantic(b Backend) server.ToolHandlerFunc {
 		if v, ok := args["threshold"].(float64); ok {
 			threshold = v
 		}
+		scope, _ := args["scope"].(string)
 
-		results, err := b.SearchSemantic(ctx, query, limit)
+		var (
+			results []SearchResult
+			err     error
+		)
+		if scope != "" {
+			sb, ok := b.(scopedSemanticBackend)
+			if !ok {
+				return mcp.NewToolResultError("scope search is not supported by this backend"), nil
+			}
+			results, err = sb.SearchSemanticScoped(ctx, query, limit, scope)
+		} else {
+			results, err = b.SearchSemantic(ctx, query, limit)
+		}
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Semantic search failed: %v", err)), nil
 		}

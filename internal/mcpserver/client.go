@@ -255,31 +255,39 @@ func (r *RemoteBackend) Tree(ctx context.Context, path string) (json.RawMessage,
 }
 
 func (r *RemoteBackend) Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]SearchResult, error) {
-	return r.search(ctx, query, limit, offset, pathPrefix, 0)
+	return r.SearchScoped(ctx, query, limit, offset, pathPrefix, "")
+}
+
+func (r *RemoteBackend) SearchScoped(ctx context.Context, query string, limit, offset int, pathPrefix, scope string) ([]SearchResult, error) {
+	return r.searchFull(ctx, query, limit, offset, pathPrefix, scope, 0)
 }
 
 func (r *RemoteBackend) SearchWithRecency(ctx context.Context, query string, limit, offset int, pathPrefix string, recencyWeight float64) ([]SearchResult, error) {
-	return r.search(ctx, query, limit, offset, pathPrefix, recencyWeight)
+	return r.searchFull(ctx, query, limit, offset, pathPrefix, "", recencyWeight)
 }
 
-func (r *RemoteBackend) search(ctx context.Context, query string, limit, offset int, pathPrefix string, recencyWeight float64) ([]SearchResult, error) {
-	q := r.apiPrefix + "/search?q=" + url.QueryEscape(query)
+func (r *RemoteBackend) searchFull(ctx context.Context, query string, limit, offset int, pathPrefix, scope string, recencyWeight float64) ([]SearchResult, error) {
+	params := url.Values{}
+	params.Set("q", query)
 	if limit > 0 {
-		q += "&limit=" + strconv.Itoa(limit)
+		params.Set("limit", strconv.Itoa(limit))
 	}
 	if offset > 0 {
-		q += "&offset=" + strconv.Itoa(offset)
+		params.Set("offset", strconv.Itoa(offset))
 	}
 	if pathPrefix != "" {
-		q += "&pathPrefix=" + url.QueryEscape(pathPrefix)
+		params.Set("pathPrefix", pathPrefix)
+	}
+	if scope != "" {
+		params.Set("scope", scope)
 	}
 	if recencyWeight > 0 {
-		q += "&recency_weight=" + strconv.FormatFloat(recencyWeight, 'f', -1, 64)
+		params.Set("recency_weight", strconv.FormatFloat(recencyWeight, 'f', -1, 64))
 	}
 	var result struct {
 		Results []SearchResult `json:"results"`
 	}
-	if err := r.getJSON(ctx, q, &result); err != nil {
+	if err := r.getJSON(ctx, r.apiPrefix+"/search?"+params.Encode(), &result); err != nil {
 		return nil, err
 	}
 	for i := range result.Results {
@@ -289,6 +297,10 @@ func (r *RemoteBackend) search(ctx context.Context, query string, limit, offset 
 }
 
 func (r *RemoteBackend) SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	return r.SearchSemanticScoped(ctx, query, limit, "")
+}
+
+func (r *RemoteBackend) SearchSemanticScoped(ctx context.Context, query string, limit int, scope string) ([]SearchResult, error) {
 	var result struct {
 		Results []struct {
 			Path  string  `json:"path"`
@@ -296,7 +308,11 @@ func (r *RemoteBackend) SearchSemantic(ctx context.Context, query string, limit 
 			Score float32 `json:"score"`
 		} `json:"results"`
 	}
-	if err := r.postJSON(ctx, r.apiPrefix+"/search/semantic", map[string]any{"query": query, "topK": limit}, &result); err != nil {
+	body := map[string]any{"query": query, "topK": limit}
+	if scope != "" {
+		body["scope"] = scope
+	}
+	if err := r.postJSON(ctx, r.apiPrefix+"/search/semantic", body, &result); err != nil {
 		return nil, err
 	}
 	out := make([]SearchResult, len(result.Results))

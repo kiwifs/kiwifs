@@ -49,6 +49,7 @@ type searchResponse struct {
 //	@Param			include_superseded	query		bool	false	"Include pages with memory_status: superseded (excluded by default)"
 //	@Param			recency_weight		query		number	false	"Blend recency into ranking, from 0.0 relevance-only to 1.0 recency-only"
 //	@Param			modifiedAfter		query		string	false	"RFC3339 formatted cutoff date to filter search results by modification time"
+//	@Param			scope				query		string	false	"Filter results to pages whose frontmatter scope exactly matches"
 //	@Success		200				{object}	searchResponse
 //	@Failure		400				{object}	map[string]string
 //	@Failure		500				{object}	map[string]string
@@ -62,6 +63,11 @@ func (h *Handlers) Search(c echo.Context) error {
 	offset := search.NormalizeOffset(parseIntParam(c, "offset", 0))
 	boost := c.QueryParam("boost")
 	includeSuperseded := c.QueryParam("include_superseded") == "true"
+	scope := c.QueryParam("scope")
+	pathPrefix := c.QueryParam("pathPrefix")
+	if pathPrefix == "" {
+		pathPrefix = c.QueryParam("path_prefix")
+	}
 	recencyWeight, perr := parseRecencyWeight(c)
 	if perr != nil {
 		return perr
@@ -71,20 +77,23 @@ func (h *Handlers) Search(c echo.Context) error {
 		err     error
 	)
 	switch {
-	case includeSuperseded || recencyWeight > 0:
+	case includeSuperseded || scope != "" || recencyWeight > 0:
 		if os, ok := h.searcher.(search.OptionsSearcher); ok {
-			results, err = os.SearchWithOptions(c.Request().Context(), q, limit, offset, "", search.SearchOptions{
+			results, err = os.SearchWithOptions(c.Request().Context(), q, limit, offset, pathPrefix, search.SearchOptions{
 				IncludeSuperseded: includeSuperseded,
+				Scope:             scope,
 				RecencyWeight:     recencyWeight,
 			})
+		} else if scope == "" {
+			results, err = h.searcher.Search(c.Request().Context(), q, limit, offset, pathPrefix)
 		} else {
-			results, err = h.searcher.Search(c.Request().Context(), q, limit, offset, "")
+			return echo.NewHTTPError(http.StatusNotImplemented, "scope search requires sqlite search backend")
 		}
 	case h.searcher != nil:
 		if ts, ok := h.searcher.(search.TrustSearcher); ok && boost != "none" && boost != "off" {
-			results, err = ts.SearchBoosted(c.Request().Context(), q, limit, offset, "")
+			results, err = ts.SearchBoosted(c.Request().Context(), q, limit, offset, pathPrefix)
 		} else {
-			results, err = h.searcher.Search(c.Request().Context(), q, limit, offset, "")
+			results, err = h.searcher.Search(c.Request().Context(), q, limit, offset, pathPrefix)
 		}
 	}
 	if err != nil {
@@ -148,7 +157,7 @@ func (h *Handlers) Search(c echo.Context) error {
 		}
 	}
 	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindSearch, Query: q, HitCount: len(results)})
-	return c.JSON(http.StatusOK, h.buildSearchResponse(c, q, limit, offset, "", results))
+	return c.JSON(http.StatusOK, h.buildSearchResponse(c, q, limit, offset, pathPrefix, results))
 }
 
 func parseRecencyWeight(c echo.Context) (float64, error) {
@@ -324,6 +333,7 @@ type semanticRequest struct {
 	TopK          int    `json:"topK"`
 	Offset        int    `json:"offset"`
 	ModifiedAfter string `json:"modifiedAfter,omitempty"`
+	Scope         string `json:"scope,omitempty"`
 }
 
 type semanticResponse struct {
@@ -344,6 +354,7 @@ type semanticResponse struct {
 //	@Param			q		query		string			false	"Search query string (used if not provided in JSON body)"
 //	@Param			topK	query		int				false	"Maximum number of search results to return (default: 10)"
 //	@Param			offset	query		int				false	"Number of search results to skip (offset)"
+//	@Param			scope	query		string			false	"Filter results to pages whose frontmatter scope exactly matches"
 //	@Success		200		{object}	semanticResponse
 //	@Failure		400		{object}	map[string]string
 //	@Failure		500		{object}	map[string]string
@@ -366,6 +377,9 @@ func (h *Handlers) SemanticSearch(c echo.Context) error {
 	if req.Offset == 0 {
 		req.Offset = parseIntParam(c, "offset", 0)
 	}
+	if req.Scope == "" {
+		req.Scope = c.QueryParam("scope")
+	}
 	if req.Query == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "query is required")
 	}
@@ -377,9 +391,23 @@ func (h *Handlers) SemanticSearch(c echo.Context) error {
 	if offset < 0 {
 		offset = 0
 	}
-	results, err := h.vectors.Search(c.Request().Context(), req.Query, topK+offset)
+	searchLimit := topK + offset
+	if req.Scope != "" && searchLimit < 200 {
+		searchLimit = 200
+	}
+	results, err := h.vectors.Search(c.Request().Context(), req.Query, searchLimit)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if req.Scope != "" {
+		sf, ok := h.searcher.(search.ScopeFilterer)
+		if !ok {
+			return echo.NewHTTPError(http.StatusNotImplemented, "scope search requires sqlite search backend")
+		}
+		results, err = filterVectorResultsByScope(c.Request().Context(), sf, results, req.Scope)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
 	}
 	if offset >= len(results) {
 		results = nil
@@ -440,6 +468,31 @@ type metaResponse struct {
 	Results []metaResultEntry `json:"results"`
 }
 
+func filterVectorResultsByScope(ctx context.Context, sf search.ScopeFilterer, results []vectorstore.Result, scope string) ([]vectorstore.Result, error) {
+	if scope == "" || len(results) == 0 {
+		return results, nil
+	}
+	paths := make([]string, len(results))
+	for i, result := range results {
+		paths[i] = result.Path
+	}
+	kept, err := sf.FilterByScope(ctx, paths, scope)
+	if err != nil {
+		return nil, err
+	}
+	keep := make(map[string]bool, len(kept))
+	for _, path := range kept {
+		keep[path] = true
+	}
+	filtered := results[:0]
+	for _, result := range results {
+		if keep[result.Path] {
+			filtered = append(filtered, result)
+		}
+	}
+	return filtered, nil
+}
+
 // Meta godoc
 //
 //	@Summary		Query page metadata
@@ -452,6 +505,7 @@ type metaResponse struct {
 //	@Param			order	query		string		false	"Sorting order ('asc' or 'desc')"
 //	@Param			limit	query		int			false	"Maximum number of results to return"
 //	@Param			offset	query		int			false	"Number of results to skip (offset)"
+//	@Param			scope	query		string		false	"Filter results to pages whose frontmatter scope exactly matches"
 //	@Success		200		{object}	metaResponse
 //	@Failure		400		{object}	map[string]string
 //	@Failure		501		{object}	map[string]string
@@ -478,6 +532,9 @@ func (h *Handlers) Meta(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 		orFilters = append(orFilters, f)
+	}
+	if scope := c.QueryParam("scope"); scope != "" {
+		andFilters = append(andFilters, search.MetaFilter{Field: "$.scope", Op: "=", Value: scope})
 	}
 
 	sortField := c.QueryParam("sort")
