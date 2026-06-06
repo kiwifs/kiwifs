@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.23](https://github.com/kiwifs/kiwifs/compare/v0.19.22...v0.19.23) (2026-06-06)
+
+
+### Bug Fixes
+
+* **janitor:** TTL overflow, malformed date warnings, error count, root validation, search case ([#268](https://github.com/kiwifs/kiwifs/issues/268)) ([b5fb62a](https://github.com/kiwifs/kiwifs/commit/b5fb62abcbb68953c138f50a92a816a5f933ab7a))
+
 ## [0.19.22](https://github.com/kiwifs/kiwifs/compare/v0.19.21...v0.19.22) (2026-06-06)
 
 
