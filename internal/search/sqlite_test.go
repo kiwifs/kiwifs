@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -646,5 +647,63 @@ zebrabyte superseded memory page content here.
 	}
 	if len(allResults) != 2 {
 		t.Fatalf("include_superseded search want 2 results, got %+v", allResults)
+	}
+}
+
+func TestSearchWithOptions_FiltersScope(t *testing.T) {
+	s := newTestSQLite(t)
+
+	files := map[string][]byte{
+		"alice/one.md": []byte("---\nscope: user:alice\n---\n# Alpha\n\nzebrabyte shared note\n"),
+		"bob/one.md":   []byte("---\nscope: user:bob\n---\n# Beta\n\nzebrabyte shared note\n"),
+		"plain.md":     []byte("# Plain\n\nzebrabyte shared note\n"),
+	}
+	for path, content := range files {
+		if err := s.Index(ctxBG, path, content); err != nil {
+			t.Fatalf("index %s: %v", path, err)
+		}
+		if err := s.IndexMeta(ctxBG, path, content); err != nil {
+			t.Fatalf("index meta %s: %v", path, err)
+		}
+	}
+
+	results, err := s.SearchWithOptions(ctxBG, "zebrabyte", 10, 0, "", SearchOptions{Scope: "user:alice"})
+	if err != nil {
+		t.Fatalf("scoped search: %v", err)
+	}
+	if len(results) != 1 || results[0].Path != "alice/one.md" {
+		t.Fatalf("scoped search got %+v, want alice/one.md only", results)
+	}
+
+	allResults, err := s.Search(ctxBG, "zebrabyte", 10, 0, "")
+	if err != nil {
+		t.Fatalf("unscoped search: %v", err)
+	}
+	if len(allResults) != 3 {
+		t.Fatalf("unscoped search should keep all matches, got %+v", allResults)
+	}
+}
+
+func TestFilterByScopePreservesInputOrder(t *testing.T) {
+	s := newTestSQLite(t)
+
+	files := map[string][]byte{
+		"a.md": []byte("---\nscope: user:alice\n---\n# A\n"),
+		"b.md": []byte("---\nscope: user:bob\n---\n# B\n"),
+		"c.md": []byte("---\nscope: user:alice\n---\n# C\n"),
+	}
+	for path, content := range files {
+		if err := s.IndexMeta(ctxBG, path, content); err != nil {
+			t.Fatalf("index meta %s: %v", path, err)
+		}
+	}
+
+	got, err := s.FilterByScope(ctxBG, []string{"c.md", "b.md", "a.md"}, "user:alice")
+	if err != nil {
+		t.Fatalf("FilterByScope: %v", err)
+	}
+	want := []string{"c.md", "a.md"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("FilterByScope got %v, want %v", got, want)
 	}
 }

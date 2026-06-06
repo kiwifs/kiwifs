@@ -48,6 +48,41 @@ func TestMetaEndpoint(t *testing.T) {
 	}
 }
 
+func TestSearchAndMetaScopeFilter(t *testing.T) {
+	s, _ := buildSQLiteTestServer(t)
+
+	mustPutFile(t, s, "alice.md", "---\nscope: user:alice\n---\n# Alice\n\nzebrabyte shared note\n")
+	mustPutFile(t, s, "bob.md", "---\nscope: user:bob\n---\n# Bob\n\nzebrabyte shared note\n")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/kiwi/search?q=zebrabyte&scope=user%3Aalice", nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("search with scope: %d %s", rec.Code, rec.Body.String())
+	}
+	var searchResp searchResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &searchResp); err != nil {
+		t.Fatalf("unmarshal search response: %v", err)
+	}
+	if len(searchResp.Results) != 1 || searchResp.Results[0].Path != "alice.md" {
+		t.Fatalf("scoped search results = %+v, want alice.md only", searchResp.Results)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/kiwi/meta?scope=user%3Aalice", nil)
+	rec = httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("meta with scope: %d %s", rec.Code, rec.Body.String())
+	}
+	var metaResp metaResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &metaResp); err != nil {
+		t.Fatalf("unmarshal meta response: %v", err)
+	}
+	if len(metaResp.Results) != 1 || metaResp.Results[0].Path != "alice.md" {
+		t.Fatalf("scoped meta results = %+v, want alice.md only", metaResp.Results)
+	}
+}
+
 // TestWriteFileWithProvenance puts a file with X-Provenance and verifies
 // (a) the returned file has `derived-from` in its frontmatter and (b) the
 // /meta endpoint can find it by run id.

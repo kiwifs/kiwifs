@@ -87,6 +87,8 @@ type SearchOptions struct {
 	// IncludeSuperseded includes pages whose memory_status is superseded.
 	// Default search excludes them.
 	IncludeSuperseded bool
+	// Scope restricts results to pages whose frontmatter scope exactly matches.
+	Scope string
 }
 
 // OptionsSearcher supports optional search tuning beyond the base Searcher contract.
@@ -126,6 +128,12 @@ type Searcher interface {
 // per-file stat calls.
 type DateFilterer interface {
 	FilterByDate(ctx context.Context, paths []string, after time.Time) ([]string, error)
+}
+
+// ScopeFilterer is implemented by search backends that can filter result paths
+// using the indexed frontmatter scope field.
+type ScopeFilterer interface {
+	FilterByScope(ctx context.Context, paths []string, scope string) ([]string, error)
 }
 
 // TrustSearcher is implemented by search backends that support trust-boosted ranking.

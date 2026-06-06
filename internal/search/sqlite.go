@@ -396,6 +396,14 @@ WHERE docs MATCH ?`
 		sqlQ += ` AND dp.path LIKE ?`
 		args = append(args, pathPrefix+"%")
 	}
+	if opts.Scope != "" {
+		sqlQ += ` AND EXISTS (
+			SELECT 1 FROM file_meta fm_scope
+			WHERE fm_scope.path = dp.path
+			  AND json_extract(fm_scope.frontmatter, '$.scope') = ?
+		)`
+		args = append(args, opts.Scope)
+	}
 	if !opts.IncludeSuperseded {
 		sqlQ += ` AND NOT EXISTS (
 			SELECT 1 FROM file_meta fm
@@ -1315,6 +1323,50 @@ func (s *SQLite) FilterByDate(ctx context.Context, paths []string, after time.Ti
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// FilterByScope returns the subset of paths whose frontmatter scope exactly
+// matches scope, preserving the input order.
+func (s *SQLite) FilterByScope(ctx context.Context, paths []string, scope string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	if scope == "" {
+		return paths, nil
+	}
+	args := make([]any, 0, len(paths)+1)
+	for _, path := range paths {
+		args = append(args, path)
+	}
+	args = append(args, scope)
+	rows, err := s.readDB.QueryContext(ctx, fmt.Sprintf(
+		`SELECT path FROM file_meta WHERE path IN (%s) AND json_extract(frontmatter, '$.scope') = ?`,
+		placeholders(len(paths)),
+	), args...)
+	if err != nil {
+		return nil, fmt.Errorf("filter by scope: %w", err)
+	}
+	defer rows.Close()
+
+	kept := make(map[string]bool, len(paths))
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		kept[path] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]string, 0, len(kept))
+	for _, path := range paths {
+		if kept[path] {
+			out = append(out, path)
+		}
+	}
+	return out, nil
 }
 
 // SearchBoosted runs a normal FTS5 search and then applies a *soft*

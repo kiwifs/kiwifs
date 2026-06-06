@@ -286,10 +286,26 @@ func (b *LocalBackend) Tree(ctx context.Context, path string) (json.RawMessage, 
 }
 
 func (b *LocalBackend) Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]SearchResult, error) {
+	return b.SearchScoped(ctx, query, limit, offset, pathPrefix, "")
+}
+
+func (b *LocalBackend) SearchScoped(ctx context.Context, query string, limit, offset int, pathPrefix, scope string) ([]SearchResult, error) {
 	if err := b.init(); err != nil {
 		return nil, err
 	}
-	results, err := b.stack.Searcher.Search(ctx, query, limit, offset, pathPrefix)
+	var (
+		results []search.Result
+		err     error
+	)
+	if scope != "" {
+		os, ok := b.stack.Searcher.(search.OptionsSearcher)
+		if !ok {
+			return nil, fmt.Errorf("scope search requires sqlite search backend")
+		}
+		results, err = os.SearchWithOptions(ctx, query, limit, offset, pathPrefix, search.SearchOptions{Scope: scope})
+	} else {
+		results, err = b.stack.Searcher.Search(ctx, query, limit, offset, pathPrefix)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +330,10 @@ func stripMarkTags(s string) string {
 }
 
 func (b *LocalBackend) SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	return b.SearchSemanticScoped(ctx, query, limit, "")
+}
+
+func (b *LocalBackend) SearchSemanticScoped(ctx context.Context, query string, limit int, scope string) ([]SearchResult, error) {
 	if err := b.init(); err != nil {
 		return nil, err
 	}
@@ -323,9 +343,26 @@ func (b *LocalBackend) SearchSemantic(ctx context.Context, query string, limit i
 	if limit <= 0 {
 		limit = vectorstore.DefaultTopK
 	}
-	results, err := b.stack.Vectors.Search(ctx, query, limit)
+	searchLimit := limit
+	if scope != "" && searchLimit < 200 {
+		searchLimit = 200
+	}
+	results, err := b.stack.Vectors.Search(ctx, query, searchLimit)
 	if err != nil {
 		return nil, err
+	}
+	if scope != "" {
+		sf, ok := b.stack.Searcher.(search.ScopeFilterer)
+		if !ok {
+			return nil, fmt.Errorf("scope search requires sqlite search backend")
+		}
+		results, err = filterVectorResultsByScope(ctx, sf, results, scope)
+		if err != nil {
+			return nil, err
+		}
+		if len(results) > limit {
+			results = results[:limit]
+		}
 	}
 	out := make([]SearchResult, len(results))
 	for i, r := range results {
@@ -336,6 +373,31 @@ func (b *LocalBackend) SearchSemantic(ctx context.Context, query string, limit i
 		}
 	}
 	return out, nil
+}
+
+func filterVectorResultsByScope(ctx context.Context, sf search.ScopeFilterer, results []vectorstore.Result, scope string) ([]vectorstore.Result, error) {
+	if scope == "" || len(results) == 0 {
+		return results, nil
+	}
+	paths := make([]string, len(results))
+	for i, result := range results {
+		paths[i] = result.Path
+	}
+	kept, err := sf.FilterByScope(ctx, paths, scope)
+	if err != nil {
+		return nil, err
+	}
+	keep := make(map[string]bool, len(kept))
+	for _, path := range kept {
+		keep[path] = true
+	}
+	filtered := results[:0]
+	for _, result := range results {
+		if keep[result.Path] {
+			filtered = append(filtered, result)
+		}
+	}
+	return filtered, nil
 }
 
 type metaQuerier interface {
@@ -762,11 +824,11 @@ type localEngagementStats struct {
 }
 
 type localAnalytics struct {
-	TotalPages int                `json:"total_pages"`
-	TotalWords int                `json:"total_words"`
-	Health     localHealthStats   `json:"health"`
-	Coverage   localCoverageStats `json:"coverage"`
-	TopUpdated []localPageStat    `json:"top_updated"`
+	TotalPages int                  `json:"total_pages"`
+	TotalWords int                  `json:"total_words"`
+	Health     localHealthStats     `json:"health"`
+	Coverage   localCoverageStats   `json:"coverage"`
+	TopUpdated []localPageStat      `json:"top_updated"`
 	Engagement localEngagementStats `json:"engagement"`
 }
 
