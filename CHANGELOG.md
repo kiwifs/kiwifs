@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.24](https://github.com/kiwifs/kiwifs/compare/v0.19.23...v0.19.24) (2026-06-06)
+
+
+### Bug Fixes
+
+* **importer:** make ExtractKeywords deterministic for single-doc corpus ([#267](https://github.com/kiwifs/kiwifs/issues/267)) ([2f649fa](https://github.com/kiwifs/kiwifs/commit/2f649fa29471839e11fa1842ceaeb71a11058d86))
+
 ## [0.19.23](https://github.com/kiwifs/kiwifs/compare/v0.19.22...v0.19.23) (2026-06-06)
 
 
