@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hibernate-generic>
+  <object class="Page">
+    <id>1</id>
+    <property name="title">Home</property>
+  </object>
+  <object class="Page">
+    <id>2</id>
+    <property name="title">Child</property>
+    <property name="parent"><id>1</id></property>
+  </object>
+</hibernate-generic>

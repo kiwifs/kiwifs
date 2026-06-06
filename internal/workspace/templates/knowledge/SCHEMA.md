@@ -56,6 +56,8 @@ Every `.md` file should have YAML frontmatter. Required fields marked *.
 | merged-from     | object[]   |          | Episode paths this page was consolidated from. Each entry: `path`, `episode_id`, `date` |
 | confidence      | float      |          | 0.0–1.0, certainty level of this knowledge  |
 | memory_status   | string     |          | `active` · `contested` · `superseded` · `stale` (default: `active`) |
+| expires_at      | datetime   |          | RFC3339 expiration timestamp for temporary memories |
+| ttl             | string     |          | Relative lifetime from `created` (e.g. `7d`, `24h`) |
 
 ### Episodes (`episodes/*.md`)
 
@@ -71,6 +73,8 @@ Every `.md` file should have YAML frontmatter. Required fields marked *.
 | related-pages   | string[]   |          | Paths to existing pages this episode relates to |
 | consolidated    | boolean    |          | `true` when merged into a page              |
 | merged-into     | string[]   |          | Paths of pages this was merged into         |
+| expires_at      | datetime   |          | RFC3339 expiration timestamp for temporary memories |
+| ttl             | string     |          | Relative lifetime from `created` (e.g. `7d`, `24h`) |
 
 ## Memory Governance
 
