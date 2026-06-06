@@ -83,13 +83,13 @@ func TestExtractKeywords_Basic(t *testing.T) {
 	}
 	found := false
 	for _, kw := range keywords {
-		if strings.Contains(kw, "auth") || strings.Contains(kw, "token") || strings.Contains(kw, "middleware") {
+		if kw == "authentication" || kw == "tokens" || kw == "middleware" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected domain-relevant keyword, got %v", keywords)
+		t.Errorf("expected authentication, tokens, or middleware in top keywords, got %v", keywords)
 	}
 }
 

@@ -29,16 +29,23 @@ func ExtractKeywords(text string, corpusDF map[string]int, totalDocs int, maxKey
 			continue
 		}
 		termFreq := float64(count) / float64(len(words))
-		df := corpusDF[word]
-		if df == 0 {
-			df = 1
+		score := termFreq
+		if totalDocs > 1 {
+			df := corpusDF[word]
+			if df == 0 {
+				df = 1
+			}
+			idf := math.Log(float64(totalDocs+1) / float64(df+1))
+			score = termFreq * idf
 		}
-		idf := math.Log(float64(totalDocs+1) / float64(df+1))
-		scores = append(scores, scored{word, termFreq * idf})
+		scores = append(scores, scored{word, score})
 	}
 
 	sort.Slice(scores, func(i, j int) bool {
-		return scores[i].score > scores[j].score
+		if scores[i].score != scores[j].score {
+			return scores[i].score > scores[j].score
+		}
+		return scores[i].word < scores[j].word
 	})
 
 	result := make([]string, 0, maxKeywords)
