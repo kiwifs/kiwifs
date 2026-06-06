@@ -603,3 +603,48 @@ func TestBuildFTS5Query_PrefixWildcard(t *testing.T) {
 		t.Fatalf("prefix wildcard should pass through: got %q", q)
 	}
 }
+
+func TestSearch_ExcludesSupersededMemoryStatus(t *testing.T) {
+	s := newTestSQLite(t)
+
+	active := []byte(`---
+title: Active note
+memory_status: active
+---
+# Memory
+
+zebrabyte active memory page content here.
+`)
+	superseded := []byte(`---
+title: Old note
+memory_status: superseded
+---
+# Memory
+
+zebrabyte superseded memory page content here.
+`)
+	for path, content := range map[string][]byte{"pages/active.md": active, "pages/old.md": superseded} {
+		if err := s.Index(ctxBG, path, content); err != nil {
+			t.Fatalf("index %s: %v", path, err)
+		}
+		if err := s.IndexMeta(ctxBG, path, content); err != nil {
+			t.Fatalf("index meta %s: %v", path, err)
+		}
+	}
+
+	defaultResults, err := s.Search(ctxBG, "zebrabyte", 10, 0, "")
+	if err != nil {
+		t.Fatalf("search default: %v", err)
+	}
+	if len(defaultResults) != 1 || defaultResults[0].Path != "pages/active.md" {
+		t.Fatalf("default search should exclude superseded, got %+v", defaultResults)
+	}
+
+	allResults, err := s.SearchWithOptions(ctxBG, "zebrabyte", 10, 0, "", SearchOptions{IncludeSuperseded: true})
+	if err != nil {
+		t.Fatalf("search include superseded: %v", err)
+	}
+	if len(allResults) != 2 {
+		t.Fatalf("include_superseded search want 2 results, got %+v", allResults)
+	}
+}

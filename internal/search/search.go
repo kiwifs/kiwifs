@@ -82,6 +82,19 @@ const defaultSearchLimit = 50
 
 const maxSearchLimit = 200
 
+// SearchOptions tune optional search behaviour for backends that support them.
+type SearchOptions struct {
+	// IncludeSuperseded includes pages whose memory_status is superseded.
+	// Default search excludes them.
+	IncludeSuperseded bool
+}
+
+// OptionsSearcher supports optional search tuning beyond the base Searcher contract.
+type OptionsSearcher interface {
+	Searcher
+	SearchWithOptions(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions) ([]Result, error)
+}
+
 // Searcher searches across all knowledge files and (for index-backed engines)
 // keeps the index in sync with filesystem writes.
 //

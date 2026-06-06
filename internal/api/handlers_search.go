@@ -44,8 +44,9 @@ type searchResponse struct {
 //	@Param			q				query		string	true	"Search query string"
 //	@Param			limit			query		int		false	"Maximum number of search results to return (default: 15, max: 200)"
 //	@Param			offset			query		int		false	"Number of search results to skip (offset) (default: 0)"
-//	@Param			boost			query		string	false	"Set to 'none' or 'off' to disable trust boosting in search results"
-//	@Param			modifiedAfter	query		string	false	"RFC3339 formatted cutoff date to filter search results by modification time"
+//	@Param			boost				query		string	false	"Set to 'none' or 'off' to disable trust boosting in search results"
+//	@Param			include_superseded	query		bool	false	"Include pages with memory_status: superseded (excluded by default)"
+//	@Param			modifiedAfter		query		string	false	"RFC3339 formatted cutoff date to filter search results by modification time"
 //	@Success		200				{object}	searchResponse
 //	@Failure		400				{object}	map[string]string
 //	@Failure		500				{object}	map[string]string
@@ -58,14 +59,24 @@ func (h *Handlers) Search(c echo.Context) error {
 	limit := search.NormalizeLimit(parseIntParam(c, "limit", 0))
 	offset := search.NormalizeOffset(parseIntParam(c, "offset", 0))
 	boost := c.QueryParam("boost")
+	includeSuperseded := c.QueryParam("include_superseded") == "true"
 	var (
 		results []search.Result
 		err     error
 	)
-	if ts, ok := h.searcher.(search.TrustSearcher); ok && boost != "none" && boost != "off" {
-		results, err = ts.SearchBoosted(c.Request().Context(), q, limit, offset, "")
-	} else {
-		results, err = h.searcher.Search(c.Request().Context(), q, limit, offset, "")
+	switch {
+	case includeSuperseded:
+		if os, ok := h.searcher.(search.OptionsSearcher); ok {
+			results, err = os.SearchWithOptions(c.Request().Context(), q, limit, offset, "", search.SearchOptions{IncludeSuperseded: true})
+		} else {
+			results, err = h.searcher.Search(c.Request().Context(), q, limit, offset, "")
+		}
+	case h.searcher != nil:
+		if ts, ok := h.searcher.(search.TrustSearcher); ok && boost != "none" && boost != "off" {
+			results, err = ts.SearchBoosted(c.Request().Context(), q, limit, offset, "")
+		} else {
+			results, err = h.searcher.Search(c.Request().Context(), q, limit, offset, "")
+		}
 	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

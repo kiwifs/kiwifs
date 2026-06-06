@@ -242,6 +242,7 @@ CREATE INDEX IF NOT EXISTS idx_meta_type ON file_meta(json_extract(frontmatter, 
 CREATE INDEX IF NOT EXISTS idx_meta_priority ON file_meta(json_extract(frontmatter, '$.priority'));
 CREATE INDEX IF NOT EXISTS idx_meta_assignee ON file_meta(json_extract(frontmatter, '$.assignee'));
 CREATE INDEX IF NOT EXISTS idx_meta_claimed_by ON file_meta(json_extract(frontmatter, '$.claimed-by'));
+CREATE INDEX IF NOT EXISTS idx_meta_memory_status ON file_meta(json_extract(frontmatter, '$.memory_status'));
 CREATE TABLE IF NOT EXISTS failed_searches (
 	query TEXT NOT NULL,
 	search_type TEXT NOT NULL DEFAULT 'search',
@@ -375,6 +376,10 @@ func (s *SQLite) isEmpty(ctx context.Context) (bool, error) {
 }
 
 func (s *SQLite) Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error) {
+	return s.SearchWithOptions(ctx, query, limit, offset, pathPrefix, SearchOptions{})
+}
+
+func (s *SQLite) SearchWithOptions(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions) ([]Result, error) {
 	q := buildFTS5Query(query)
 	if q == "" {
 		return nil, nil
@@ -390,6 +395,13 @@ WHERE docs MATCH ?`
 	if pathPrefix != "" {
 		sqlQ += ` AND dp.path LIKE ?`
 		args = append(args, pathPrefix+"%")
+	}
+	if !opts.IncludeSuperseded {
+		sqlQ += ` AND NOT EXISTS (
+			SELECT 1 FROM file_meta fm
+			WHERE fm.path = dp.path
+			  AND json_extract(fm.frontmatter, '$.memory_status') = 'superseded'
+		)`
 	}
 	sqlQ += ` ORDER BY bm25(docs) LIMIT ? OFFSET ?`
 	args = append(args, limit, offset)

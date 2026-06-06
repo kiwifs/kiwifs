@@ -33,6 +33,21 @@ Use `memory_kind` to classify a page. Recognised values include:
 
 ---
 
+## `memory_status` in frontmatter
+
+Use `memory_status` to track the lifecycle of a memory page:
+
+| Value | Meaning |
+|-------|---------|
+| `active` | Current memory, retrieved normally (**default** when absent) |
+| `contested` | A contradiction was flagged; still retrievable, surfaced in memory reports |
+| `superseded` | Replaced by a newer memory; **excluded from default search** |
+| `stale` | Aged out or expired; deprioritized in ranking (future) |
+
+Pages with `memory_status: superseded` are indexed but omitted from default FTS search results. Pass `include_superseded=true` on `GET /api/kiwi/search` to include them.
+
+---
+
 ## Memory expiration: `expires_at` and `ttl`
 
 Agents can mark memories as temporary without deleting them:
