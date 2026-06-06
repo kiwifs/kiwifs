@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.22](https://github.com/kiwifs/kiwifs/compare/v0.19.21...v0.19.22) (2026-06-06)
+
+
+### Features
+
+* **import:** rewrite Confluence export page links to wiki paths ([#249](https://github.com/kiwifs/kiwifs/issues/249)) ([b7459b1](https://github.com/kiwifs/kiwifs/commit/b7459b11aecf4afde20303c81f5134ed2ca2c25a))
+* **memory:** add memory_status frontmatter indexing and search filtering ([#261](https://github.com/kiwifs/kiwifs/issues/261)) ([1f346f1](https://github.com/kiwifs/kiwifs/commit/1f346f1f44960c6b2a3506f24207309cf94c8640))
+
 ## [0.19.21](https://github.com/kiwifs/kiwifs/compare/v0.19.20...v0.19.21) (2026-06-05)
 
 
