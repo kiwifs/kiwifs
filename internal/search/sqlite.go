@@ -386,10 +386,12 @@ func (s *SQLite) SearchWithOptions(ctx context.Context, query string, limit, off
 	}
 	limit = NormalizeLimit(limit)
 	offset = NormalizeOffset(offset)
+	recencyWeight := normalizeRecencyWeight(opts.RecencyWeight)
 
-	sqlQ := `SELECT dp.path, bm25(docs) AS score
+	sqlQ := `SELECT dp.path, bm25(docs) AS score, COALESCE(fm.updated_at, '') AS updated_at
 FROM docs
 INNER JOIN doc_paths dp ON dp.rowid = docs.rowid
+LEFT JOIN file_meta fm ON fm.path = dp.path
 WHERE docs MATCH ?`
 	args := []any{q}
 	if pathPrefix != "" {
@@ -397,14 +399,13 @@ WHERE docs MATCH ?`
 		args = append(args, pathPrefix+"%")
 	}
 	if !opts.IncludeSuperseded {
-		sqlQ += ` AND NOT EXISTS (
-			SELECT 1 FROM file_meta fm
-			WHERE fm.path = dp.path
-			  AND LOWER(json_extract(fm.frontmatter, '$.memory_status')) = 'superseded'
-		)`
+		sqlQ += ` AND COALESCE(LOWER(json_extract(fm.frontmatter, '$.memory_status')), '') != 'superseded'`
 	}
-	sqlQ += ` ORDER BY bm25(docs) LIMIT ? OFFSET ?`
-	args = append(args, limit, offset)
+	sqlQ += ` ORDER BY bm25(docs)`
+	if recencyWeight == 0 {
+		sqlQ += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
 
 	queryTerms := strings.Fields(strings.ToLower(query))
 
@@ -422,25 +423,112 @@ WHERE docs MATCH ?`
 	}
 	defer rows.Close()
 
-	var results []Result
+	var ranked []sqliteSearchRow
 	for rows.Next() {
 		var path string
 		var score float64
-		if err := rows.Scan(&path, &score); err != nil {
+		var updatedRaw string
+		if err := rows.Scan(&path, &score, &updatedRaw); err != nil {
 			return nil, err
 		}
+		row := sqliteSearchRow{path: path, score: -score}
+		if updatedRaw != "" {
+			if updatedAt, perr := time.Parse(time.RFC3339, updatedRaw); perr == nil {
+				row.updatedAt = updatedAt
+				row.hasUpdatedAt = true
+			}
+		}
+		ranked = append(ranked, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if recencyWeight > 0 {
+		applyRecencyWeight(ranked, recencyWeight)
+		ranked = paginateSearchRows(ranked, offset, limit)
+	}
+	return s.searchRowsToResults(ctx, ranked, queryTerms), nil
+}
+
+type sqliteSearchRow struct {
+	path         string
+	score        float64
+	updatedAt    time.Time
+	hasUpdatedAt bool
+}
+
+func normalizeRecencyWeight(weight float64) float64 {
+	if weight < 0 {
+		return 0
+	}
+	if weight > 1 {
+		return 1
+	}
+	return weight
+}
+
+func applyRecencyWeight(rows []sqliteSearchRow, weight float64) {
+	if len(rows) == 0 || weight <= 0 {
+		return
+	}
+
+	var minUpdated, maxUpdated time.Time
+	haveUpdated := false
+	for _, row := range rows {
+		if !row.hasUpdatedAt {
+			continue
+		}
+		if !haveUpdated || row.updatedAt.Before(minUpdated) {
+			minUpdated = row.updatedAt
+		}
+		if !haveUpdated || row.updatedAt.After(maxUpdated) {
+			maxUpdated = row.updatedAt
+		}
+		haveUpdated = true
+	}
+
+	for i := range rows {
+		recencyScore := 0.0
+		if rows[i].hasUpdatedAt {
+			if maxUpdated.Equal(minUpdated) {
+				recencyScore = 1
+			} else {
+				recencyScore = rows[i].updatedAt.Sub(minUpdated).Seconds() / maxUpdated.Sub(minUpdated).Seconds()
+			}
+		}
+		rows[i].score = (1-weight)*rows[i].score + weight*recencyScore
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		return rows[i].score > rows[j].score
+	})
+}
+
+func paginateSearchRows(rows []sqliteSearchRow, offset, limit int) []sqliteSearchRow {
+	if offset >= len(rows) {
+		return nil
+	}
+	end := offset + limit
+	if end > len(rows) {
+		end = len(rows)
+	}
+	return rows[offset:end]
+}
+
+func (s *SQLite) searchRowsToResults(ctx context.Context, rows []sqliteSearchRow, queryTerms []string) []Result {
+	results := make([]Result, 0, len(rows))
+	for _, row := range rows {
 		snip := ""
-		if content, rerr := s.store.Read(ctx, path); rerr == nil {
+		if content, rerr := s.store.Read(ctx, row.path); rerr == nil {
 			snip = generateSnippet(content, queryTerms, 160)
 		}
 		results = append(results, Result{
-			Path:    path,
-			Score:   -score,
+			Path:    row.path,
+			Score:   row.score,
 			Snippet: snip,
 			Matches: []Match{{Line: 0, Text: snip}},
 		})
 	}
-	return results, rows.Err()
+	return results
 }
 
 func (s *SQLite) RecordFailedSearch(ctx context.Context, query, searchType string) error {

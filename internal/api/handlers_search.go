@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/config"
@@ -28,11 +29,11 @@ type searchSuggestionEntry struct {
 }
 
 type searchResponse struct {
-	Query        string                  `json:"query"`
-	Limit        int                     `json:"limit"`
-	Offset       int                     `json:"offset"`
-	Results      []searchResultEntry     `json:"results"`
-	Suggestions  []searchSuggestionEntry `json:"suggestions,omitempty"`
+	Query       string                  `json:"query"`
+	Limit       int                     `json:"limit"`
+	Offset      int                     `json:"offset"`
+	Results     []searchResultEntry     `json:"results"`
+	Suggestions []searchSuggestionEntry `json:"suggestions,omitempty"`
 }
 
 // Search godoc
@@ -46,6 +47,7 @@ type searchResponse struct {
 //	@Param			offset			query		int		false	"Number of search results to skip (offset) (default: 0)"
 //	@Param			boost				query		string	false	"Set to 'none' or 'off' to disable trust boosting in search results"
 //	@Param			include_superseded	query		bool	false	"Include pages with memory_status: superseded (excluded by default)"
+//	@Param			recency_weight		query		number	false	"Blend recency into ranking, from 0.0 relevance-only to 1.0 recency-only"
 //	@Param			modifiedAfter		query		string	false	"RFC3339 formatted cutoff date to filter search results by modification time"
 //	@Success		200				{object}	searchResponse
 //	@Failure		400				{object}	map[string]string
@@ -60,14 +62,21 @@ func (h *Handlers) Search(c echo.Context) error {
 	offset := search.NormalizeOffset(parseIntParam(c, "offset", 0))
 	boost := c.QueryParam("boost")
 	includeSuperseded := c.QueryParam("include_superseded") == "true"
+	recencyWeight, perr := parseRecencyWeight(c)
+	if perr != nil {
+		return perr
+	}
 	var (
 		results []search.Result
 		err     error
 	)
 	switch {
-	case includeSuperseded:
+	case includeSuperseded || recencyWeight > 0:
 		if os, ok := h.searcher.(search.OptionsSearcher); ok {
-			results, err = os.SearchWithOptions(c.Request().Context(), q, limit, offset, "", search.SearchOptions{IncludeSuperseded: true})
+			results, err = os.SearchWithOptions(c.Request().Context(), q, limit, offset, "", search.SearchOptions{
+				IncludeSuperseded: includeSuperseded,
+				RecencyWeight:     recencyWeight,
+			})
 		} else {
 			results, err = h.searcher.Search(c.Request().Context(), q, limit, offset, "")
 		}
@@ -140,6 +149,18 @@ func (h *Handlers) Search(c echo.Context) error {
 	}
 	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindSearch, Query: q, HitCount: len(results)})
 	return c.JSON(http.StatusOK, h.buildSearchResponse(c, q, limit, offset, "", results))
+}
+
+func parseRecencyWeight(c echo.Context) (float64, error) {
+	raw := c.QueryParam("recency_weight")
+	if raw == "" {
+		return 0, nil
+	}
+	weight, err := strconv.ParseFloat(raw, 64)
+	if err != nil || weight < 0 || weight > 1 {
+		return 0, echo.NewHTTPError(http.StatusBadRequest, "invalid recency_weight: expected number between 0.0 and 1.0")
+	}
+	return weight, nil
 }
 
 func (h *Handlers) buildSearchResponse(c echo.Context, q string, limit, offset int, pathPrefix string, results []search.Result) searchResponse {

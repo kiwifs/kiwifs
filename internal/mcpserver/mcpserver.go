@@ -135,6 +135,7 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 				mcp.WithNumber("limit", mcp.Description("Max results (default 20, max 50)")),
 				mcp.WithString("path_prefix", mcp.Description("Filter to a subtree like failures/")),
 				mcp.WithNumber("offset", mcp.Description("Offset for pagination (default 0)")),
+				mcp.WithNumber("recency_weight", mcp.Description("Blend recency into ranking, from 0.0 relevance-only to 1.0 recency-only")),
 				mcp.WithReadOnlyHintAnnotation(true),
 				mcp.WithDestructiveHintAnnotation(false),
 			),
@@ -1049,8 +1050,21 @@ func handleSearch(b Backend) server.ToolHandlerFunc {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		recencyWeight, err := floatArg(args, "recency_weight", 0)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
-		results, err := b.Search(ctx, query, limit+1, offset, prefix)
+		var results []SearchResult
+		if recencyWeight > 0 {
+			recencyBackend, ok := b.(recencySearchBackend)
+			if !ok {
+				return mcp.NewToolResultError("recency_weight is not supported by this backend"), nil
+			}
+			results, err = recencyBackend.SearchWithRecency(ctx, query, limit+1, offset, prefix, recencyWeight)
+		} else {
+			results, err = b.Search(ctx, query, limit+1, offset, prefix)
+		}
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Search failed: %v", err)), nil
 		}
@@ -1440,8 +1454,8 @@ func handleAnalytics(b Backend) server.ToolHandlerFunc {
 				UpdatedAt string `json:"updated_at"`
 			} `json:"top_updated"`
 			Engagement struct {
-				TotalViews     int `json:"total_views"`
-				TopViewed      []struct {
+				TotalViews int `json:"total_views"`
+				TopViewed  []struct {
 					Path  string `json:"path"`
 					Count int    `json:"count"`
 				} `json:"top_viewed"`
@@ -2246,6 +2260,36 @@ func intArg(args map[string]any, key string, def int) int {
 		return def
 	}
 	return n
+}
+
+func floatArg(args map[string]any, key string, def float64) (float64, error) {
+	v, ok := args[key]
+	if !ok {
+		return def, nil
+	}
+	var n float64
+	switch raw := v.(type) {
+	case float64:
+		n = raw
+	case float32:
+		n = float64(raw)
+	case int:
+		n = float64(raw)
+	case int64:
+		n = float64(raw)
+	case json.Number:
+		var err error
+		n, err = raw.Float64()
+		if err != nil {
+			return 0, fmt.Errorf("%s must be a number", key)
+		}
+	default:
+		return 0, fmt.Errorf("%s must be a number", key)
+	}
+	if n < 0 || n > 1 {
+		return 0, fmt.Errorf("%s must be between 0.0 and 1.0", key)
+	}
+	return n, nil
 }
 
 func extractFrontmatterFromContent(content string) map[string]any {

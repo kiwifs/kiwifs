@@ -408,6 +408,26 @@ func TestToolHandlerSearch(t *testing.T) {
 	mustCallTool(t, handleSearch(b), "kiwi_search", map[string]any{"query": "knowledge"})
 }
 
+func TestToolHandlerSearchRejectsInvalidRecencyWeight(t *testing.T) {
+	b, _ := setupTestBackend(t)
+	defer b.Close()
+
+	result, err := handleSearch(b)(context.Background(), callToolReq("kiwi_search", map[string]any{
+		"query":          "knowledge",
+		"recency_weight": 1.5,
+	}))
+	if err != nil {
+		t.Fatalf("kiwi_search: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected error result, got %+v", result.Content)
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "recency_weight must be between 0.0 and 1.0") {
+		t.Fatalf("unexpected error text: %s", text)
+	}
+}
+
 func TestToolHandlerDelete(t *testing.T) {
 	b, _ := setupTestBackend(t)
 	defer b.Close()
@@ -568,6 +588,24 @@ func TestRemoteSpacePrefixing(t *testing.T) {
 	rb2.Search(context.Background(), "test", 10, 0, "")
 	if !strings.HasPrefix(gotPath, "/api/kiwi/search") {
 		t.Errorf("path = %q, want prefix /api/kiwi/search", gotPath)
+	}
+}
+
+func TestRemoteSearchWithRecencyAddsParam(t *testing.T) {
+	var gotRecency string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRecency = r.URL.Query().Get("recency_weight")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+
+	rb := NewRemoteBackend(srv.URL, "", "default")
+	if _, err := rb.SearchWithRecency(context.Background(), "test", 10, 0, "", 0.3); err != nil {
+		t.Fatalf("SearchWithRecency: %v", err)
+	}
+	if gotRecency != "0.3" {
+		t.Fatalf("recency_weight query = %q, want 0.3", gotRecency)
 	}
 }
 

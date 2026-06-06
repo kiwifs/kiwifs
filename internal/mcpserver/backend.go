@@ -45,8 +45,10 @@ type BulkFile struct {
 }
 
 var (
-	_ Backend = (*RemoteBackend)(nil)
-	_ Backend = (*LocalBackend)(nil)
+	_ Backend              = (*RemoteBackend)(nil)
+	_ Backend              = (*LocalBackend)(nil)
+	_ recencySearchBackend = (*RemoteBackend)(nil)
+	_ recencySearchBackend = (*LocalBackend)(nil)
 )
 
 // QueryResult is the response from a DQL query via the dataview engine.
@@ -197,6 +199,10 @@ type Backend interface {
 	WorkflowSave(ctx context.Context, w WorkflowDef) error
 	WorkflowAdvance(ctx context.Context, path, targetState, actor string) (*WorkflowAdvanceResult, error)
 	WorkflowBoard(ctx context.Context, workflowName string) (*WorkflowBoardResult, error)
+}
+
+type recencySearchBackend interface {
+	SearchWithRecency(ctx context.Context, query string, limit, offset int, pathPrefix string, recencyWeight float64) ([]SearchResult, error)
 }
 
 type DraftInfo struct {

@@ -286,13 +286,39 @@ func (b *LocalBackend) Tree(ctx context.Context, path string) (json.RawMessage, 
 }
 
 func (b *LocalBackend) Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]SearchResult, error) {
+	return b.searchWithOptions(ctx, query, limit, offset, pathPrefix, search.SearchOptions{})
+}
+
+func (b *LocalBackend) SearchWithRecency(ctx context.Context, query string, limit, offset int, pathPrefix string, recencyWeight float64) ([]SearchResult, error) {
+	return b.searchWithOptions(ctx, query, limit, offset, pathPrefix, search.SearchOptions{RecencyWeight: recencyWeight})
+}
+
+func (b *LocalBackend) searchWithOptions(ctx context.Context, query string, limit, offset int, pathPrefix string, opts search.SearchOptions) ([]SearchResult, error) {
 	if err := b.init(); err != nil {
 		return nil, err
 	}
-	results, err := b.stack.Searcher.Search(ctx, query, limit, offset, pathPrefix)
+	var (
+		results []search.Result
+		err     error
+	)
+	if opts.IncludeSuperseded || opts.RecencyWeight > 0 {
+		if os, ok := b.stack.Searcher.(search.OptionsSearcher); ok {
+			results, err = os.SearchWithOptions(ctx, query, limit, offset, pathPrefix, opts)
+		} else {
+			results, err = b.stack.Searcher.Search(ctx, query, limit, offset, pathPrefix)
+		}
+	} else {
+		results, err = b.stack.Searcher.Search(ctx, query, limit, offset, pathPrefix)
+	}
 	if err != nil {
 		return nil, err
 	}
+	out := mapSearchResults(results)
+	tracing.Record(ctx, tracing.Event{Kind: tracing.KindSearch, Query: query, HitCount: len(out)})
+	return out, nil
+}
+
+func mapSearchResults(results []search.Result) []SearchResult {
 	out := make([]SearchResult, len(results))
 	for i, r := range results {
 		snippet := r.Snippet
@@ -303,8 +329,7 @@ func (b *LocalBackend) Search(ctx context.Context, query string, limit, offset i
 			Score:   r.Score,
 		}
 	}
-	tracing.Record(ctx, tracing.Event{Kind: tracing.KindSearch, Query: query, HitCount: len(out)})
-	return out, nil
+	return out
 }
 
 var markTagRe = regexp.MustCompile(`</?mark>`)
@@ -762,11 +787,11 @@ type localEngagementStats struct {
 }
 
 type localAnalytics struct {
-	TotalPages int                `json:"total_pages"`
-	TotalWords int                `json:"total_words"`
-	Health     localHealthStats   `json:"health"`
-	Coverage   localCoverageStats `json:"coverage"`
-	TopUpdated []localPageStat    `json:"top_updated"`
+	TotalPages int                  `json:"total_pages"`
+	TotalWords int                  `json:"total_words"`
+	Health     localHealthStats     `json:"health"`
+	Coverage   localCoverageStats   `json:"coverage"`
+	TopUpdated []localPageStat      `json:"top_updated"`
 	Engagement localEngagementStats `json:"engagement"`
 }
 

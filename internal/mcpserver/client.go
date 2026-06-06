@@ -255,6 +255,14 @@ func (r *RemoteBackend) Tree(ctx context.Context, path string) (json.RawMessage,
 }
 
 func (r *RemoteBackend) Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]SearchResult, error) {
+	return r.search(ctx, query, limit, offset, pathPrefix, 0)
+}
+
+func (r *RemoteBackend) SearchWithRecency(ctx context.Context, query string, limit, offset int, pathPrefix string, recencyWeight float64) ([]SearchResult, error) {
+	return r.search(ctx, query, limit, offset, pathPrefix, recencyWeight)
+}
+
+func (r *RemoteBackend) search(ctx context.Context, query string, limit, offset int, pathPrefix string, recencyWeight float64) ([]SearchResult, error) {
 	q := r.apiPrefix + "/search?q=" + url.QueryEscape(query)
 	if limit > 0 {
 		q += "&limit=" + strconv.Itoa(limit)
@@ -264,6 +272,9 @@ func (r *RemoteBackend) Search(ctx context.Context, query string, limit, offset 
 	}
 	if pathPrefix != "" {
 		q += "&pathPrefix=" + url.QueryEscape(pathPrefix)
+	}
+	if recencyWeight > 0 {
+		q += "&recency_weight=" + strconv.FormatFloat(recencyWeight, 'f', -1, 64)
 	}
 	var result struct {
 		Results []SearchResult `json:"results"`

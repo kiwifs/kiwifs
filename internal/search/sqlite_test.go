@@ -648,3 +648,42 @@ zebrabyte superseded memory page content here.
 		t.Fatalf("include_superseded search want 2 results, got %+v", allResults)
 	}
 }
+
+func TestSearchWithOptionsRecencyWeightRanksNewest(t *testing.T) {
+	s := newTestSQLite(t)
+
+	for path, content := range map[string][]byte{
+		"old.md": []byte("# Old\n\nkiwi memory alpha shared content.\n"),
+		"new.md": []byte("# New\n\nkiwi memory alpha shared content.\n"),
+	} {
+		if err := s.Index(ctxBG, path, content); err != nil {
+			t.Fatalf("index %s: %v", path, err)
+		}
+		if err := s.IndexMeta(ctxBG, path, content); err != nil {
+			t.Fatalf("index meta %s: %v", path, err)
+		}
+	}
+
+	oldTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	newTime := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	if _, err := s.writeDB.ExecContext(ctxBG, `UPDATE file_meta SET updated_at = ? WHERE path = ?`, oldTime, "old.md"); err != nil {
+		t.Fatalf("set old updated_at: %v", err)
+	}
+	if _, err := s.writeDB.ExecContext(ctxBG, `UPDATE file_meta SET updated_at = ? WHERE path = ?`, newTime, "new.md"); err != nil {
+		t.Fatalf("set new updated_at: %v", err)
+	}
+
+	got, err := s.SearchWithOptions(ctxBG, "kiwi memory alpha", 10, 0, "", SearchOptions{RecencyWeight: 1})
+	if err != nil {
+		t.Fatalf("search with recency: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 results, got %+v", got)
+	}
+	if got[0].Path != "new.md" {
+		t.Fatalf("newest result should rank first, got %+v", got)
+	}
+	if got[0].Score <= got[1].Score {
+		t.Fatalf("newest result should have higher score, got %+v", got)
+	}
+}
