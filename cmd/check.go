@@ -18,7 +18,7 @@ var checkCmd = &cobra.Command{
 	Long: `Run the janitor scan with stable exit codes for CI pipelines.
 
 Exit codes:
-  0 — no error-severity issues (and no warnings when --fail-on warn)
+  0 — no error-severity issues (and no warnings when --fail-on-warn)
   1 — hygiene issues found
   2 — scan failure (bad root, unreadable files)
 
@@ -26,7 +26,7 @@ Delegates to the same checks as kiwifs janitor: stale pages, orphans,
 broken links, missing metadata, expired memory, and more.`,
 	Example: `  kiwifs check --root ./knowledge
   kiwifs check --root ./knowledge --json
-  kiwifs check --root ./knowledge --fail-on warn`,
+  kiwifs check --root ./knowledge --fail-on-warn`,
 	RunE: runCheck,
 }
 
@@ -46,6 +46,10 @@ func runKnowledgeScan(cmd *cobra.Command) (*janitor.ScanResult, string, int, boo
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, "", 0, asJSON, fmt.Errorf("check: %w", err)
+	}
+
+	if info, statErr := os.Stat(abs); statErr != nil || !info.IsDir() {
+		return nil, abs, 0, asJSON, fmt.Errorf("check: root directory does not exist or is not a directory: %s", abs)
 	}
 
 	store, err := storage.NewLocal(abs)

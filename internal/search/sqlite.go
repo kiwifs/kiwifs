@@ -400,7 +400,7 @@ WHERE docs MATCH ?`
 		sqlQ += ` AND NOT EXISTS (
 			SELECT 1 FROM file_meta fm
 			WHERE fm.path = dp.path
-			  AND json_extract(fm.frontmatter, '$.memory_status') = 'superseded'
+			  AND LOWER(json_extract(fm.frontmatter, '$.memory_status')) = 'superseded'
 		)`
 	}
 	sqlQ += ` ORDER BY bm25(docs) LIMIT ? OFFSET ?`

@@ -477,7 +477,17 @@ func tagOverlap(a, b []string) []string {
 func (s *Scanner) checkExpiredMemory(ctx context.Context, p pageInfo) []Issue {
 	now := time.Now().UTC()
 
-	if expiresAt, ok := fmDateField(p.frontmatter, "expires_at"); ok {
+	if raw, hasKey := p.frontmatter["expires_at"]; hasKey {
+		expiresAt, ok := fmDateField(p.frontmatter, "expires_at")
+		if !ok {
+			return []Issue{{
+				Kind:       IssueExpiredMemory,
+				Path:       p.path,
+				Message:    fmt.Sprintf("expires_at value %q is not a valid date (expected RFC3339 or YYYY-MM-DD)", fmt.Sprint(raw)),
+				Severity:   "warning",
+				Suggestion: "use a valid date format, e.g. expires_at: 2026-12-31 or expires_at: 2026-12-31T00:00:00Z",
+			}}
+		}
 		if now.After(expiresAt) {
 			return []Issue{{
 				Kind:       IssueExpiredMemory,
@@ -496,7 +506,13 @@ func (s *Scanner) checkExpiredMemory(ctx context.Context, p pageInfo) []Issue {
 	}
 	ttl, ok := parseTTL(strings.TrimSpace(ttlRaw))
 	if !ok {
-		return nil
+		return []Issue{{
+			Kind:       IssueExpiredMemory,
+			Path:       p.path,
+			Message:    fmt.Sprintf("ttl value %q is not a supported format (use e.g. 7d, 24h)", ttlRaw),
+			Severity:   "warning",
+			Suggestion: "use a supported TTL format: <number>d for days or <number>h for hours",
+		}}
 	}
 
 	base, ok := fmDateField(p.frontmatter, "created")
@@ -521,6 +537,11 @@ func (s *Scanner) checkExpiredMemory(ctx context.Context, p pageInfo) []Issue {
 	return nil
 }
 
+const (
+	maxTTLDays  = 106751 // prevent int64 nanosecond overflow (~292 years)
+	maxTTLHours = 2562047
+)
+
 func parseTTL(raw string) (time.Duration, bool) {
 	var n int
 	var unit string
@@ -529,8 +550,14 @@ func parseTTL(raw string) (time.Duration, bool) {
 	}
 	switch unit {
 	case "d":
+		if n > maxTTLDays {
+			n = maxTTLDays
+		}
 		return time.Duration(n) * 24 * time.Hour, true
 	case "h":
+		if n > maxTTLHours {
+			n = maxTTLHours
+		}
 		return time.Duration(n) * time.Hour, true
 	default:
 		return 0, false
