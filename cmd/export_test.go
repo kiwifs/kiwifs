@@ -8,10 +8,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/kiwifs/kiwifs/internal/webhooks"
+	"gopkg.in/yaml.v3"
 )
 
 func TestExportFiresWebhookAfterDataExport(t *testing.T) {
@@ -88,5 +90,75 @@ title: Hello
 
 	if _, err := os.Stat(outPath); err != nil {
 		t.Fatalf("export output missing: %v", err)
+	}
+}
+
+func TestRunMkDocsExport(t *testing.T) {
+	root := t.TempDir()
+	pagePath := filepath.Join(root, "pages", "hello.md")
+	if err := os.MkdirAll(filepath.Dir(pagePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := `---
+title: Hello
+nav_order: 1
+memory_kind: semantic
+---
+# Hello
+
+See [[world]] for more.
+`
+	if err := os.WriteFile(pagePath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	worldPath := filepath.Join(root, "pages", "world.md")
+	if err := os.WriteFile(worldPath, []byte(`---
+title: World
+---
+# World
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outDir := filepath.Join(root, "site")
+	args := []string{
+		"--root", root,
+		"--format", "mkdocs",
+		"--output", outDir,
+		"--site-name", "CLI Test KB",
+		"--site-url", "https://example.com/docs/",
+	}
+	cmd := exportCmd
+	cmd.SetContext(context.Background())
+	cmd.SetArgs(args)
+	if err := cmd.ParseFlags(args); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+	if err := runMkDocsExport(cmd); err != nil {
+		t.Fatalf("mkdocs export: %v", err)
+	}
+
+	cfgBytes, err := os.ReadFile(filepath.Join(outDir, "mkdocs.yml"))
+	if err != nil {
+		t.Fatalf("mkdocs.yml: %v", err)
+	}
+	var cfg map[string]any
+	if err := yaml.Unmarshal(cfgBytes, &cfg); err != nil {
+		t.Fatalf("parse mkdocs.yml: %v", err)
+	}
+	if cfg["site_name"] != "CLI Test KB" {
+		t.Fatalf("site_name = %v, want CLI Test KB", cfg["site_name"])
+	}
+
+	hello, err := os.ReadFile(filepath.Join(outDir, "docs", "pages", "hello.md"))
+	if err != nil {
+		t.Fatalf("hello.md: %v", err)
+	}
+	body := string(hello)
+	if !strings.Contains(body, "[world](world.md)") {
+		t.Fatalf("wiki link not converted: %q", body)
+	}
+	if strings.Contains(body, "memory_kind") {
+		t.Fatalf("kiwi frontmatter should be stripped: %q", body)
 	}
 }
