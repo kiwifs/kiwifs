@@ -35,7 +35,8 @@ Document formats render markdown into typeset output using external tools
   kiwifs export --format pdf --path docs/ --output book.pdf --theme paper
   kiwifs export --format html --path docs/page.md --self-contained
   kiwifs export --format slides --path talk.md --output slides.html
-  kiwifs export --format site --path docs/ --output docs-site.zip`,
+  kiwifs export --format site --path docs/ --output docs-site.zip
+  kiwifs export --format mkdocs --output ./docs-site --site-name "My KB"`,
 	RunE: runExport,
 }
 
@@ -43,7 +44,7 @@ func init() {
 	rootCmd.AddCommand(exportCmd)
 
 	exportCmd.Flags().StringP("root", "r", "./knowledge", "knowledge root directory")
-	exportCmd.Flags().String("format", "jsonl", "output format: jsonl | csv | parquet | pdf | html | slides | site")
+	exportCmd.Flags().String("format", "jsonl", "output format: jsonl | csv | parquet | mkdocs | pdf | html | slides | site")
 	exportCmd.Flags().StringP("output", "o", "", "output file (default: stdout for data formats)")
 	exportCmd.Flags().String("path", "", "file or directory path to export")
 
@@ -83,10 +84,53 @@ func isDocumentFormat(format string) bool {
 func runExport(cmd *cobra.Command, _ []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
+	if format == "mkdocs" {
+		return runMkDocsExport(cmd)
+	}
+
 	if isDocumentFormat(format) {
 		return runDocumentExport(cmd)
 	}
 	return runDataExport(cmd)
+}
+
+func runMkDocsExport(cmd *cobra.Command) error {
+	root, _ := cmd.Flags().GetString("root")
+	output, _ := cmd.Flags().GetString("output")
+	path, _ := cmd.Flags().GetString("path")
+	siteName, _ := cmd.Flags().GetString("site-name")
+	siteURL, _ := cmd.Flags().GetString("site-url")
+	repoURL, _ := cmd.Flags().GetString("repo-url")
+
+	if output == "" {
+		return fmt.Errorf("--output directory is required for mkdocs export")
+	}
+
+	cfg, err := config.Load(root)
+	if err != nil {
+		cfg = &config.Config{}
+	}
+	cfg.Storage.Root = root
+
+	stack, err := bootstrap.Build("export", root, cfg)
+	if err != nil {
+		return fmt.Errorf("bootstrap: %w", err)
+	}
+	defer stack.Close()
+
+	count, err := exporter.ExportMkDocs(cmd.Context(), stack.Store, exporter.MkDocsOptions{
+		OutputDir:  output,
+		PathPrefix: path,
+		SiteName:   siteName,
+		SiteURL:    siteURL,
+		RepoURL:    repoURL,
+	})
+	if err != nil {
+		return fmt.Errorf("export: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Exported %d files to MkDocs project at %s\n", count, output)
+	return nil
 }
 
 // runDataExport handles JSONL/CSV/Parquet data export (existing functionality).
@@ -102,7 +146,7 @@ func runDataExport(cmd *cobra.Command) error {
 	limit, _ := cmd.Flags().GetInt("limit")
 
 	if format != "jsonl" && format != "csv" && format != "parquet" {
-		return fmt.Errorf("unsupported format: %s (use jsonl, csv, parquet, pdf, html, slides, or site)", format)
+		return fmt.Errorf("unsupported format: %s (use jsonl, csv, parquet, mkdocs, pdf, html, slides, or site)", format)
 	}
 
 	cfg, err := config.Load(root)
