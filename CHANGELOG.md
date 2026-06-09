@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.26](https://github.com/kiwifs/kiwifs/compare/v0.19.25...v0.19.26) (2026-06-09)
+
+
+### Features
+
+* **exporter:** add MkDocs static site project export ([#275](https://github.com/kiwifs/kiwifs/issues/275)) ([ae83920](https://github.com/kiwifs/kiwifs/commit/ae839203f476b4717f75441e0a888e1d81abf881))
+
+
+### Bug Fixes
+
+* **api:** handle copied public page title suffixes ([#276](https://github.com/kiwifs/kiwifs/issues/276)) ([d6d0d9b](https://github.com/kiwifs/kiwifs/commit/d6d0d9b8de239880e5296e703d52ed3471143d7f))
+
 ## [0.19.25](https://github.com/kiwifs/kiwifs/compare/v0.19.24...v0.19.25) (2026-06-06)
 
 
