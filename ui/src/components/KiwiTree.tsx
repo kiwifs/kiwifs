@@ -839,6 +839,10 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
         onRename={handleRename}
         onDelete={handleDelete}
         onActivate={(node) => {
+          if (node.data.isDir && !node.data.virtualDir) {
+            node.toggle();
+            return;
+          }
           if (node.data.virtualDir || isMarkdown(node.id)) onSelect(node.id);
           else if (!node.data.isDir) onSelect(node.id);
         }}
@@ -999,16 +1003,16 @@ function TreeNode({
               isPublished={isVirtual && isPublished}
               {...osDropHandlers}
               onClick={(e) => {
-                e.stopPropagation();
                 if (isVirtual) {
+                  e.stopPropagation();
                   onSelect(path);
                   return;
                 }
                 if (e.altKey) {
+                  e.stopPropagation();
                   onFolderAltClick(node.data);
                   return;
                 }
-                node.toggle();
               }}
             >
               {showChevron ? (
