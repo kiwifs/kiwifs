@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.28](https://github.com/kiwifs/kiwifs/compare/v0.19.27...v0.19.28) (2026-06-09)
+
+
+### Bug Fixes
+
+* **ui:** allow folder collapse toggle in KiwiTree ([#280](https://github.com/kiwifs/kiwifs/issues/280)) ([ccb7bb4](https://github.com/kiwifs/kiwifs/commit/ccb7bb4018fea4f2fec6e5a941f76c65dea1dde1))
+
 ## [0.19.27](https://github.com/kiwifs/kiwifs/compare/v0.19.26...v0.19.27) (2026-06-09)
 
 
