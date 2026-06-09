@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.27](https://github.com/kiwifs/kiwifs/compare/v0.19.26...v0.19.27) (2026-06-09)
+
+
+### Bug Fixes
+
+* **exporter:** handle code blocks, deep nav hierarchy, and anchors in MkDocs export ([#278](https://github.com/kiwifs/kiwifs/issues/278)) ([d2162f8](https://github.com/kiwifs/kiwifs/commit/d2162f886eca77130a6dc1275ea5325af8d03798))
+
 ## [0.19.26](https://github.com/kiwifs/kiwifs/compare/v0.19.25...v0.19.26) (2026-06-09)
 
 
