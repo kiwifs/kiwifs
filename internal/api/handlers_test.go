@@ -799,6 +799,34 @@ func TestResolveLinksEndpoint(t *testing.T) {
 	})
 }
 
+func TestPublishedPageAcceptsCopiedTitleSuffix(t *testing.T) {
+	s := buildTestServer(t)
+	mustPutFile(t, s, "docs/report.md", "---\npublished: true\ntitle: Quarterly Report\n---\n# Quarterly Report\n")
+	mustPutFile(t, s, "docs/runbook.markdown", "---\npublished: true\ntitle: Service Runbook\n---\n# Service Runbook\n")
+
+	for _, tc := range []struct {
+		name     string
+		target   string
+		expected string
+	}{
+		{name: "exact markdown path", target: "/p/docs/report.md", expected: "Quarterly Report"},
+		{name: "markdown path with copied title suffix", target: "/p/docs/report.md%20Quarterly%20Report", expected: "Quarterly Report"},
+		{name: "markdown extension path with copied title suffix", target: "/p/docs/runbook.markdown%20Service%20Runbook", expected: "Service Runbook"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.target, nil)
+			rec := httptest.NewRecorder()
+			s.echo.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s: %d %s", tc.target, rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tc.expected) {
+				t.Fatalf("GET %s missing page content %q", tc.target, tc.expected)
+			}
+		})
+	}
+}
+
 func TestReadFileResolveLinks(t *testing.T) {
 	s := buildTestServerWithPublicURL(t, "https://wiki.co")
 

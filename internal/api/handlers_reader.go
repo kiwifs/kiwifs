@@ -98,24 +98,28 @@ func addHeadingIDs(html string) (string, []tocEntry) {
 //	@Router			/p/{path} [get]
 func (h *Handlers) PublishedPage(c echo.Context) error {
 	raw := c.Param("*")
-	cleaned := strings.TrimPrefix(strings.TrimPrefix(raw, "/"), "/")
+	cleaned := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(raw, "/"), "/"))
 	if cleaned == "" {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
-
-	ext := strings.ToLower(filepath.Ext(cleaned))
-	if ext == "" {
+	if filepath.Ext(cleaned) == "" {
 		cleaned += ".md"
-		ext = ".md"
 	}
-
-	isMarkdown := ext == ".md" || ext == ".markdown"
 
 	ctx := c.Request().Context()
 	content, err := h.store.Read(ctx, cleaned)
 	if err != nil {
+		if fallback := trimCopiedMarkdownTitleSuffix(cleaned); fallback != cleaned {
+			cleaned = fallback
+			content, err = h.store.Read(ctx, cleaned)
+		}
+	}
+	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
+
+	ext := strings.ToLower(filepath.Ext(cleaned))
+	isMarkdown := ext == ".md" || ext == ".markdown"
 
 	if !isMarkdown {
 		if !h.hasPublicSibling(ctx, cleaned) {
@@ -172,6 +176,17 @@ func (h *Handlers) PublishedPage(c echo.Context) error {
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.Response().Header().Set("Cache-Control", "public, max-age=60")
 	return readerTmpl.Execute(c.Response(), data)
+}
+
+func trimCopiedMarkdownTitleSuffix(path string) string {
+	lower := strings.ToLower(path)
+	for _, ext := range []string{".markdown", ".md"} {
+		marker := ext + " "
+		if idx := strings.Index(lower, marker); idx >= 0 {
+			return strings.TrimSpace(path[:idx+len(ext)])
+		}
+	}
+	return path
 }
 
 func rewriteRelativeAssets(body string, pageDir string) string {
