@@ -204,7 +204,55 @@ func sanitizeMkdocsFrontmatter(fm []byte) ([]byte, error) {
 }
 
 func convertWikiLinksForMkDocs(content, sourcePath string, wikiIdx map[string]string) string {
-	return mkdocsWikiLinkRe.ReplaceAllStringFunc(content, func(match string) string {
+	lines := strings.Split(content, "\n")
+	inFencedBlock := false
+	fencePrefix := ""
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !inFencedBlock {
+			if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+				inFencedBlock = true
+				fencePrefix = trimmed[:3]
+				continue
+			}
+		} else {
+			if strings.HasPrefix(trimmed, fencePrefix) && strings.TrimSpace(strings.TrimLeft(trimmed, fencePrefix[:1])) == "" {
+				inFencedBlock = false
+			}
+			continue
+		}
+
+		lines[i] = replaceWikiLinksOutsideInlineCode(line, sourcePath, wikiIdx)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func replaceWikiLinksOutsideInlineCode(line, sourcePath string, wikiIdx map[string]string) string {
+	var result strings.Builder
+	remaining := line
+	for {
+		idx := strings.Index(remaining, "`")
+		if idx < 0 {
+			result.WriteString(replaceSingleLineWikiLinks(remaining, sourcePath, wikiIdx))
+			break
+		}
+		result.WriteString(replaceSingleLineWikiLinks(remaining[:idx], sourcePath, wikiIdx))
+
+		remaining = remaining[idx:]
+		end := strings.Index(remaining[1:], "`")
+		if end < 0 {
+			result.WriteString(remaining)
+			break
+		}
+		result.WriteString(remaining[:end+2])
+		remaining = remaining[end+2:]
+	}
+	return result.String()
+}
+
+func replaceSingleLineWikiLinks(s, sourcePath string, wikiIdx map[string]string) string {
+	return mkdocsWikiLinkRe.ReplaceAllStringFunc(s, func(match string) string {
 		sub := mkdocsWikiLinkRe.FindStringSubmatch(match)
 		if len(sub) < 2 {
 			return match
@@ -214,12 +262,23 @@ func convertWikiLinksForMkDocs(content, sourcePath string, wikiIdx map[string]st
 		if len(sub) >= 3 && sub[2] != "" {
 			label = strings.TrimSpace(sub[2])
 		}
+
+		anchor := ""
+		if hashIdx := strings.Index(target, "#"); hashIdx >= 0 {
+			anchor = target[hashIdx:]
+			target = target[:hashIdx]
+		}
+
+		if target == "" {
+			return match
+		}
+
 		resolved := wikiIdx[strings.ToLower(target)]
 		if resolved == "" {
 			return match
 		}
 		rel := mkdocsRelativeLink(sourcePath, resolved)
-		return fmt.Sprintf("[%s](%s)", label, rel)
+		return fmt.Sprintf("[%s](%s%s)", label, rel, anchor)
 	})
 }
 
@@ -250,22 +309,23 @@ func buildMkdocsNav(pages []mkdocsPage) []any {
 	root := &mkdocsNavNode{children: make(map[string]*mkdocsNavNode)}
 	for _, p := range pages {
 		parts := strings.Split(p.path, "/")
-		if len(parts) == 1 {
-			root.children[p.path] = &mkdocsNavNode{title: p.title, path: p.path, order: p.order}
-			continue
-		}
-		dir := strings.Join(parts[:len(parts)-1], "/")
-		if _, ok := root.children[dir]; !ok {
-			root.children[dir] = &mkdocsNavNode{
-				title:    parts[len(parts)-2],
-				children: make(map[string]*mkdocsNavNode),
+		cur := root
+		for i := 0; i < len(parts)-1; i++ {
+			seg := parts[i]
+			if cur.children[seg] == nil {
+				cur.children[seg] = &mkdocsNavNode{
+					title:    seg,
+					order:    9999,
+					children: make(map[string]*mkdocsNavNode),
+				}
+			}
+			cur = cur.children[seg]
+			if p.order < cur.order {
+				cur.order = p.order
 			}
 		}
-		section := root.children[dir]
-		section.children[p.path] = &mkdocsNavNode{title: p.title, path: p.path, order: p.order}
-		if p.order < section.order || section.order == 0 {
-			section.order = p.order
-		}
+		leaf := parts[len(parts)-1]
+		cur.children[leaf] = &mkdocsNavNode{title: p.title, path: p.path, order: p.order}
 	}
 
 	keys := sortedNavKeys(root.children)
@@ -298,10 +358,7 @@ func navNodeToYAML(key string, node *mkdocsNavNode) any {
 	childKeys := sortedNavKeys(node.children)
 	items := make([]any, 0, len(childKeys))
 	for _, ck := range childKeys {
-		child := node.children[ck]
-		if child.path != "" {
-			items = append(items, map[string]string{child.title: child.path})
-		}
+		items = append(items, navNodeToYAML(ck, node.children[ck]))
 	}
 	return map[string]any{node.title: items}
 }

@@ -161,6 +161,118 @@ See [[hello]] from another folder.
 	}
 }
 
+func TestConvertWikiLinksSkipsCodeBlocks(t *testing.T) {
+	idx := buildMkdocsWikiIndex([]string{"pages/hello.md"})
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "fenced code block preserved",
+			input: "text\n```\n[[hello]]\n```\nafter",
+			want:  "text\n```\n[[hello]]\n```\nafter",
+		},
+		{
+			name:  "tilde fence preserved",
+			input: "text\n~~~\n[[hello]]\n~~~\nafter",
+			want:  "text\n~~~\n[[hello]]\n~~~\nafter",
+		},
+		{
+			name:  "inline code preserved",
+			input: "Use `[[hello]]` to link.",
+			want:  "Use `[[hello]]` to link.",
+		},
+		{
+			name:  "outside code is converted",
+			input: "See [[hello]] and `code`.",
+			want:  "See [hello](hello.md) and `code`.",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := convertWikiLinksForMkDocs(tc.input, "pages/index.md", idx)
+			if got != tc.want {
+				t.Fatalf("got:\n%s\nwant:\n%s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestConvertWikiLinksWithAnchors(t *testing.T) {
+	idx := buildMkdocsWikiIndex([]string{"pages/hello.md", "guides/setup.md"})
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "anchor preserved",
+			input: "See [[hello#intro]].",
+			want:  "See [hello#intro](hello.md#intro).",
+		},
+		{
+			name:  "anchor with alias",
+			input: "Read [[setup#install|Installation]].",
+			want:  "Read [Installation](../guides/setup.md#install).",
+		},
+		{
+			name:  "anchor only no target",
+			input: "See [[#section]].",
+			want:  "See [[#section]].",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := convertWikiLinksForMkDocs(tc.input, "pages/index.md", idx)
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildMkdocsNavDeepHierarchy(t *testing.T) {
+	pages := []mkdocsPage{
+		{path: "a/b/c/deep.md", title: "Deep", order: 1},
+		{path: "a/b/mid.md", title: "Mid", order: 2},
+		{path: "top.md", title: "Top", order: 1},
+	}
+	nav := buildMkdocsNav(pages)
+
+	// Should have 2 top-level items: "Top" leaf and "a" section
+	if len(nav) != 2 {
+		t.Fatalf("expected 2 top-level nav items, got %d: %v", len(nav), nav)
+	}
+
+	// Verify recursive: find "a" section, then "b" inside it, then "c" inside that
+	found := false
+	for _, item := range nav {
+		if m, ok := item.(map[string]any); ok {
+			if aItems, ok := m["a"]; ok {
+				aList := aItems.([]any)
+				for _, aItem := range aList {
+					if bm, ok := aItem.(map[string]any); ok {
+						if bItems, ok := bm["b"]; ok {
+							bList := bItems.([]any)
+							for _, bItem := range bList {
+								if cm, ok := bItem.(map[string]any); ok {
+									if _, ok := cm["c"]; ok {
+										found = true
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected recursive hierarchy a → b → c, got: %v", nav)
+	}
+}
+
 func TestMkdocsRelativeLink(t *testing.T) {
 	got := mkdocsRelativeLink("guides/intro.md", "pages/hello.md")
 	if got != "../pages/hello.md" {
