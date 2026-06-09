@@ -59,6 +59,7 @@
     "graphology-shortest-path": "^2.1.0",
     "graphology-types": "^0.24.8",
     "gray-matter": "^4.0.3",
+    "js-yaml": "^4.2.0",
     "katex": "^0.16.45",
     "lucide-react": "^0.468.0",
     "lz-string": "^1.5.0",

@@ -1,5 +1,13 @@
 export { KiwiTree } from "./components/KiwiTree";
 export { KiwiPage } from "./components/KiwiPage";
+export {
+  registerWidget,
+  unregisterWidget,
+  getWidget,
+  getRegisteredWidgets,
+  clearWidgets,
+} from "./widgets";
+export type { WidgetComponent, WidgetProps } from "./widgets";
 export { KiwiEditor } from "./components/KiwiEditor";
 export { KiwiSearch } from "./components/KiwiSearch";
 export { KiwiGraph } from "./components/KiwiGraph";

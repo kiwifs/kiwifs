@@ -35,6 +35,8 @@ import { KiwiTabs } from "./KiwiTabs";
 import { KiwiColumns } from "./KiwiColumns";
 import { ExcalidrawMarkdownPreview, isExcalidrawMarkdown } from "./ExcalidrawMarkdownPreview";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { getWidget } from "@kw/widgets/registry";
+import yaml from "js-yaml";
 import { PageSkeleton } from "./PageSkeleton";
 import { trackRecent } from "./KiwiFavorites";
 import { Badge } from "@kw/components/ui/badge";
@@ -800,6 +802,20 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                       const match = /language-([A-Za-z0-9_-]+)/.exec(className || "");
                       const lang = match ? match[1] : undefined;
                       const raw = String(children).replace(/\n$/, "");
+                      if (lang?.startsWith("widget:")) {
+                        const widgetName = lang.slice("widget:".length);
+                        const Widget = getWidget(widgetName);
+                        if (Widget) {
+                          let config: Record<string, unknown> = {};
+                          try { config = (yaml.load(raw) as Record<string, unknown>) ?? {}; } catch {}
+                          return (
+                            <ErrorBoundary fallback={<pre className="kiwi-widget-error"><code>{`Widget "${widgetName}" threw an error\n\n${raw}`}</code></pre>}>
+                              <Widget config={config} />
+                            </ErrorBoundary>
+                          );
+                        }
+                        return <pre><code className="language-yaml">{raw}</code></pre>;
+                      }
                       if (lang === "kiwi-query") {
                         return <KiwiQuery source={raw} onNavigate={onNavigate} isComputedView={parsed.meta?.["kiwi-view"] === true} />;
                       }
