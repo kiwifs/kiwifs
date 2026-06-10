@@ -91,7 +91,7 @@ func runModelDownload(cmd *cobra.Command, args []string) error {
 		}
 		return fmt.Errorf("unknown model %q (want %s)", modelKey, strings.Join(keys, " | "))
 	}
-	outDir := modelDownloadDir
+	outDir := expandUserPath(modelDownloadDir)
 	if outDir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -120,6 +120,18 @@ func runModelDownload(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(cmd.OutOrStdout(), "\nDownloaded %s to %s\n\nExample config:\n%s\n\nBuild with ONNX support:\n  go build -tags onnx -o kiwifs .\n",
 		artifact.name, outDir, fmt.Sprintf(artifact.hintTOML, outDir))
 	return nil
+}
+
+// expandUserPath replaces a leading ~/ with the user's home directory.
+func expandUserPath(path string) string {
+	if path == "" || !strings.HasPrefix(path, "~/") {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	return strings.Replace(path, "~", home, 1)
 }
 
 func downloadFile(client *http.Client, url, dest string) error {

@@ -68,6 +68,48 @@ func TestRunModelDownloadWritesArtifacts(t *testing.T) {
 	}
 }
 
+func TestRunModelDownloadExpandsTildeDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "model.onnx"):
+			_, _ = w.Write([]byte("onnx-model"))
+		case strings.HasSuffix(r.URL.Path, "tokenizer.json"):
+			_, _ = w.Write([]byte("{}"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	orig := onnxModelCatalog["all-minilm-l6-v2"]
+	t.Cleanup(func() {
+		onnxModelCatalog["all-minilm-l6-v2"] = orig
+	})
+	catalog := orig
+	catalog.files = map[string]string{
+		"onnx/model.onnx": srv.URL + "/onnx/model.onnx",
+		"tokenizer.json":  srv.URL + "/tokenizer.json",
+	}
+	onnxModelCatalog["all-minilm-l6-v2"] = catalog
+
+	modelDownloadDir = "~/.kiwi/models/custom"
+	t.Cleanup(func() { modelDownloadDir = "" })
+
+	if err := runModelDownload(modelDownloadCmd, []string{"all-minilm-l6-v2"}); err != nil {
+		t.Fatalf("runModelDownload: %v", err)
+	}
+	wantDir := filepath.Join(home, ".kiwi", "models", "custom")
+	for _, rel := range []string{"onnx/model.onnx", "tokenizer.json"} {
+		path := filepath.Join(wantDir, rel)
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("missing %s under expanded dir: %v", rel, err)
+		}
+	}
+}
+
 func TestRunModelDownloadUnknownModel(t *testing.T) {
 	err := runModelDownload(modelDownloadCmd, []string{"not-a-model"})
 	if err == nil || !strings.Contains(err.Error(), "unknown model") {
