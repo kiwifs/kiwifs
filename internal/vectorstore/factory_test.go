@@ -165,6 +165,59 @@ model_path = %q
 	}
 }
 
+func TestBuildONNXExpandsTildeModelPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	modelDir := filepath.Join(home, ".kiwi", "models", "all-MiniLM-L6-v2", "onnx")
+	tokenizerPath := filepath.Join(home, ".kiwi", "models", "all-MiniLM-L6-v2", "tokenizer.json")
+	modelPath := filepath.Join(modelDir, "model.onnx")
+	if err := os.MkdirAll(modelDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(modelPath, []byte("stub"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tokenizerPath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `
+[search.vector]
+enabled = true
+
+[search.vector.embedder]
+type = "onnx"
+model_path = "~/.kiwi/models/all-MiniLM-L6-v2/onnx/model.onnx"
+`
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	_, err = Build(root, nil, cfg.Search.Vector)
+	if err == nil {
+		t.Fatal("Build succeeded without ONNX runtime build tag")
+	}
+	if !strings.Contains(err.Error(), "embedder:") {
+		t.Fatalf("err = %v, want embedder wrapper from Build", err)
+	}
+	if strings.Contains(err.Error(), "unknown embedder provider") {
+		t.Fatalf("loaded type alias not resolved in Build, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "model not found") {
+		t.Fatalf("tilde path not expanded in Build, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "onnx") {
+		t.Fatalf("err = %v, want onnx-related message", err)
+	}
+}
+
 func TestBuildEmbedderONNXExpandsTildeModelPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
