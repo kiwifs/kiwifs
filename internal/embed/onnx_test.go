@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -99,5 +100,27 @@ func TestNewONNXRequiresTokenizerPath(t *testing.T) {
 	}
 	if _, err := NewONNX(ONNXOptions{ModelPath: modelPath}); err == nil {
 		t.Fatal("NewONNX succeeded without tokenizer_path")
+	}
+}
+
+func TestNewONNXInfersTokenizerPath(t *testing.T) {
+	dir := t.TempDir()
+	modelPath := filepath.Join(dir, "onnx", "model.onnx")
+	tokenizerPath := filepath.Join(dir, "tokenizer.json")
+	if err := os.MkdirAll(filepath.Dir(modelPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(modelPath, []byte("stub"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tokenizerPath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewONNX(ONNXOptions{ModelPath: modelPath, Dimensions: 384})
+	if err == nil {
+		t.Fatal("expected error without onnx build tag")
+	}
+	if strings.Contains(err.Error(), "tokenizer_path is required") {
+		t.Fatalf("tokenizer should be inferred, got: %v", err)
 	}
 }
