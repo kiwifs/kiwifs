@@ -229,6 +229,9 @@ func TestEmbedderConfigResolvedProvider(t *testing.T) {
 	if got := (EmbedderConfig{Provider: "openai"}).ResolvedProvider(); got != "openai" {
 		t.Fatalf("provider wins: got %q", got)
 	}
+	if got := (EmbedderConfig{Provider: "openai", Type: "onnx"}).ResolvedProvider(); got != "openai" {
+		t.Fatalf("provider wins over type: got %q", got)
+	}
 	if got := (EmbedderConfig{Type: "onnx"}).ResolvedProvider(); got != "onnx" {
 		t.Fatalf("type alias: got %q", got)
 	}
