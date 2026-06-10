@@ -62,6 +62,18 @@ func TestBuildEmbedderONNXTypeAlias(t *testing.T) {
 	}
 }
 
+func TestBuildEmbedderUnknownProviderUsesResolvedType(t *testing.T) {
+	_, err := buildEmbedder(context.Background(), config.EmbedderConfig{
+		Type: "not-a-real-provider",
+	})
+	if err == nil {
+		t.Fatal("buildEmbedder succeeded with unknown provider")
+	}
+	if !strings.Contains(err.Error(), `unknown embedder provider "not-a-real-provider"`) {
+		t.Fatalf("err = %v, want resolved type in unknown-provider message", err)
+	}
+}
+
 func TestBuildEmbedderONNXInfersTokenizerPath(t *testing.T) {
 	dir := t.TempDir()
 	modelPath := filepath.Join(dir, "onnx", "model.onnx")
