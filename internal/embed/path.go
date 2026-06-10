@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// expandUserPath replaces a leading ~/ with the user's home directory.
-func expandUserPath(path string) string {
+// ExpandUserPath replaces a leading ~/ with the user's home directory.
+func ExpandUserPath(path string) string {
 	if path == "" || !strings.HasPrefix(path, "~/") {
 		return path
 	}
@@ -21,11 +21,11 @@ func expandUserPath(path string) string {
 // resolveTokenizerPath returns an explicit tokenizer path or infers tokenizer.json
 // next to the ONNX model (same directory, then parent — matches kiwifs model download layout).
 func resolveTokenizerPath(modelPath, tokenizerPath string) (string, error) {
-	tokenizerPath = expandUserPath(tokenizerPath)
+	tokenizerPath = ExpandUserPath(tokenizerPath)
 	if tokenizerPath != "" {
 		return tokenizerPath, nil
 	}
-	modelPath = expandUserPath(modelPath)
+	modelPath = ExpandUserPath(modelPath)
 	if modelPath == "" {
 		return "", nil
 	}
