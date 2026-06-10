@@ -2,6 +2,7 @@ package vectorstore
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,6 +72,48 @@ func TestBuildEmbedderUnknownProviderUsesResolvedType(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `unknown embedder provider "not-a-real-provider"`) {
 		t.Fatalf("err = %v, want resolved type in unknown-provider message", err)
+	}
+}
+
+func TestBuildEmbedderONNXFromLoadedConfig(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	modelDir := filepath.Join(root, "models", "all-MiniLM-L6-v2", "onnx")
+	tokenizerPath := filepath.Join(root, "models", "all-MiniLM-L6-v2", "tokenizer.json")
+	modelPath := filepath.Join(modelDir, "model.onnx")
+	if err := os.MkdirAll(modelDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(modelPath, []byte("stub"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tokenizerPath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf(`
+[search.vector.embedder]
+type = "onnx"
+model_path = %q
+`, modelPath)
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	_, err = buildEmbedder(context.Background(), cfg.Search.Vector.Embedder)
+	if err == nil {
+		t.Fatal("buildEmbedder succeeded without ONNX runtime build tag")
+	}
+	if strings.Contains(err.Error(), "unknown embedder provider") {
+		t.Fatalf("loaded type alias not resolved in factory, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "onnx") {
+		t.Fatalf("err = %v, want onnx-related message", err)
 	}
 }
 
