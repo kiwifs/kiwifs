@@ -95,7 +95,6 @@ export function usePlayback<T>(
     const target = containerRef?.current ?? document;
     const handler = (e: Event) => {
       const ke = e as KeyboardEvent;
-      // Don't capture when user is typing in an input
       const tag = (ke.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 

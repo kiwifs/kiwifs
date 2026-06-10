@@ -31,8 +31,6 @@ function CopyButton({ code }: { code: string }) {
 
 /** Apply line highlighting by wrapping lines in spans with a highlight class. */
 function applyLineHighlights(html: string, highlightLines: Set<number>): string {
-  // Shiki outputs <pre><code>...lines...</code></pre>
-  // We wrap each line in a span for highlighting
   return html.replace(
     /(<code[^>]*>)([\s\S]*?)(<\/code>)/,
     (_match, openCode, content, closeCode) => {
@@ -56,7 +54,6 @@ function applyDiffStyles(html: string): string {
     (_match, openCode, content, closeCode) => {
       const lines = content.split("\n");
       const wrapped = lines.map((line: string) => {
-        // Strip HTML to check leading character
         const plainStart = line.replace(/<[^>]*>/g, "").trimStart();
         if (plainStart.startsWith("+")) {
           return `<span class="kiwi-diff-add">${line}</span>`;
@@ -102,11 +99,9 @@ export function ShikiCode({ code, lang, title, highlightLines }: Props) {
           lang,
           theme: isDark ? "github-dark" : "github-light",
         });
-        // Apply diff styling for diff blocks
         if (lang === "diff") {
           rendered = applyDiffStyles(rendered);
         }
-        // Apply line highlights if specified
         if (highlightLines && highlightLines.size > 0) {
           rendered = applyLineHighlights(rendered, highlightLines);
         }
