@@ -80,7 +80,7 @@ func buildEmbedder(ctx context.Context, cfg config.EmbedderConfig) (embed.Embedd
 			OutputName:    cfg.OutputName,
 		})
 	default:
-		return nil, fmt.Errorf("unknown embedder provider %q (want openai | ollama | http | cohere | voyage | bedrock | vertex | onnx)", cfg.Provider)
+		return nil, fmt.Errorf("unknown embedder provider %q (want openai | ollama | http | cohere | voyage | bedrock | vertex | onnx)", provider)
 	}
 }
 
