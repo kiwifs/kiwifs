@@ -240,6 +240,26 @@ func TestEmbedderConfigResolvedProvider(t *testing.T) {
 	}
 }
 
+func TestEmbedderProviderWinsOverTypeOnLoad(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[search.vector.embedder]
+provider = "openai"
+type = "onnx"
+model = "text-embedding-3-small"
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := cfg.Search.Vector.Embedder.Provider; got != "openai" {
+		t.Fatalf("provider = %q, want openai (provider wins over type alias)", got)
+	}
+}
+
 func TestONNXEmbedderTypeAlias(t *testing.T) {
 	root := t.TempDir()
 	cfgDir := filepath.Join(root, ".kiwi")
