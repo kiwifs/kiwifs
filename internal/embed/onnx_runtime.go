@@ -30,9 +30,9 @@ func newONNXRunner(options ONNXOptions) (onnxRunner, error) {
 	if err := initONNXEnvironment(options.RuntimePath); err != nil {
 		return nil, err
 	}
-	tokenizer, err := pretrained.FromFile(options.TokenizerPath)
+	tokenizer, err := loadTokenizerSafe(options.TokenizerPath)
 	if err != nil {
-		return nil, fmt.Errorf("onnx: load tokenizer: %w", err)
+		return nil, err
 	}
 	inputNames, resolvedOptions, err := resolveONNXNames(options)
 	if err != nil {
@@ -82,6 +82,23 @@ func resolveONNXNames(options ONNXOptions) ([]string, ONNXOptions, error) {
 		return inputNames, options, nil
 	}
 	return nil, options, fmt.Errorf("onnx: model does not expose output %q", options.OutputName)
+}
+
+// loadTokenizerSafe wraps pretrained.FromFile with panic recovery.
+// The sugarme/tokenizer library panics on malformed tokenizer.json
+// (e.g. missing "model" field) instead of returning an error.
+func loadTokenizerSafe(path string) (tokenizer *tok.Tokenizer, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			tokenizer = nil
+			err = fmt.Errorf("onnx: tokenizer at %s is malformed or incompatible: %v", path, r)
+		}
+	}()
+	tokenizer, err = pretrained.FromFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("onnx: load tokenizer: %w", err)
+	}
+	return tokenizer, nil
 }
 
 func initONNXEnvironment(runtimePath string) error {
