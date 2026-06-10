@@ -3,6 +3,7 @@ package vectorstore
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -26,6 +27,34 @@ func TestBuildEmbedderONNXWithoutRuntimeSupport(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("buildEmbedder succeeded without ONNX runtime build tag")
+	}
+	if !strings.Contains(err.Error(), "onnx") {
+		t.Fatalf("err = %v, want onnx-related message", err)
+	}
+}
+
+func TestBuildEmbedderONNXInfersTokenizerPath(t *testing.T) {
+	dir := t.TempDir()
+	modelPath := filepath.Join(dir, "onnx", "model.onnx")
+	tokenizerPath := filepath.Join(dir, "tokenizer.json")
+	if err := os.MkdirAll(filepath.Dir(modelPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(modelPath, []byte("stub"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tokenizerPath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := buildEmbedder(context.Background(), config.EmbedderConfig{
+		Provider:  "onnx",
+		ModelPath: modelPath,
+	})
+	if err == nil {
+		t.Fatal("buildEmbedder succeeded without ONNX runtime build tag")
+	}
+	if strings.Contains(err.Error(), "tokenizer_path is required") {
+		t.Fatalf("tokenizer should be inferred from parent dir, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "onnx") {
 		t.Fatalf("err = %v, want onnx-related message", err)
