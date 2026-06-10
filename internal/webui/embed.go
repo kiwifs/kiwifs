@@ -47,6 +47,9 @@ func Handler() echo.HandlerFunc {
 		path := strings.TrimPrefix(req.URL.Path, "/")
 
 		if path != "" && exists(assets, path) {
+			if strings.HasPrefix(path, "assets/") {
+				c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
 			fileServer.ServeHTTP(c.Response(), req)
 			return nil
 		}
