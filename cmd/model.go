@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
+
+const modelDownloadTimeout = 30 * time.Minute
 
 var modelCmd = &cobra.Command{
 	Use:   "model",
@@ -99,7 +102,7 @@ func runModelDownload(cmd *cobra.Command, args []string) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("create output dir: %w", err)
 	}
-	client := &http.Client{}
+	client := &http.Client{Timeout: modelDownloadTimeout}
 	for relPath, url := range artifact.files {
 		dest := filepath.Join(outDir, relPath)
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
