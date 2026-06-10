@@ -287,6 +287,15 @@ type EmbedderConfig struct {
 	CredentialsFile string `toml:"credentials_file"` // path to service account JSON (optional; falls back to ADC)
 }
 
+// ResolvedProvider returns the embedder backend name, using Type as an alias
+// when Provider is unset (issue #102: type = "onnx").
+func (c EmbedderConfig) ResolvedProvider() string {
+	if c.Provider != "" {
+		return c.Provider
+	}
+	return c.Type
+}
+
 type VectorStoreConfig struct {
 	Provider string `toml:"provider"` // sqlite | qdrant | pinecone | weaviate | pgvector
 
@@ -357,8 +366,8 @@ func Load(root string) (*Config, error) {
 }
 
 func normalizeConfig(cfg *Config) {
-	if cfg.Search.Vector.Embedder.Provider == "" && cfg.Search.Vector.Embedder.Type != "" {
-		cfg.Search.Vector.Embedder.Provider = cfg.Search.Vector.Embedder.Type
+	if resolved := cfg.Search.Vector.Embedder.ResolvedProvider(); resolved != "" {
+		cfg.Search.Vector.Embedder.Provider = resolved
 	}
 }
 

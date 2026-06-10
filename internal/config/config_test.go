@@ -225,6 +225,18 @@ overlap = 80
 	}
 }
 
+func TestEmbedderConfigResolvedProvider(t *testing.T) {
+	if got := (EmbedderConfig{Provider: "openai"}).ResolvedProvider(); got != "openai" {
+		t.Fatalf("provider wins: got %q", got)
+	}
+	if got := (EmbedderConfig{Type: "onnx"}).ResolvedProvider(); got != "onnx" {
+		t.Fatalf("type alias: got %q", got)
+	}
+	if got := (EmbedderConfig{}).ResolvedProvider(); got != "" {
+		t.Fatalf("empty: got %q", got)
+	}
+}
+
 func TestONNXEmbedderTypeAlias(t *testing.T) {
 	root := t.TempDir()
 	cfgDir := filepath.Join(root, ".kiwi")
