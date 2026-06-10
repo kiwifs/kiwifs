@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.33](https://github.com/kiwifs/kiwifs/compare/v0.19.32...v0.19.33) (2026-06-10)
+
+
+### Features
+
+* **search:** complete ONNX embedder acceptance for issue [#102](https://github.com/kiwifs/kiwifs/issues/102) ([#290](https://github.com/kiwifs/kiwifs/issues/290)) ([0ccaf1e](https://github.com/kiwifs/kiwifs/commit/0ccaf1e7fe6f5130ab7b9c54a302ff507770c6ae))
+
 ## [0.19.32](https://github.com/kiwifs/kiwifs/compare/v0.19.31...v0.19.32) (2026-06-10)
 
 
