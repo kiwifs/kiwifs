@@ -131,10 +131,10 @@ export function ShikiCode({ code, lang, title, highlightLines }: Props) {
 
   if (html) {
     return (
-      <div className="relative group">
+      <div className="relative group my-4">
         {headerBar}
         <div
-          className={`kiwi-shiki my-4 text-sm rounded-md overflow-hidden [&>pre]:p-4 [&>pre]:overflow-x-auto${headerBar ? " kiwi-shiki-with-header" : ""}`}
+          className={`kiwi-shiki text-sm overflow-hidden [&>pre]:p-4 [&>pre]:overflow-x-auto${headerBar ? " kiwi-shiki-with-header" : ""}`}
           dangerouslySetInnerHTML={{ __html: html }}
         />
         <CopyButton code={code} />
@@ -142,7 +142,7 @@ export function ShikiCode({ code, lang, title, highlightLines }: Props) {
     );
   }
   return (
-    <div className="relative group">
+    <div className="relative group my-4">
       {headerBar}
       <pre>
         <code>{code}</code>
