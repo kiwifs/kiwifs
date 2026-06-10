@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.34](https://github.com/kiwifs/kiwifs/compare/v0.19.33...v0.19.34) (2026-06-10)
+
+
+### Bug Fixes
+
+* **embed:** recover from panic in tokenizer library on malformed JSON ([#294](https://github.com/kiwifs/kiwifs/issues/294)) ([a7eb050](https://github.com/kiwifs/kiwifs/commit/a7eb0508bd2733fbbdd52e7cf92a382cc33728ef))
+
 ## [0.19.33](https://github.com/kiwifs/kiwifs/compare/v0.19.32...v0.19.33) (2026-06-10)
 
 
