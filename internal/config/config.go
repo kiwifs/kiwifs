@@ -255,6 +255,7 @@ type VectorConfig struct {
 
 type EmbedderConfig struct {
 	Provider   string            `toml:"provider"` // openai | ollama | http | cohere | voyage | bedrock | vertex | onnx
+	Type       string            `toml:"type"`     // alias for provider (issue #102 used type = "onnx")
 	Model      string            `toml:"model"`
 	APIKey     string            `toml:"api_key"` // ${ENV} expansion supported
 	BaseURL    string            `toml:"base_url"`
@@ -351,7 +352,14 @@ func Load(root string) (*Config, error) {
 	}
 	expandAllEnv(&cfg)
 	applyBackupEnv(&cfg)
+	normalizeConfig(&cfg)
 	return &cfg, nil
+}
+
+func normalizeConfig(cfg *Config) {
+	if cfg.Search.Vector.Embedder.Provider == "" && cfg.Search.Vector.Embedder.Type != "" {
+		cfg.Search.Vector.Embedder.Provider = cfg.Search.Vector.Embedder.Type
+	}
 }
 
 // ResolvedPublicURL returns the public URL for building permalinks.

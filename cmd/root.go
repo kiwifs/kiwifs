@@ -48,4 +48,5 @@ func init() {
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(whoamiCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(modelCmd)
 }

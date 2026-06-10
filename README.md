@@ -107,6 +107,44 @@ curl -X PUT 'localhost:3333/api/kiwi/file?path=pages/auth.md' \
 
 ---
 
+## Vector embedder options
+
+Semantic search needs an embedder and a vector store. Configure both under `[search.vector]` in `.kiwi/config.toml`:
+
+```toml
+[search.vector]
+enabled = true
+
+[search.vector.embedder]
+provider = "openai"       # openai | ollama | cohere | onnx | http | ...
+model = "text-embedding-3-small"
+api_key = "${OPENAI_API_KEY}"
+
+[search.vector.store]
+provider = "sqlite-vec"
+```
+
+### Offline ONNX embedder
+
+For zero-dependency semantic search, use a local ONNX sentence-transformer model. Download artifacts, build with the `onnx` tag, and point config at the files:
+
+```bash
+kiwifs model download all-minilm-l6-v2
+go build -tags onnx -o kiwifs .
+```
+
+```toml
+[search.vector.embedder]
+provider = "onnx"   # type = "onnx" also works
+model_path = "~/.kiwi/models/all-MiniLM-L6-v2/onnx/model.onnx"
+tokenizer_path = "~/.kiwi/models/all-MiniLM-L6-v2/tokenizer.json"
+dimensions = 384
+```
+
+For Korean/Japanese/Chinese collections, prefer `kiwifs model download multilingual-e5-small` and set `query_prefix = "query: "` plus `passage_prefix = "passage: "`. See [docs/EXAMPLES.md](docs/EXAMPLES.md) for full ONNX setup.
+
+---
+
 ## Connect your AI tools
 
 **Local (Claude Desktop / Cursor / any MCP client):**

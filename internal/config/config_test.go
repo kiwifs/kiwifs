@@ -225,6 +225,27 @@ overlap = 80
 	}
 }
 
+func TestONNXEmbedderTypeAlias(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[search.vector.embedder]
+type = "onnx"
+model_path = "/models/all-MiniLM-L6-v2/onnx/model.onnx"
+tokenizer_path = "/models/all-MiniLM-L6-v2/tokenizer.json"
+dimensions = 384
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Search.Vector.Embedder.Provider != "onnx" {
+		t.Fatalf("provider = %q, want onnx", cfg.Search.Vector.Embedder.Provider)
+	}
+}
+
 func TestONNXEmbedderTOML(t *testing.T) {
 	root := t.TempDir()
 	cfgDir := filepath.Join(root, ".kiwi")

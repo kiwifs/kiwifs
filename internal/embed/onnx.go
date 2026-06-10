@@ -78,6 +78,9 @@ type onnxRunner interface {
 // an onnxruntime session.
 func NewONNX(options ONNXOptions) (*ONNX, error) {
 	options = options.withDefaults()
+	options.ModelPath = expandUserPath(options.ModelPath)
+	options.TokenizerPath = expandUserPath(options.TokenizerPath)
+	options.RuntimePath = expandUserPath(options.RuntimePath)
 	if options.ModelPath == "" {
 		return nil, fmt.Errorf("onnx: model_path is required")
 	}
