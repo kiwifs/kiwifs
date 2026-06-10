@@ -135,10 +135,10 @@ go build -tags onnx -o kiwifs .
 
 ```toml
 [search.vector.embedder]
-provider = "onnx"   # type = "onnx" also works
+type = "onnx"       # provider = "onnx" also works
 model_path = "~/.kiwi/models/all-MiniLM-L6-v2/onnx/model.onnx"
-tokenizer_path = "~/.kiwi/models/all-MiniLM-L6-v2/tokenizer.json"
 dimensions = 384
+# tokenizer_path optional — auto-discovered from parent dir after kiwifs model download
 ```
 
 For Korean/Japanese/Chinese collections, prefer `kiwifs model download multilingual-e5-small` and set `query_prefix = "query: "` plus `passage_prefix = "passage: "`. See [docs/EXAMPLES.md](docs/EXAMPLES.md) for full ONNX setup.
