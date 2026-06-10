@@ -53,7 +53,7 @@ var onnxModelCatalog = map[string]modelArtifact{
 			"tokenizer.json":  "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json",
 		},
 		hintTOML: `[search.vector.embedder]
-provider = "onnx"
+type = "onnx"
 model_path = "%s/onnx/model.onnx"
 dimensions = 384
 # tokenizer_path optional — auto-discovered from parent dir`,
@@ -66,7 +66,7 @@ dimensions = 384
 			"tokenizer.json":  "https://huggingface.co/intfloat/multilingual-e5-small/resolve/main/tokenizer.json",
 		},
 		hintTOML: `[search.vector.embedder]
-provider = "onnx"
+type = "onnx"
 model_path = "%s/onnx/model.onnx"
 dimensions = 384
 query_prefix = "query: "

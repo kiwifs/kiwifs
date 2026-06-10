@@ -246,6 +246,33 @@ dimensions = 384
 	}
 }
 
+func TestONNXEmbedderTypeAliasIssue102Minimal(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	// Matches issue #102 acceptance config (type alias, model_path only).
+	body := `
+[search.vector.embedder]
+type = "onnx"
+model_path = "~/.kiwi/models/all-MiniLM-L6-v2/onnx/model.onnx"
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	emb := cfg.Search.Vector.Embedder
+	if emb.Provider != "onnx" {
+		t.Fatalf("provider = %q, want onnx from type alias", emb.Provider)
+	}
+	if emb.ModelPath != "~/.kiwi/models/all-MiniLM-L6-v2/onnx/model.onnx" {
+		t.Fatalf("model_path = %q", emb.ModelPath)
+	}
+	if emb.TokenizerPath != "" {
+		t.Fatalf("tokenizer_path should be empty in config, got %q", emb.TokenizerPath)
+	}
+}
+
 func TestONNXEmbedderTOML(t *testing.T) {
 	root := t.TempDir()
 	cfgDir := filepath.Join(root, ".kiwi")
