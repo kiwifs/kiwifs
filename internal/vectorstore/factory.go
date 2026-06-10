@@ -36,7 +36,11 @@ func Build(root string, source storage.Storage, cfg config.VectorConfig) (*Servi
 }
 
 func buildEmbedder(ctx context.Context, cfg config.EmbedderConfig) (embed.Embedder, error) {
-	switch cfg.Provider {
+	provider := cfg.Provider
+	if provider == "" && cfg.Type != "" {
+		provider = cfg.Type
+	}
+	switch provider {
 	case "", "openai", "azure-openai":
 		return embed.NewOpenAI(cfg.APIKey, cfg.Model, cfg.BaseURL, cfg.Dimensions)
 	case "ollama":

@@ -33,6 +33,35 @@ func TestBuildEmbedderONNXWithoutRuntimeSupport(t *testing.T) {
 	}
 }
 
+func TestBuildEmbedderONNXTypeAlias(t *testing.T) {
+	dir := t.TempDir()
+	modelPath := filepath.Join(dir, "onnx", "model.onnx")
+	tokenizerPath := filepath.Join(dir, "tokenizer.json")
+	if err := os.MkdirAll(filepath.Dir(modelPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(modelPath, []byte("stub"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tokenizerPath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Issue #102 uses type = "onnx" without provider; factory must accept Type alone.
+	_, err := buildEmbedder(context.Background(), config.EmbedderConfig{
+		Type:      "onnx",
+		ModelPath: modelPath,
+	})
+	if err == nil {
+		t.Fatal("buildEmbedder succeeded without ONNX runtime build tag")
+	}
+	if strings.Contains(err.Error(), "unknown embedder provider") {
+		t.Fatalf("type alias not resolved, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "onnx") {
+		t.Fatalf("err = %v, want onnx-related message", err)
+	}
+}
+
 func TestBuildEmbedderONNXInfersTokenizerPath(t *testing.T) {
 	dir := t.TempDir()
 	modelPath := filepath.Join(dir, "onnx", "model.onnx")
