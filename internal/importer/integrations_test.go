@@ -243,6 +243,9 @@ func TestDynamoDBImporterIntegration(t *testing.T) {
 			return aws.Credentials{AccessKeyID: "test", SecretAccessKey: "test"}, nil
 		}),
 	})
+	if err := waitDynamoDBReady(ctx, ddbClient); err != nil {
+		t.Fatalf("dynamodb ready: %v", err)
+	}
 	_, err = ddbClient.CreateTable(ctx, &dynamodb.CreateTableInput{
 		TableName: aws.String("widgets"),
 		AttributeDefinitions: []types.AttributeDefinition{
@@ -305,6 +308,26 @@ func esTestHTTPClient(ctr *elasticsearch.ElasticsearchContainer) *http.Client {
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{RootCAs: pool},
 		},
+	}
+}
+
+func waitDynamoDBReady(ctx context.Context, client *dynamodb.Client) error {
+	deadline := time.Now().Add(60 * time.Second)
+	var lastErr error
+	for {
+		_, err := client.ListTables(ctx, &dynamodb.ListTablesInput{Limit: aws.Int32(1)})
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if time.Now().After(deadline) {
+			return fmt.Errorf("dynamodb not ready before timeout: %v", lastErr)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
 	}
 }
 
