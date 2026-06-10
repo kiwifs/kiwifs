@@ -11,8 +11,11 @@ interface Props {
   onStepForward: () => void;
   onStepBack: () => void;
   onReset: () => void;
-  onSpeedChange: (speed: number) => void;
   onSeek: (step: number) => void;
+  /** Cycle speed (1x → 2x → 4x → 1x). If omitted, speed badge is hidden. */
+  onCycleSpeed?: () => void;
+  /** @deprecated Use onCycleSpeed instead. Kept for backward compat. */
+  onSpeedChange?: (speed: number) => void;
 }
 
 export function PlaybackControls({
@@ -25,35 +28,20 @@ export function PlaybackControls({
   onStepForward,
   onStepBack,
   onReset,
-  onSpeedChange,
   onSeek,
+  onCycleSpeed,
 }: Props) {
-  return (
-    <div className="flex flex-col gap-3 p-4 rounded-lg border border-border bg-card">
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={onReset} title="Reset">
-          <RotateCcw className="h-3.5 w-3.5" />
-        </Button>
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={onStepBack} disabled={currentStep === 0} title="Step back">
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        {playing ? (
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={onStop} title="Pause">
-            <Pause className="h-3.5 w-3.5" />
-          </Button>
-        ) : (
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={onPlay} disabled={currentStep >= totalSteps - 1} title="Play">
-            <Play className="h-3.5 w-3.5" />
-          </Button>
-        )}
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={onStepForward} disabled={currentStep >= totalSteps - 1} title="Step forward">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-          Step {currentStep} / {totalSteps - 1}
-        </span>
-      </div>
+  const atStart = currentStep === 0;
+  const atEnd = currentStep >= totalSteps - 1;
 
+  return (
+    <div
+      className="flex flex-col gap-2 select-none"
+      tabIndex={0}
+      role="toolbar"
+      aria-label="Playback controls"
+    >
+      {/* Scrubber */}
       <input
         type="range"
         min={0}
@@ -63,22 +51,46 @@ export function PlaybackControls({
           onStop();
           onSeek(Number(e.target.value));
         }}
-        className="w-full accent-primary"
+        className="w-full accent-primary h-1.5 cursor-pointer"
+        aria-label={`Step ${currentStep + 1} of ${totalSteps}`}
       />
 
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Speed:</span>
-        {[0.5, 1, 2, 4].map((s) => (
-          <Button
-            key={s}
-            variant={speed === s ? "default" : "outline"}
-            size="sm"
-            className="h-6 px-2 text-xs"
-            onClick={() => onSpeedChange(s)}
-          >
-            {s}x
+      {/* Transport row */}
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onReset} disabled={atStart} title="Reset (r)">
+          <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStepBack} disabled={atStart} title="Step back (←)">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        {playing ? (
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStop} title="Pause (space)">
+            <Pause className="h-3.5 w-3.5" />
           </Button>
-        ))}
+        ) : (
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onPlay} disabled={atEnd} title="Play (space)">
+            <Play className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onStepForward} disabled={atEnd} title="Step forward (→)">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+
+        {/* Step counter */}
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+          {currentStep + 1}/{totalSteps}
+        </span>
+
+        {/* Speed badge — single click cycles */}
+        {onCycleSpeed && (
+          <button
+            onClick={onCycleSpeed}
+            className="ml-1 text-[10px] font-medium text-muted-foreground hover:text-foreground bg-muted rounded px-1.5 py-0.5 tabular-nums transition-colors"
+            title="Cycle speed"
+          >
+            {speed}x
+          </button>
+        )}
       </div>
     </div>
   );
