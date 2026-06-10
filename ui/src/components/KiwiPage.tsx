@@ -799,7 +799,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                       );
                     },
                     code: ({ className, children, node, ...rest }: any) => {
-                      const match = /language-([A-Za-z0-9_-]+)/.exec(className || "");
+                      const match = /language-([A-Za-z0-9_:.-]+)/.exec(className || "");
                       const lang = match ? match[1] : undefined;
                       const raw = String(children).replace(/\n$/, "");
                       if (lang?.startsWith("widget:")) {
