@@ -121,7 +121,9 @@ export function ShikiCode({ code, lang, title, highlightLines }: Props) {
   }, [code, lang, isDark, highlightLines]);
 
   const langLabel = lang ? formatLangLabel(lang) : undefined;
-  const headerBar = (title || langLabel) ? (
+  const hasHeader = !!(title || langLabel);
+
+  const headerEl = hasHeader ? (
     <div className="kiwi-code-header">
       {title && <span className="kiwi-code-title">{title}</span>}
       {langLabel && !title && <span className="kiwi-code-lang">{langLabel}</span>}
@@ -131,10 +133,10 @@ export function ShikiCode({ code, lang, title, highlightLines }: Props) {
 
   if (html) {
     return (
-      <div className={`relative group${headerBar ? " my-4" : ""}`}>
-        {headerBar}
+      <div className="kiwi-shiki relative group my-4 text-sm rounded-lg overflow-hidden">
+        {headerEl}
         <div
-          className={`kiwi-shiki text-sm rounded-md overflow-hidden [&>pre]:p-4 [&>pre]:overflow-x-auto${headerBar ? " kiwi-shiki-with-header" : " my-4"}`}
+          className="[&>pre]:p-4 [&>pre]:overflow-x-auto"
           dangerouslySetInnerHTML={{ __html: html }}
         />
         <CopyButton code={code} />
@@ -142,9 +144,9 @@ export function ShikiCode({ code, lang, title, highlightLines }: Props) {
     );
   }
   return (
-    <div className={`relative group${headerBar ? " my-4" : ""}`}>
-      {headerBar}
-      <pre>
+    <div className="kiwi-shiki relative group my-4 text-sm rounded-lg overflow-hidden">
+      {headerEl}
+      <pre className="p-4 overflow-x-auto">
         <code>{code}</code>
       </pre>
       <CopyButton code={code} />
