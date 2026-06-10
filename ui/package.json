@@ -75,6 +75,7 @@
     "react-force-graph-2d": "^1.29.1",
     "react-force-graph-3d": "^1.29.1",
     "react-is": "^19.2.6",
+    "react-live": "^4.1.8",
     "react-map-gl": "^8.1.1",
     "react-markdown": "^9.0.1",
     "react-medium-image-zoom": "^5.4.3",
