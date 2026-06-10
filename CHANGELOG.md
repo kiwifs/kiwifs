@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.29](https://github.com/kiwifs/kiwifs/compare/v0.19.28...v0.19.29) (2026-06-10)
+
+
+### Features
+
+* **ui:** add widget system for embedding React components in markdown ([#281](https://github.com/kiwifs/kiwifs/issues/281)) ([195d481](https://github.com/kiwifs/kiwifs/commit/195d481aed06f44fac9cfbf6f0d01c6940ee0b90))
+* **ui:** add widget:live (react-live) and playback engine ([#284](https://github.com/kiwifs/kiwifs/issues/284)) ([539f25a](https://github.com/kiwifs/kiwifs/commit/539f25aaa57ef6ca6c490c5fdd0cfbbf390df69c))
+
 ## [0.19.28](https://github.com/kiwifs/kiwifs/compare/v0.19.27...v0.19.28) (2026-06-09)
 
 
