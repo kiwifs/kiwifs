@@ -55,8 +55,8 @@ var onnxModelCatalog = map[string]modelArtifact{
 		hintTOML: `[search.vector.embedder]
 provider = "onnx"
 model_path = "%s/onnx/model.onnx"
-tokenizer_path = "%s/tokenizer.json"
-dimensions = 384`,
+dimensions = 384
+# tokenizer_path optional — auto-discovered from parent dir`,
 	},
 	"multilingual-e5-small": {
 		name:   "intfloat/multilingual-e5-small",
@@ -68,10 +68,10 @@ dimensions = 384`,
 		hintTOML: `[search.vector.embedder]
 provider = "onnx"
 model_path = "%s/onnx/model.onnx"
-tokenizer_path = "%s/tokenizer.json"
 dimensions = 384
 query_prefix = "query: "
-passage_prefix = "passage: "`,
+passage_prefix = "passage: "
+# tokenizer_path optional — auto-discovered from parent dir`,
 	},
 }
 
@@ -115,7 +115,7 @@ func runModelDownload(cmd *cobra.Command, args []string) error {
 		}
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "\nDownloaded %s to %s\n\nExample config:\n%s\n\nBuild with ONNX support:\n  go build -tags onnx -o kiwifs .\n",
-		artifact.name, outDir, fmt.Sprintf(artifact.hintTOML, outDir, outDir))
+		artifact.name, outDir, fmt.Sprintf(artifact.hintTOML, outDir))
 	return nil
 }
 
