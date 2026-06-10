@@ -25,7 +25,7 @@ Supported models:
   all-minilm-l6-v2         English baseline (384-dim, ~80MB)
   multilingual-e5-small  Multilingual/CJK default (384-dim, needs query/passage prefixes)
 
-After download, configure vector search with provider = "onnx" and the printed paths.`,
+After download, configure vector search with type = "onnx" and the printed paths.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runModelDownload,
 }
