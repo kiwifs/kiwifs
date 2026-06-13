@@ -43,6 +43,38 @@ func TestLintFlagsOrphanAndBrokenLinks(t *testing.T) {
 	}
 }
 
+func TestLintIgnoresWikiLinksInCodeBlocks(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "SCHEMA.md"),
+		[]byte("# Schema\n\nExpected: [[index]]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "index.md"),
+		[]byte("# Index\n\nsee [[concepts/a]]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "concepts"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	// This file has [[routes]] inside a TOML code block — must NOT be
+	// flagged as broken-link (issue #301).
+	if err := os.WriteFile(filepath.Join(root, "concepts/a.md"),
+		[]byte("---\ntitle: example config\n---\n\n# Config\n\n```toml\n[server]\nhost = \"localhost\"\n\n[[routes]]\npath = \"/api\"\n```\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Lint(root)
+	if err != nil {
+		t.Fatalf("lint: %v", err)
+	}
+
+	for _, is := range res.Issues {
+		if is.Kind == "broken-link" {
+			t.Fatalf("unexpected broken-link issue: %s — %s", is.Path, is.Message)
+		}
+	}
+}
+
 func TestLintMissingSchema(t *testing.T) {
 	root := t.TempDir()
 	res, err := Lint(root)

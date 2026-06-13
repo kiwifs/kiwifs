@@ -52,20 +52,24 @@ type Linker interface {
 }
 
 // wikiLinkRe matches [[target]] or [[target|label]]. Target may contain any
-// character except ] and |. We deliberately keep this simple — wiki links
-// inside fenced code blocks or inline code are still captured, which is
-// usually what authors want (code-block [[x]] is quite rare in practice).
+// character except ] and |.
 var wikiLinkRe = regexp.MustCompile(`!?\[\[([^\]|]+)(?:\|[^\]]+)?\]\]`)
 
 // Extract pulls [[target]] entries out of a markdown body. Targets are
 // returned verbatim (trimmed of surrounding whitespace) in order of
 // appearance, with duplicates preserved so callers can derive a weight if
 // they want one. Most callers should de-dupe with Unique().
+//
+// Per the CommonMark spec, content inside fenced code blocks, indented
+// code blocks, and inline code spans is literal text and is not parsed
+// for wikilinks. For example, TOML [[array-of-tables]] inside a code
+// fence will not be mistaken for a wikilink.
 func Extract(content []byte) []string {
 	if len(content) == 0 {
 		return nil
 	}
-	matches := wikiLinkRe.FindAllSubmatch(content, -1)
+	cleaned := stripCodeRegions(content)
+	matches := wikiLinkRe.FindAllSubmatch(cleaned, -1)
 	if len(matches) == 0 {
 		return nil
 	}
@@ -78,6 +82,123 @@ func Extract(content []byte) []string {
 		out = append(out, t)
 	}
 	return out
+}
+
+// openFenceRe matches the opening of a fenced code block per CommonMark
+// §4.5: up to 3 spaces of indentation followed by 3+ backticks or tildes,
+// then an optional info string. Applied to the RAW line (not trimmed) so
+// the indent constraint is enforced.
+var openFenceRe = regexp.MustCompile(`^ {0,3}(` + "`{3,}" + `|~{3,})(.*)$`)
+
+// closeFenceRe matches a closing fence per CommonMark §4.5: up to 3 spaces
+// of indentation followed by 3+ backticks or tildes, then only whitespace.
+// Closing fences cannot have info strings.
+var closeFenceRe = regexp.MustCompile(`^ {0,3}(` + "`{3,}" + `|~{3,})\s*$`)
+
+// stripCodeRegions blanks out content inside fenced code blocks (``` / ~~~)
+// and inline code spans so the wikilink regex does not match literal text
+// inside code. This follows CommonMark §4.5 (fenced code blocks) and
+// §6.1 (code spans).
+func stripCodeRegions(content []byte) []byte {
+	s := string(content)
+	lines := strings.Split(s, "\n")
+	inFence := false
+	var fenceChar byte
+	var fenceRunLen int
+
+	for i, line := range lines {
+		if !inFence {
+			m := openFenceRe.FindStringSubmatch(line)
+			if m != nil {
+				marker := m[1]
+				info := m[2]
+				ch := marker[0]
+				runLen := len(marker)
+				if ch == '`' && strings.ContainsRune(info, '`') {
+					lines[i] = stripInlineCodeSpans(line)
+					continue
+				}
+				inFence = true
+				fenceChar = ch
+				fenceRunLen = runLen
+				lines[i] = ""
+				continue
+			}
+			lines[i] = stripInlineCodeSpans(line)
+		} else {
+			if isClosingCodeFence(line, fenceChar, fenceRunLen) {
+				inFence = false
+			}
+			lines[i] = ""
+		}
+	}
+	return []byte(strings.Join(lines, "\n"))
+}
+
+// isClosingCodeFence checks whether a raw line is a valid closing fence
+// for the given opening fence character and minimum run length.
+// Per CommonMark §4.5: 0-3 spaces indent, same char, at least as many
+// repetitions as the opening, followed only by whitespace.
+func isClosingCodeFence(line string, fenceChar byte, minRunLen int) bool {
+	m := closeFenceRe.FindStringSubmatch(line)
+	if m == nil {
+		return false
+	}
+	marker := m[1]
+	return marker[0] == fenceChar && len(marker) >= minRunLen
+}
+
+// stripInlineCodeSpans replaces content inside backtick code spans with
+// spaces. Handles arbitrary backtick-string lengths per CommonMark §6.1.
+func stripInlineCodeSpans(line string) string {
+	result := []byte(line)
+	i := 0
+	for i < len(result) {
+		if result[i] != '`' {
+			i++
+			continue
+		}
+		openStart := i
+		openLen := 0
+		for i < len(result) && result[i] == '`' {
+			openLen++
+			i++
+		}
+		closeIdx := findClosingBackticks(result[i:], openLen)
+		if closeIdx < 0 {
+			i = openStart + openLen
+			continue
+		}
+		spanEnd := i + closeIdx + openLen
+		for j := openStart; j < spanEnd && j < len(result); j++ {
+			result[j] = ' '
+		}
+		i = spanEnd
+	}
+	return string(result)
+}
+
+// findClosingBackticks scans data for a backtick string of exactly n
+// backticks (not preceded or followed by a backtick). Returns the byte
+// offset of the first backtick of the closing string, or -1 if not found.
+func findClosingBackticks(data []byte, n int) int {
+	i := 0
+	for i < len(data) {
+		if data[i] != '`' {
+			i++
+			continue
+		}
+		start := i
+		runLen := 0
+		for i < len(data) && data[i] == '`' {
+			runLen++
+			i++
+		}
+		if runLen == n {
+			return start
+		}
+	}
+	return -1
 }
 
 // Unique de-dupes a slice of targets case-insensitively while preserving order.

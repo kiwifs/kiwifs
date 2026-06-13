@@ -21,6 +21,276 @@ func TestExtractAndUnique(t *testing.T) {
 	}
 }
 
+func TestExtract_IgnoresFencedCodeBlock(t *testing.T) {
+	body := []byte("see [[real]] link\n```\n[[inside-code]]\n```\nand [[another]]\n")
+	got := Extract(body)
+	want := []string{"real", "another"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_IgnoresFencedCodeBlockWithLanguage(t *testing.T) {
+	body := []byte("# Config\n\n```toml\n[server]\nhost = \"localhost\"\n\n[[routes]]\npath = \"/api\"\n```\n\nSee [[config-docs]]\n")
+	got := Extract(body)
+	want := []string{"config-docs"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_IgnoresTildeFencedCodeBlock(t *testing.T) {
+	body := []byte("~~~\n[[in-tilde-fence]]\n~~~\n[[real]]\n")
+	got := Extract(body)
+	want := []string{"real"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_IgnoresInlineCode(t *testing.T) {
+	body := []byte("Use `[[not-a-link]]` syntax, but [[real-link]] is real.\n")
+	got := Extract(body)
+	want := []string{"real-link"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_IgnoresDoubleBacktickInlineCode(t *testing.T) {
+	body := []byte("Example ``[[not-a-link]]`` and [[yes]].\n")
+	got := Extract(body)
+	want := []string{"yes"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_MixedCodeAndRealLinks(t *testing.T) {
+	body := []byte("[[a]] before\n```python\nx = [[b]]\n```\nMiddle `[[c]]` text\n~~~\n[[d]]\n~~~\n[[e]] end\n")
+	got := Extract(body)
+	want := []string{"a", "e"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_UnclosedFenceTreatsRestAsCode(t *testing.T) {
+	body := []byte("[[before]]\n```\n[[inside]]\nno closing fence\n[[also-inside]]\n")
+	got := Extract(body)
+	want := []string{"before"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_FenceLengthMustMatch(t *testing.T) {
+	body := []byte("````\n[[inside]]\n```\n[[still-inside]]\n````\n[[outside]]\n")
+	got := Extract(body)
+	want := []string{"outside"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_NoLinksReturnsNil(t *testing.T) {
+	body := []byte("```\n[[only-in-code]]\n```\n")
+	got := Extract(body)
+	if got != nil {
+		t.Fatalf("expected nil, got %v", got)
+	}
+}
+
+// --- Edge cases per CommonMark spec ---
+
+func TestExtract_FourSpaceIndentIsNotFence(t *testing.T) {
+	// CommonMark §4.5: "Four spaces of indentation is too many"
+	// A line with 4+ spaces is an indented code block, NOT a fence opener.
+	// The [[link]] after the "fence" should still be extracted since the
+	// fake fence never opened.
+	body := []byte("    ```\n    [[indented-content]]\n    ```\n[[real]]\n")
+	got := Extract(body)
+	// The 4-space lines are not fences, so [[indented-content]] is visible
+	// to the regex (it's just indented text, not inside a real fence).
+	// [[real]] is also visible.
+	if len(got) < 1 {
+		t.Fatalf("expected at least [[real]], got %v", got)
+	}
+	found := false
+	for _, g := range got {
+		if g == "real" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected [[real]] to be extracted, got %v", got)
+	}
+}
+
+func TestExtract_ThreeSpaceIndentIsFence(t *testing.T) {
+	// CommonMark §4.5: up to 3 spaces of indentation is valid for a fence.
+	body := []byte("   ```\n[[inside]]\n   ```\n[[outside]]\n")
+	got := Extract(body)
+	want := []string{"outside"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_ClosingFenceIndentedFourSpaces(t *testing.T) {
+	// CommonMark: "This is not a closing fence, because it is indented 4 spaces"
+	// So the fence stays open past the 4-space-indented "closing" line.
+	body := []byte("```\n[[inside]]\n    ```\n[[still-inside]]\n```\n[[outside]]\n")
+	got := Extract(body)
+	want := []string{"outside"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_BacktickInfoStringWithBackticks(t *testing.T) {
+	// CommonMark §4.5: "Info strings for backtick code blocks cannot
+	// contain backticks". So this is NOT a valid fence opener.
+	body := []byte("``` foo`bar\n[[visible]]\n```\n")
+	got := Extract(body)
+	if len(got) == 0 || got[0] != "visible" {
+		t.Fatalf("expected [[visible]] (invalid fence), got %v", got)
+	}
+}
+
+func TestExtract_TildeInfoStringWithBackticks(t *testing.T) {
+	// Tilde fences CAN have backticks in the info string.
+	body := []byte("~~~ foo`bar\n[[hidden]]\n~~~\n[[visible]]\n")
+	got := Extract(body)
+	want := []string{"visible"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_TildeCannotCloseBacktickFence(t *testing.T) {
+	// CommonMark: "The closing code fence must use the same character"
+	body := []byte("```\n[[inside]]\n~~~\n[[still-inside]]\n```\n[[outside]]\n")
+	got := Extract(body)
+	want := []string{"outside"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_EmptyFencedBlock(t *testing.T) {
+	body := []byte("```\n```\n[[after]]\n")
+	got := Extract(body)
+	want := []string{"after"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_MultipleFencedBlocks(t *testing.T) {
+	body := []byte("[[a]]\n```\n[[b]]\n```\n[[c]]\n~~~\n[[d]]\n~~~\n[[e]]\n")
+	got := Extract(body)
+	want := []string{"a", "c", "e"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_EmbedSyntaxInCodeBlock(t *testing.T) {
+	body := []byte("```\n![[embed-in-code]]\n```\n![[real-embed]]\n")
+	got := Extract(body)
+	want := []string{"real-embed"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_WikilinkWithPathInCodeBlock(t *testing.T) {
+	body := []byte("```\n[[concepts/auth]]\n```\n[[concepts/billing]]\n")
+	got := Extract(body)
+	want := []string{"concepts/billing"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_LabeledWikilinkInInlineCode(t *testing.T) {
+	body := []byte("See `[[auth|login docs]]` and [[billing|payments]].\n")
+	got := Extract(body)
+	want := []string{"billing"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_UnmatchedBacktickDoesNotSwallowLine(t *testing.T) {
+	// A single backtick with no closing should not eat the rest of the line.
+	body := []byte("It's a `broken span [[real-link]] here.\n")
+	got := Extract(body)
+	want := []string{"real-link"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_TripleBacktickInlineCode(t *testing.T) {
+	// Triple backtick as inline code (matched by triple closing backticks on same line).
+	body := []byte("Run ```[[not-link]]``` to test, and see [[real]].\n")
+	got := Extract(body)
+	want := []string{"real"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_FrontmatterNotAffected(t *testing.T) {
+	// YAML frontmatter delimiters (---) should not interfere with fence detection.
+	body := []byte("---\ntitle: test\n---\n\n[[real-link]]\n\n```\n[[in-code]]\n```\n")
+	got := Extract(body)
+	want := []string{"real-link"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_TOMLArrayOfTables(t *testing.T) {
+	// The exact scenario from issue #301.
+	body := []byte("---\ntitle: example config\ntype: resource\nprovenance: human\nstatus: active\n---\n\n# Example TOML Configuration\n\n```toml\n[server]\nhost = \"localhost\"\nport = 8080\n\n[[routes]]\npath = \"/api\"\nhandler = \"proxy\"\n```\n")
+	got := Extract(body)
+	if got != nil {
+		t.Fatalf("expected nil (no real wikilinks), got %v", got)
+	}
+}
+
+func TestExtract_ConsecutiveInlineCodeSpans(t *testing.T) {
+	body := []byte("`[[a]]` normal `[[b]]` text [[c]].\n")
+	got := Extract(body)
+	want := []string{"c"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_FencedBlockWithTrailingSpaces(t *testing.T) {
+	// Trailing spaces after closing fence are allowed per CommonMark.
+	body := []byte("```   \n[[inside]]\n```   \n[[outside]]\n")
+	got := Extract(body)
+	want := []string{"outside"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_FiveBacktickFence(t *testing.T) {
+	// Opening with 5 backticks requires at least 5 to close.
+	body := []byte("`````\n[[inside]]\n```\n[[still-inside]]\n`````\n[[outside]]\n")
+	got := Extract(body)
+	want := []string{"outside"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
 func TestResolveWikiLinksToMarkdown(t *testing.T) {
 	resolver := func(target string) string {
 		m := map[string]string{
