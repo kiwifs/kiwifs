@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.35](https://github.com/kiwifs/kiwifs/compare/v0.19.34...v0.19.35) (2026-06-13)
+
+
+### Bug Fixes
+
+* **lint:** skip wikilinks inside code blocks and inline code ([#305](https://github.com/kiwifs/kiwifs/issues/305)) ([562047d](https://github.com/kiwifs/kiwifs/commit/562047d2f84e1d1ef534592993a5287337e68376)), closes [#301](https://github.com/kiwifs/kiwifs/issues/301)
+
 ## [0.19.34](https://github.com/kiwifs/kiwifs/compare/v0.19.33...v0.19.34) (2026-06-10)
 
 
