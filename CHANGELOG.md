@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.36](https://github.com/kiwifs/kiwifs/compare/v0.19.35...v0.19.36) (2026-06-14)
+
+
+### Features
+
+* **api:** add content negotiation to public reader endpoint ([#307](https://github.com/kiwifs/kiwifs/issues/307)) ([d3686da](https://github.com/kiwifs/kiwifs/commit/d3686da8092130bbf2023e855f703b5eec2dbcbc))
+* **memory:** add coverage, freshness, and scope metrics to report ([#304](https://github.com/kiwifs/kiwifs/issues/304)) ([e8237d4](https://github.com/kiwifs/kiwifs/commit/e8237d4041617f7c5b0a86b0e420eedc182efc56)), closes [#258](https://github.com/kiwifs/kiwifs/issues/258)
+
 ## [0.19.35](https://github.com/kiwifs/kiwifs/compare/v0.19.34...v0.19.35) (2026-06-13)
 
 
