@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.37](https://github.com/kiwifs/kiwifs/compare/v0.19.36...v0.19.37) (2026-06-14)
+
+
+### Bug Fixes
+
+* **links:** skip wikilinks inside indented code blocks ([#309](https://github.com/kiwifs/kiwifs/issues/309)) ([e41a762](https://github.com/kiwifs/kiwifs/commit/e41a762fdb69df0056feab359efebf4f02592506))
+
 ## [0.19.36](https://github.com/kiwifs/kiwifs/compare/v0.19.35...v0.19.36) (2026-06-14)
 
 
