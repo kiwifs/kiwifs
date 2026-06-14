@@ -48,6 +48,15 @@ func TestExtract_IgnoresTildeFencedCodeBlock(t *testing.T) {
 	}
 }
 
+func TestExtract_IgnoresIndentedCodeBlock(t *testing.T) {
+	body := []byte("normal [[real]] text\n    [[indented-code]]\n\t[[tab-indented]]\nnot indented [[also-real]]\n")
+	got := Extract(body)
+	want := []string{"real", "also-real"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
 func TestExtract_IgnoresInlineCode(t *testing.T) {
 	body := []byte("Use `[[not-a-link]]` syntax, but [[real-link]] is real.\n")
 	got := Extract(body)

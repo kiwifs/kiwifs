@@ -95,10 +95,11 @@ var openFenceRe = regexp.MustCompile(`^ {0,3}(` + "`{3,}" + `|~{3,})(.*)$`)
 // Closing fences cannot have info strings.
 var closeFenceRe = regexp.MustCompile(`^ {0,3}(` + "`{3,}" + `|~{3,})\s*$`)
 
-// stripCodeRegions blanks out content inside fenced code blocks (``` / ~~~)
-// and inline code spans so the wikilink regex does not match literal text
-// inside code. This follows CommonMark §4.5 (fenced code blocks) and
-// §6.1 (code spans).
+// stripCodeRegions blanks out content inside fenced code blocks (``` / ~~~),
+// indented code blocks (4+ spaces / tab), and inline code spans so the
+// wikilink regex does not match literal text inside code. This follows
+// CommonMark §4.4 (indented code blocks), §4.5 (fenced code blocks),
+// and §6.1 (code spans).
 func stripCodeRegions(content []byte) []byte {
 	s := string(content)
 	lines := strings.Split(s, "\n")
@@ -124,6 +125,10 @@ func stripCodeRegions(content []byte) []byte {
 				lines[i] = ""
 				continue
 			}
+			if isIndentedCodeLine(line) {
+				lines[i] = ""
+				continue
+			}
 			lines[i] = stripInlineCodeSpans(line)
 		} else {
 			if isClosingCodeFence(line, fenceChar, fenceRunLen) {
@@ -133,6 +138,21 @@ func stripCodeRegions(content []byte) []byte {
 		}
 	}
 	return []byte(strings.Join(lines, "\n"))
+}
+
+// isIndentedCodeLine returns true if the line starts with 4+ spaces or a tab,
+// which makes it an indented code block per CommonMark §4.4.
+func isIndentedCodeLine(line string) bool {
+	if len(line) == 0 {
+		return false
+	}
+	if line[0] == '\t' {
+		return true
+	}
+	if len(line) >= 4 && line[0] == ' ' && line[1] == ' ' && line[2] == ' ' && line[3] == ' ' {
+		return true
+	}
+	return false
 }
 
 // isClosingCodeFence checks whether a raw line is a valid closing fence
