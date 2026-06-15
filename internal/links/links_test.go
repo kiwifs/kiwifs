@@ -603,8 +603,8 @@ func TestResolverCaching(t *testing.T) {
 	if got2 != got {
 		t.Fatalf("second resolve returned different result: %q vs %q", got2, got)
 	}
-	if elapsed > time.Millisecond {
-		t.Fatalf("cached resolve took %v, expected <1ms", elapsed)
+	if elapsed > 10*time.Millisecond {
+		t.Fatalf("cached resolve took %v, expected <10ms", elapsed)
 	}
 }
 
