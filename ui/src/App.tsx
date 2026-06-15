@@ -606,6 +606,7 @@ const handleSpaceSwitch = useCallback(() => {
                 initialCanvasPath={initialCanvasPath}
                 onClose={() => { setCanvasOpen(false); setInitialCanvasPath(null); }}
                 onNavigate={(p) => { setCanvasOpen(false); setInitialCanvasPath(null); navigate(p); }}
+                tree={tree}
                 onTreeRefresh={() => setRefreshKey((k) => k + 1)}
               />
             ) : whiteboardOpen ? (

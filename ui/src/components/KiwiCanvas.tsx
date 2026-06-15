@@ -4,15 +4,17 @@
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@kw/components/ui/button";
 import { FlowCanvas } from "./canvas/FlowCanvas";
+import type { TreeEntry } from "@kw/lib/api";
 
 type Props = {
   path: string | null;
   embedded?: boolean;
   onClose?: () => void;
   onNavigate: (path: string) => void;
+  tree?: TreeEntry | null;
 };
 
-export function KiwiCanvas({ path, embedded = false, onClose, onNavigate }: Props) {
+export function KiwiCanvas({ path, embedded = false, onClose, onNavigate, tree = null }: Props) {
   if (!path) {
     return (
       <div className="h-full grid place-items-center text-muted-foreground text-sm">
@@ -35,7 +37,7 @@ export function KiwiCanvas({ path, embedded = false, onClose, onNavigate }: Prop
         </div>
       )}
       <div className="flex-1 min-h-0">
-        <FlowCanvas key={path} path={path} onNavigate={onNavigate} />
+        <FlowCanvas key={path} path={path} onNavigate={onNavigate} tree={tree} />
       </div>
     </div>
   );

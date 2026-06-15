@@ -36,6 +36,7 @@ import {
   Redo2,
   Palette,
   Copy,
+  FileText,
 } from "lucide-react";
 import { Button } from "@kw/components/ui/button";
 import {
@@ -43,12 +44,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@kw/components/ui/popover";
-import { api, sseUrl } from "@kw/lib/api";
+import { api, sseUrl, type TreeEntry } from "@kw/lib/api";
 import { applyDagreLayout } from "@kw/lib/canvasLayout";
+import {
+  getCanvasMarkdownDragPath,
+  normalizeDroppedMarkdownPath,
+} from "@kw/lib/canvasMarkdownDrag";
+import { useCanvasMarkdownUiStore } from "@kw/stores/canvasMarkdownUiStore";
+import { KiwiSearch } from "../KiwiSearch";
 import CanvasTextNode from "./CanvasTextNode";
 import CanvasFileNode from "./CanvasFileNode";
 import CanvasLinkNode from "./CanvasLinkNode";
 import CanvasGroupNode from "./CanvasGroupNode";
+import { CanvasMarkdownPagePicker } from "./CanvasMarkdownPagePicker";
 
 // ─── JSON Canvas data types ─────────────────────────────────────────────────
 
@@ -91,13 +99,44 @@ const COLOR_PRESETS: { key: string; label: string; hex: string }[] = [
 function resolveColor(color?: string): string | undefined {
   if (!color) return undefined;
   const preset = COLOR_PRESETS.find((p) => p.key === color);
-  return preset ? preset.hex : color;
+  if (!preset) return color;
+  return preset.hex;
 }
 
 function unresolveColor(hex?: string): string | undefined {
   if (!hex) return undefined;
   const preset = COLOR_PRESETS.find((p) => p.hex === hex);
-  return preset ? preset.key : hex;
+  if (!preset) return hex;
+  return preset.key;
+}
+
+function resolveNodeType(type: string | undefined): string {
+  if (type === "file") return "file";
+  if (type === "link") return "link";
+  if (type === "group") return "group";
+  return "text";
+}
+
+function edgeStyle(color: string | undefined): Edge["style"] {
+  if (!color) return undefined;
+  return { stroke: resolveColor(color) };
+}
+
+function edgeSidePatch(handleId: string | null | undefined, key: "fromSide" | "toSide"): Partial<CanvasEdge> {
+  const side = handleToSide(handleId);
+  if (!side) return {};
+  return { [key]: side };
+}
+
+function edgeLabelPatch(label: unknown): Partial<CanvasEdge> {
+  if (!label) return {};
+  return { label: String(label) };
+}
+
+function edgeColorPatch(style: Edge["style"]): Partial<CanvasEdge> {
+  if (!style) return {};
+  if (!("stroke" in style)) return {};
+  return { color: unresolveColor(String(style.stroke)) };
 }
 
 // ─── Handle-side mapping ─────────────────────────────────────────────────────
@@ -135,7 +174,7 @@ function toFlowNodes(
 ): Node[] {
   return raw.map((n) => ({
     id: n.id,
-    type: n.type === "file" || n.type === "link" || n.type === "group" ? n.type : "text",
+    type: resolveNodeType(n.type),
     position: { x: n.x ?? 0, y: n.y ?? 0 },
     data: {
       text: n.text,
@@ -159,7 +198,7 @@ function toFlowEdges(raw: CanvasEdge[]): Edge[] {
     targetHandle: sideToHandle(e.toSide, "target"),
     label: e.label,
     animated: false,
-    style: e.color ? { stroke: resolveColor(e.color) } : undefined,
+    style: edgeStyle(e.color),
   }));
 }
 
@@ -182,12 +221,10 @@ function toCanvasDoc(nodes: Node[], edges: Edge[]): CanvasDoc {
       id: e.id,
       fromNode: e.source,
       toNode: e.target,
-      ...(handleToSide(e.sourceHandle) ? { fromSide: handleToSide(e.sourceHandle) } : {}),
-      ...(handleToSide(e.targetHandle) ? { toSide: handleToSide(e.targetHandle) } : {}),
-      ...(e.label ? { label: String(e.label) } : {}),
-      ...(e.style && "stroke" in e.style
-        ? { color: unresolveColor(String(e.style.stroke)) }
-        : {}),
+      ...edgeSidePatch(e.sourceHandle, "fromSide"),
+      ...edgeSidePatch(e.targetHandle, "toSide"),
+      ...edgeLabelPatch(e.label),
+      ...edgeColorPatch(e.style),
     })),
   };
 }
@@ -250,11 +287,47 @@ function newId(prefix = "n"): string {
   return `${prefix}-${Date.now().toString(36)}-${(idCounter++).toString(36)}`;
 }
 
+function canvasCenterPosition(reactFlow: ReturnType<typeof useReactFlow>): XYPosition {
+  const viewport = reactFlow.getViewport();
+  return {
+    x: (window.innerWidth / 2 - viewport.x) / viewport.zoom,
+    y: (window.innerHeight / 2 - viewport.y) / viewport.zoom,
+  };
+}
+
+function updateNodeData(node: Node, nodeId: string, data: Record<string, unknown>): Node {
+  if (node.id !== nodeId) return node;
+  return { ...node, data: { ...node.data, ...data } };
+}
+
+const nodeDefaultsFor = (
+  type: "text" | "file" | "link" | "group",
+  onTextChange: (id: string, text: string) => void,
+  onNavigate: (path: string) => void,
+): Record<string, unknown> => {
+  const callbacks = { onTextChange, onNavigate };
+  if (type === "file") return { file: "", ...callbacks };
+  if (type === "link") return { url: "", ...callbacks };
+  if (type === "group") return { text: "Group", ...callbacks };
+  return { text: "", ...callbacks };
+};
+
+const nodeSizeFor = (type: "text" | "file" | "link" | "group") => {
+  if (type === "group") return { width: 400, height: 300 };
+  return { width: 240, height: 80 };
+};
+
+function SaveStatusIcon({ saving }: { saving: boolean }) {
+  if (saving) return <Loader2 className="h-3 w-3 animate-spin" />;
+  return <Save className="h-3 w-3" />;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 type Props = {
   path: string;
   onNavigate: (path: string) => void;
+  tree?: TreeEntry | null;
 };
 
 export function FlowCanvas(props: Props) {
@@ -265,15 +338,23 @@ export function FlowCanvas(props: Props) {
   );
 }
 
-function FlowCanvasInner({ path, onNavigate }: Props) {
+function FlowCanvasInner({ path, onNavigate, tree = null }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canvasDropRootRef = useRef<HTMLDivElement | null>(null);
   const suppressSSERef = useRef(false);
   const initialLoadRef = useRef(true);
   const history = useHistory();
+  const addMenuOpen = useCanvasMarkdownUiStore((state) => state.addMenuOpen);
+  const markdownSearchOpen = useCanvasMarkdownUiStore((state) => state.searchOpen);
+  const setAddMenuOpen = useCanvasMarkdownUiStore((state) => state.setAddMenuOpen);
+  const openMarkdownSearch = useCanvasMarkdownUiStore((state) => state.openMarkdownSearch);
+  const closeMarkdownSearch = useCanvasMarkdownUiStore((state) => state.closeMarkdownSearch);
+  const closeCanvasMarkdownMenus = useCanvasMarkdownUiStore((state) => state.closeMenus);
+  const recordMarkdownDropIfFresh = useCanvasMarkdownUiStore((state) => state.recordDropIfFresh);
 
   // Context menu state
   const [ctxMenu, setCtxMenu] = useState<{
@@ -293,9 +374,7 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
     (nodeId: string, text: string) => {
       setNodes((nds) => {
         history.push({ nodes: nds, edges: edgesRef.current });
-        return nds.map((n) =>
-          n.id === nodeId ? { ...n, data: { ...n.data, text } } : n,
-        );
+        return nds.map((n) => updateNodeData(n, nodeId, { text }));
       });
       scheduleAutosave();
     },
@@ -447,21 +526,16 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
     (type: "text" | "file" | "link" | "group", position: XYPosition, extraData?: Record<string, unknown>) => {
       history.push({ nodes: nodesRef.current, edges: edgesRef.current });
       const id = newId("n");
-      const defaults: Record<string, unknown> = {
-        text: type === "text" ? { text: "", onTextChange: handleTextChange, onNavigate: handleNodeNavigate } : undefined,
-        file: { file: "", onTextChange: handleTextChange, onNavigate: handleNodeNavigate },
-        link: { url: "", onTextChange: handleTextChange, onNavigate: handleNodeNavigate },
-        group: { text: "Group", onTextChange: handleTextChange, onNavigate: handleNodeNavigate },
+      const data = {
+        ...nodeDefaultsFor(type, handleTextChange, handleNodeNavigate),
+        ...extraData,
       };
-      const size = type === "group"
-        ? { width: 400, height: 300 }
-        : { width: 240, height: 80 };
       const newNode: Node = {
         id,
         type,
         position,
-        data: { ...(defaults[type] as Record<string, unknown>), ...extraData, onTextChange: handleTextChange, onNavigate: handleNodeNavigate },
-        ...size,
+        data,
+        ...nodeSizeFor(type),
       };
       setNodes((nds) => [...nds, newNode]);
       scheduleAutosave();
@@ -469,6 +543,94 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
     },
     [setNodes, scheduleAutosave, history, handleTextChange, handleNodeNavigate],
   );
+
+  const addMarkdownPageAt = useCallback(
+    (filePath: string, position: XYPosition) => {
+      const normalized = filePath.trim();
+      if (!normalized) return;
+      createNode("file", position, { file: normalized });
+      closeCanvasMarkdownMenus();
+    },
+    [createNode, closeCanvasMarkdownMenus],
+  );
+
+  const handleAddMenuOpenChange = useCallback(
+    (open: boolean) => {
+      setAddMenuOpen(open);
+    },
+    [setAddMenuOpen],
+  );
+
+  const addTextAtCenter = useCallback(() => {
+    createNode("text", canvasCenterPosition(reactFlow));
+    setAddMenuOpen(false);
+  }, [createNode, reactFlow, setAddMenuOpen]);
+
+  const addSelectedMarkdownPage = useCallback(
+    (page: string) => addMarkdownPageAt(page, canvasCenterPosition(reactFlow)),
+    [addMarkdownPageAt, reactFlow],
+  );
+
+  const addLinkFromPrompt = useCallback(() => {
+    const url = window.prompt("Enter URL:");
+    if (!url) return;
+    createNode("link", canvasCenterPosition(reactFlow), { url });
+    setAddMenuOpen(false);
+  }, [createNode, reactFlow, setAddMenuOpen]);
+
+  const addGroupAtCenter = useCallback(() => {
+    createNode("group", canvasCenterPosition(reactFlow));
+    setAddMenuOpen(false);
+  }, [createNode, reactFlow, setAddMenuOpen]);
+
+  const handleMarkdownPageDrop = useCallback(
+    (event: DragEvent | React.DragEvent) => {
+      const dataTransfer = event.dataTransfer;
+      if (!dataTransfer) return false;
+      const filePath = normalizeDroppedMarkdownPath(dataTransfer);
+      if (!filePath) return false;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const position = reactFlow.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      const key = `${filePath}:${Math.round(position.x)}:${Math.round(position.y)}`;
+      if (!recordMarkdownDropIfFresh(key, Date.now())) return true;
+
+      addMarkdownPageAt(filePath, position);
+      return true;
+    },
+    [reactFlow, addMarkdownPageAt, recordMarkdownDropIfFresh],
+  );
+
+  useEffect(() => {
+    const isInsideCanvas = (target: EventTarget | null) =>
+      target instanceof Node && canvasDropRootRef.current?.contains(target);
+
+    const acceptMarkdownDrag = (event: DragEvent) => {
+      if (!isInsideCanvas(event.target) || !getCanvasMarkdownDragPath()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+
+    const onDropCapture = (event: DragEvent) => {
+      if (!isInsideCanvas(event.target)) return;
+      handleMarkdownPageDrop(event);
+    };
+
+    window.addEventListener("dragenter", acceptMarkdownDrag, true);
+    window.addEventListener("dragover", acceptMarkdownDrag, true);
+    window.addEventListener("drop", onDropCapture, true);
+    return () => {
+      window.removeEventListener("dragenter", acceptMarkdownDrag, true);
+      window.removeEventListener("dragover", acceptMarkdownDrag, true);
+      window.removeEventListener("drop", onDropCapture, true);
+    };
+  }, [handleMarkdownPageDrop]);
 
   // Double-click canvas background → new text card
   const onPaneDoubleClick = useCallback(
@@ -514,23 +676,24 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
-      event.preventDefault();
-      const filePath = event.dataTransfer.getData("application/kiwi-path");
-      if (!filePath) return;
-
-      const position = reactFlow.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-      createNode("file", position, { file: filePath });
+      handleMarkdownPageDrop(event);
     },
-    [reactFlow, createNode],
+    [handleMarkdownPageDrop],
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
-    event.dataTransfer.dropEffect = "link";
+    event.dataTransfer.dropEffect = "copy";
   }, []);
+
+  const addMarkdownPageNode = useCallback(
+    (position: XYPosition) => {
+      const filePath = window.prompt("Markdown page path (example: Notes/Overview.md):")?.trim();
+      if (!filePath) return;
+      addMarkdownPageAt(filePath, position);
+    },
+    [addMarkdownPageAt],
+  );
 
   // ── Delete selected ────────────────────────────────────────────────────
 
@@ -600,11 +763,7 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
   const setNodeColor = useCallback(
     (nodeId: string, color: string | undefined) => {
       history.push({ nodes: nodesRef.current, edges: edgesRef.current });
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === nodeId ? { ...n, data: { ...n.data, color } } : n,
-        ),
-      );
+      setNodes((nds) => nds.map((n) => updateNodeData(n, nodeId, { color })));
       scheduleAutosave();
     },
     [setNodes, scheduleAutosave, history],
@@ -681,6 +840,17 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
     }
   }, [history, setNodes, setEdges, scheduleAutosave, reattachCallbacks]);
 
+  const handleUndoOrRedo = useCallback(
+    (shiftKey: boolean) => {
+      if (shiftKey) {
+        handleRedo();
+        return;
+      }
+      handleUndo();
+    },
+    [handleRedo, handleUndo],
+  );
+
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
 
   useEffect(() => {
@@ -695,11 +865,7 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
 
       if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        if (e.shiftKey) {
-          handleRedo();
-        } else {
-          handleUndo();
-        }
+        handleUndoOrRedo(e.shiftKey);
         return;
       }
 
@@ -720,7 +886,7 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, handleUndo, handleRedo, setNodes, setEdges, deleteSelected]);
+  }, [save, handleUndoOrRedo, setNodes, setEdges, deleteSelected]);
 
   const proOptions = useMemo(() => ({ hideAttribution: true }), []);
 
@@ -740,56 +906,41 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-card shrink-0">
         <div className="flex items-center gap-1.5">
           {/* Add node menu */}
-          <Popover>
+          <Popover
+            open={addMenuOpen}
+            onOpenChange={handleAddMenuOpenChange}
+          >
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1 h-7 text-xs">
                 <Plus className="h-3 w-3" /> Add
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-44 p-1">
+            <PopoverContent align="start" className="w-80 p-1">
               <button
                 className="w-full px-3 py-1.5 text-left text-sm rounded hover:bg-accent flex items-center gap-2"
-                onClick={() => {
-                  const vp = reactFlow.getViewport();
-                  const center: XYPosition = {
-                    x: (window.innerWidth / 2 - vp.x) / vp.zoom,
-                    y: (window.innerHeight / 2 - vp.y) / vp.zoom,
-                  };
-                  createNode("text", center);
-                }}
+                onClick={addTextAtCenter}
               >
                 <Type className="h-3.5 w-3.5" /> Text card
               </button>
+              <CanvasMarkdownPagePicker onOpenSearch={openMarkdownSearch} />
               <button
                 className="w-full px-3 py-1.5 text-left text-sm rounded hover:bg-accent flex items-center gap-2"
-                onClick={() => {
-                  const url = window.prompt("Enter URL:");
-                  if (!url) return;
-                  const vp = reactFlow.getViewport();
-                  const center: XYPosition = {
-                    x: (window.innerWidth / 2 - vp.x) / vp.zoom,
-                    y: (window.innerHeight / 2 - vp.y) / vp.zoom,
-                  };
-                  createNode("link", center, { url });
-                }}
+                onClick={addLinkFromPrompt}
               >
                 <LinkIcon className="h-3.5 w-3.5" /> Link card
               </button>
               <button
                 className="w-full px-3 py-1.5 text-left text-sm rounded hover:bg-accent flex items-center gap-2"
-                onClick={() => {
-                  const vp = reactFlow.getViewport();
-                  const center: XYPosition = {
-                    x: (window.innerWidth / 2 - vp.x) / vp.zoom,
-                    y: (window.innerHeight / 2 - vp.y) / vp.zoom,
-                  };
-                  createNode("group", center);
-                }}
+                onClick={addGroupAtCenter}
               >
                 <Group className="h-3.5 w-3.5" /> Group
               </button>
             </PopoverContent>
           </Popover>
+        </div>
+
+        <div className="ml-2 hidden text-xs text-muted-foreground md:block">
+          Tip: drag Markdown pages from the file tree, or use Add → Markdown page and pick from native search.
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
@@ -803,14 +954,14 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
             <LayoutGrid className="h-3 w-3" /> Auto-layout
           </Button>
           <Button variant="outline" size="sm" className="gap-1 h-7 text-xs" onClick={save} disabled={saving}>
-            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+            <SaveStatusIcon saving={saving} />
             Save
           </Button>
         </div>
       </div>
 
       {/* Canvas */}
-      <div className="flex-1" onDoubleClick={onPaneDoubleClick}>
+      <div ref={canvasDropRootRef} className="flex-1" onDoubleClick={onPaneDoubleClick}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -846,12 +997,24 @@ function FlowCanvasInner({ path, onNavigate }: Props) {
         </ReactFlow>
       </div>
 
+
+      <KiwiSearch
+        open={markdownSearchOpen}
+        onOpenChange={(open) => {
+          if (!open) closeMarkdownSearch();
+        }}
+        onSelect={addSelectedMarkdownPage}
+        tree={tree}
+        mode="markdown-page-picker"
+      />
+
       {/* Context Menu */}
       {ctxMenu && (
         <ContextMenuOverlay
           menu={ctxMenu}
           onClose={closeContextMenu}
           createNode={createNode}
+          addMarkdownPageNode={addMarkdownPageNode}
           duplicateSelected={duplicateSelected}
           setNodeColor={setNodeColor}
           deleteEdge={(edgeId: string) => {
@@ -877,6 +1040,7 @@ function ContextMenuOverlay({
   menu,
   onClose,
   createNode,
+  addMarkdownPageNode,
   duplicateSelected,
   setNodeColor,
   deleteEdge,
@@ -892,6 +1056,7 @@ function ContextMenuOverlay({
   };
   onClose: () => void;
   createNode: (type: "text" | "file" | "link" | "group", pos: XYPosition, extra?: Record<string, unknown>) => void;
+  addMarkdownPageNode: (pos: XYPosition) => void;
   duplicateSelected: () => void;
   setNodeColor: (nodeId: string, color: string | undefined) => void;
   deleteEdge: (edgeId: string) => void;
@@ -913,6 +1078,12 @@ function ContextMenuOverlay({
             onClick={() => { createNode("text", menu.flowPos!); onClose(); }}
           >
             <Type className="h-3.5 w-3.5" /> Add text card
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left hover:bg-accent flex items-center gap-2"
+            onClick={() => { addMarkdownPageNode(menu.flowPos!); onClose(); }}
+          >
+            <FileText className="h-3.5 w-3.5" /> Add Markdown page
           </button>
           <button
             className="w-full px-3 py-1.5 text-left hover:bg-accent flex items-center gap-2"

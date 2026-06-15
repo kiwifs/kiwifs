@@ -7,7 +7,7 @@ import {
   Network,
   Plus,
 } from "lucide-react";
-import { api, type CanvasEntry } from "@kw/lib/api";
+import { api, type CanvasEntry, type TreeEntry } from "@kw/lib/api";
 import { Button } from "@kw/components/ui/button";
 import { Input } from "@kw/components/ui/input";
 import {
@@ -31,6 +31,7 @@ type Props = {
   onClose: () => void;
   onNavigate: (path: string) => void;
   onTreeRefresh?: () => void;
+  tree?: TreeEntry | null;
 };
 
 const LAST_CANVAS_KEY = "kiwifs-last-canvas";
@@ -45,7 +46,7 @@ function canvasPathFromName(name: string): string {
   return `canvases/${base}.canvas.json`;
 }
 
-export function KiwiCanvasScreen({ initialCanvasPath, onClose, onNavigate, onTreeRefresh }: Props) {
+export function KiwiCanvasScreen({ initialCanvasPath, onClose, onNavigate, onTreeRefresh, tree = null }: Props) {
   const [canvases, setCanvases] = useState<CanvasEntry[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [activePath, setActivePath] = useState<string | null>(initialCanvasPath ?? null);
@@ -166,6 +167,7 @@ export function KiwiCanvasScreen({ initialCanvasPath, onClose, onNavigate, onTre
             path={activePath}
             embedded
             onNavigate={onNavigate}
+            tree={tree}
           />
         ) : (
           <div className="h-full flex flex-col items-center justify-center gap-4 p-8 text-center text-muted-foreground">

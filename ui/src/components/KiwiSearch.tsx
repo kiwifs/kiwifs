@@ -9,7 +9,7 @@ import {
   CommandList,
 } from "@kw/components/ui/command";
 import { api, type MetaFilter, type SemanticResult, type TreeEntry } from "@kw/lib/api";
-import { titleize } from "@kw/lib/paths";
+import { isMarkdown, titleize } from "@kw/lib/paths";
 import { cn } from "@kw/lib/cn";
 
 const RECENT_KEY = "kiwi:recent-searches";
@@ -21,6 +21,7 @@ type Props = {
   onSelect: (path: string) => void;
   tree: TreeEntry | null;
   initialQuery?: string;
+  mode?: "navigate" | "markdown-page-picker";
 };
 
 type Hit = {
@@ -69,7 +70,7 @@ function clearRecentSearches() {
   localStorage.removeItem(RECENT_KEY);
 }
 
-export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }: Props) {
+export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery, mode = "navigate" }: Props) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
@@ -81,6 +82,8 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
   const requestId = useRef(0);
 
   const dirs = topDirs(tree);
+  const dialogTitle = mode === "markdown-page-picker" ? "Add Markdown page to canvas" : "Search";
+  const inputPlaceholder = mode === "markdown-page-picker" ? "Search Markdown pages…" : "Search…";
 
   useEffect(() => {
     if (open) {
@@ -194,7 +197,7 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
           // Sort by combined score descending.
           results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
-          setHits(results);
+          setHits(filterHitsForMode(results, mode));
           setSuggestions(
             results.length === 0 && ftsRes?.suggestions?.length
               ? ftsRes.suggestions
@@ -213,7 +216,7 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
     return () => {
       if (debounce.current) window.clearTimeout(debounce.current);
     };
-  }, [query, dateFilter]);
+  }, [query, dateFilter, mode]);
 
   function handleSelect(path: string) {
     if (query.trim()) saveRecentSearch(query.trim());
@@ -230,9 +233,10 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
       open={open}
       onOpenChange={onOpenChange}
       commandProps={{ shouldFilter: false }}
+      title={dialogTitle}
     >
       <CommandInput
-        placeholder="Search…"
+        placeholder={inputPlaceholder}
         value={query}
         onValueChange={setQuery}
       />
@@ -376,7 +380,7 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
         ))}
       </CommandList>
       <div className="text-[11px] text-muted-foreground px-3 py-2 border-t border-border flex justify-between">
-        <span>↑↓ navigate · enter to open · esc to close · <code className="font-mono">field:value</code> to filter</span>
+        <span>{mode === "markdown-page-picker" ? "↑↓ navigate · enter to add card · esc to close" : <>↑↓ navigate · enter to open · esc to close · <code className="font-mono">field:value</code> to filter</>}</span>
         <span>
           {loading
             ? "Searching…"
@@ -390,6 +394,12 @@ export function KiwiSearch({ open, onOpenChange, onSelect, tree, initialQuery }:
       </div>
     </CommandDialog>
   );
+}
+
+
+function filterHitsForMode(results: Hit[], mode: Props["mode"]): Hit[] {
+  if (mode !== "markdown-page-picker") return results;
+  return results.filter((result) => isMarkdown(result.path));
 }
 
 function parseFieldFilters(q: string): { text: string; filters: MetaFilter[] } {

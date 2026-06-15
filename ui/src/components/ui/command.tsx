@@ -24,6 +24,7 @@ interface CommandDialogProps extends React.ComponentProps<typeof Dialog> {
   className?: string;
   contentClassName?: string;
   commandProps?: React.ComponentPropsWithoutRef<typeof Command>;
+  title?: string;
 }
 
 const CommandDialog = ({
@@ -31,6 +32,7 @@ const CommandDialog = ({
   className,
   contentClassName,
   commandProps,
+  title = "Search",
   ...props
 }: CommandDialogProps) => (
   <Dialog {...props}>
@@ -38,7 +40,7 @@ const CommandDialog = ({
       className={cn("overflow-hidden p-0 sm:max-w-2xl", contentClassName)}
       showCloseButton={false}
     >
-      <DialogTitle className="sr-only">Search</DialogTitle>
+      <DialogTitle className="sr-only">{title}</DialogTitle>
       <Command
         {...commandProps}
         className={cn(

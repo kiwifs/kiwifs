@@ -59,6 +59,10 @@ import {
 } from "@kw/components/ui/context-menu";
 import { type TreeRevealRequest } from "@kw/lib/treeReveal";
 import { createTreePageDragData } from "@kw/lib/kanbanDnd";
+import {
+  attachCanvasMarkdownDragPayload,
+  clearCanvasMarkdownDragPath,
+} from "@kw/lib/canvasMarkdownDrag";
 import { shouldApplyTreeLoad } from "@kw/lib/treeRefresh";
 import { applyOptimisticTreeMove } from "@kw/lib/treeReorder";
 import { persistSiblingOrder } from "@kw/lib/treeOrderPersistence";
@@ -1463,6 +1467,10 @@ function TreeNode({
     );
   }
 
+  const handleCanvasMarkdownDragStart = (e: React.DragEvent) => {
+    attachCanvasMarkdownDragPayload(e.dataTransfer, path);
+  };
+
   // Markdown page
   return (
     <ContextMenu>
@@ -1473,11 +1481,9 @@ function TreeNode({
             if (enableKanbanDrag) kanbanDraggable.setNodeRef(el);
           }}
           className="h-full w-full"
-          onDragStart={(e) => {
-            // Let react-arborist own the native tree drag. We only attach the
-            // page path payload so canvas drops can still consume tree drags.
-            e.dataTransfer.setData("application/kiwi-path", path);
-          }}
+          onDragStartCapture={handleCanvasMarkdownDragStart}
+          onDragStart={handleCanvasMarkdownDragStart}
+          onDragEnd={clearCanvasMarkdownDragPath}
           {...(enableKanbanDrag ? { ...kanbanDraggable.attributes, ...kanbanDraggable.listeners } : {})}
         >
           <TreeRowShell
