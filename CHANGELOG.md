@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.39](https://github.com/kiwifs/kiwifs/compare/v0.19.38...v0.19.39) (2026-06-15)
+
+
+### Bug Fixes
+
+* **links:** CommonMark-compliant extraction and contradicts normalization ([#318](https://github.com/kiwifs/kiwifs/issues/318)) ([a2405de](https://github.com/kiwifs/kiwifs/commit/a2405def34360450600a12fa731af4b44ff1946e))
+
 ## [0.19.38](https://github.com/kiwifs/kiwifs/compare/v0.19.37...v0.19.38) (2026-06-15)
 
 
