@@ -72,6 +72,9 @@ var wikiLinkRe = regexp.MustCompile(`!?\[\[([^\]|]+)(?:\|[^\]]+)?\]\]`)
 // appearance, with duplicates preserved so callers can derive a weight if
 // they want one. Most callers should de-dupe with Unique().
 //
+// YAML frontmatter is stripped before extraction — frontmatter fields like
+// `contradicts: [[path]]` are metadata indexed separately, not prose links.
+//
 // Per the CommonMark spec, content inside fenced code blocks, indented
 // code blocks, and inline code spans is literal text and is not parsed
 // for wikilinks. For example, TOML [[array-of-tables]] inside a code
@@ -80,7 +83,8 @@ func Extract(content []byte) []string {
 	if len(content) == 0 {
 		return nil
 	}
-	cleaned := stripCodeRegions(content)
+	body := stripFrontmatter(content)
+	cleaned := stripCodeRegions(body)
 	matches := wikiLinkRe.FindAllSubmatch(cleaned, -1)
 	if len(matches) == 0 {
 		return nil
@@ -94,6 +98,26 @@ func Extract(content []byte) []string {
 		out = append(out, t)
 	}
 	return out
+}
+
+// stripFrontmatter removes YAML frontmatter (--- delimited) from the
+// beginning of content. Frontmatter values like contradicts: [[path]]
+// are metadata handled by ExtractContradicts, not body wikilinks.
+func stripFrontmatter(content []byte) []byte {
+	s := string(content)
+	if !strings.HasPrefix(s, "---") {
+		return content
+	}
+	rest := s[3:]
+	idx := strings.Index(rest, "\n---")
+	if idx < 0 {
+		return content
+	}
+	after := rest[idx+4:]
+	if len(after) > 0 && after[0] == '\n' {
+		after = after[1:]
+	}
+	return []byte(after)
 }
 
 // openFenceRe matches the opening of a fenced code block per CommonMark
@@ -116,45 +140,71 @@ func stripCodeRegions(content []byte) []byte {
 	s := string(content)
 	lines := strings.Split(s, "\n")
 	inFence := false
+	inIndented := false
 	var fenceChar byte
 	var fenceRunLen int
+	// Per CommonMark §4.4, an indented code block cannot interrupt a
+	// paragraph — a blank line must precede it. We track whether the
+	// previous line was blank (or a block-level boundary like a fence)
+	// to decide if a 4-space-indented line starts a new indented code
+	// block, vs. a hanging indent / list continuation with real wikilinks.
+	prevBlank := true
 
 	for i, line := range lines {
-		if !inFence {
-			m := openFenceRe.FindStringSubmatch(line)
-			if m != nil {
-				marker := m[1]
-				info := m[2]
-				ch := marker[0]
-				runLen := len(marker)
-				if ch == '`' && strings.ContainsRune(info, '`') {
-					lines[i] = stripInlineCodeSpans(line)
-					continue
-				}
-				inFence = true
-				fenceChar = ch
-				fenceRunLen = runLen
-				lines[i] = ""
-				continue
-			}
-			if isIndentedCodeLine(line) {
-				lines[i] = ""
-				continue
-			}
-			lines[i] = stripInlineCodeSpans(line)
-		} else {
+		if inFence {
 			if isClosingCodeFence(line, fenceChar, fenceRunLen) {
 				inFence = false
+				prevBlank = true
 			}
 			lines[i] = ""
+			continue
+		}
+		if inIndented {
+			if hasIndentedCodePrefix(line) {
+				lines[i] = ""
+				continue
+			}
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			inIndented = false
+		}
+
+		m := openFenceRe.FindStringSubmatch(line)
+		if m != nil {
+			marker := m[1]
+			info := m[2]
+			ch := marker[0]
+			runLen := len(marker)
+			if ch == '`' && strings.ContainsRune(info, '`') {
+				lines[i] = stripInlineCodeSpans(line)
+				prevBlank = false
+				continue
+			}
+			inFence = true
+			fenceChar = ch
+			fenceRunLen = runLen
+			lines[i] = ""
+			prevBlank = true
+			continue
+		}
+		if prevBlank && hasIndentedCodePrefix(line) {
+			inIndented = true
+			lines[i] = ""
+			continue
+		}
+		prevBlank = strings.TrimSpace(line) == ""
+		if !prevBlank {
+			lines[i] = stripInlineCodeSpans(line)
 		}
 	}
 	return []byte(strings.Join(lines, "\n"))
 }
 
-// isIndentedCodeLine returns true if the line starts with 4+ spaces or a tab,
-// which makes it an indented code block per CommonMark §4.4.
-func isIndentedCodeLine(line string) bool {
+// hasIndentedCodePrefix returns true if the line starts with 4+ spaces or a
+// tab. The caller is responsible for checking the CommonMark §4.4 context
+// rule (must follow a blank line or another indented code line).
+func hasIndentedCodePrefix(line string) bool {
 	if len(line) == 0 {
 		return false
 	}
@@ -282,7 +332,6 @@ func ExtractContradicts(fm map[string]any) []string {
 
 func normalizeContradictTarget(s string) string {
 	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "/")
 	if strings.HasPrefix(s, "[[") && strings.HasSuffix(s, "]]") {
 		inner := strings.TrimSuffix(strings.TrimPrefix(s, "[["), "]]")
 		if i := strings.Index(inner, "|"); i >= 0 {
@@ -290,6 +339,7 @@ func normalizeContradictTarget(s string) string {
 		}
 		s = strings.TrimSpace(inner)
 	}
+	s = strings.TrimPrefix(s, "/")
 	return s
 }
 

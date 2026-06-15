@@ -45,6 +45,36 @@ func TestExtractContradicts(t *testing.T) {
 			fm:   map[string]any{"title": "x"},
 			want: nil,
 		},
+		{
+			name: "wiki link with leading slash inside brackets",
+			fm:   map[string]any{"contradicts": "[[/pages/b.md]]"},
+			want: []string{"pages/b.md"},
+		},
+		{
+			name: "wiki link with leading slash and label",
+			fm:   map[string]any{"contradicts": "[[/pages/b.md|old policy]]"},
+			want: []string{"pages/b.md"},
+		},
+		{
+			name: "array with mixed slash wiki-links",
+			fm:   map[string]any{"contradicts": []any{"[[/pages/a.md]]", "/pages/b.md", "pages/c.md"}},
+			want: []string{"pages/a.md", "pages/b.md", "pages/c.md"},
+		},
+		{
+			name: "empty wiki-link",
+			fm:   map[string]any{"contradicts": "[[]]"},
+			want: nil,
+		},
+		{
+			name: "whitespace only",
+			fm:   map[string]any{"contradicts": "   "},
+			want: nil,
+		},
+		{
+			name: "nil value",
+			fm:   map[string]any{"contradicts": nil},
+			want: nil,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -115,9 +145,45 @@ func TestExtract_IgnoresTildeFencedCodeBlock(t *testing.T) {
 }
 
 func TestExtract_IgnoresIndentedCodeBlock(t *testing.T) {
-	body := []byte("normal [[real]] text\n    [[indented-code]]\n\t[[tab-indented]]\nnot indented [[also-real]]\n")
+	// Per CommonMark §4.4, indented code blocks require a preceding blank
+	// line — they cannot interrupt a paragraph. Lines after a blank line
+	// with 4+ space / tab indent ARE code; lines continuing a paragraph
+	// with 4+ spaces are hanging indents (NOT code), so links are kept.
+	body := []byte("# heading\n\n    [[indented-code-after-blank]]\n\t[[tab-indented-after-blank]]\nnot indented [[real]]\n")
 	got := Extract(body)
-	want := []string{"real", "also-real"}
+	want := []string{"real"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_IndentedAfterParagraphIsNotCode(t *testing.T) {
+	// CommonMark §4.4: "An indented code block cannot interrupt a paragraph"
+	// so 4-space-indented lines after non-blank content are paragraph
+	// continuations (hanging indent), not code. Links should be extracted.
+	body := []byte("paragraph text\n    [[hanging-indent-link]]\nnormal [[other]]\n")
+	got := Extract(body)
+	want := []string{"hanging-indent-link", "other"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_ListContinuationWithLinks(t *testing.T) {
+	// List item continuation is indented but not a code block.
+	body := []byte("- item one\n    continuation with [[link-in-list]]\n- item two [[another]]\n")
+	got := Extract(body)
+	want := []string{"link-in-list", "another"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_ConsecutiveIndentedCodeLines(t *testing.T) {
+	// Multiple indented lines after a blank line are all code.
+	body := []byte("text\n\n    [[code-line-1]]\n    [[code-line-2]]\n\n[[real]]\n")
+	got := Extract(body)
+	want := []string{"real"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -323,6 +389,27 @@ func TestExtract_FrontmatterNotAffected(t *testing.T) {
 	body := []byte("---\ntitle: test\n---\n\n[[real-link]]\n\n```\n[[in-code]]\n```\n")
 	got := Extract(body)
 	want := []string{"real-link"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_FrontmatterWikilinksIgnored(t *testing.T) {
+	// Wikilink syntax in frontmatter values (e.g. contradicts: [[path]])
+	// must not be extracted as body wikilinks. The contradicts field is
+	// handled separately by ExtractContradicts.
+	body := []byte("---\ntitle: test\ncontradicts: \"[[pages/old.md]]\"\n---\n\n[[real-link]]\n")
+	got := Extract(body)
+	want := []string{"real-link"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtract_NoFrontmatterStillWorks(t *testing.T) {
+	body := []byte("# No Frontmatter\n\n[[link-a]] and [[link-b]]\n")
+	got := Extract(body)
+	want := []string{"link-a", "link-b"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
