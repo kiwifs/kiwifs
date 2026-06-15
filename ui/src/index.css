@@ -433,6 +433,24 @@
   @apply block -mx-4 px-4 bg-red-500/10;
 }
 
+/* ─── CodeRunner (editable code blocks with execution) ─── */
+.kiwi-code-runner pre,
+.kiwi-code-runner textarea {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.875rem;
+  line-height: 1.625;
+  letter-spacing: 0;
+  word-spacing: 0;
+  tab-size: 4;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
+}
+.kiwi-code-runner pre code {
+  background: transparent !important;
+}
+
 /* ─── Scrollbar ─── */
 .kiwi-scroll::-webkit-scrollbar,
 .kiwi-board-scroll::-webkit-scrollbar {
