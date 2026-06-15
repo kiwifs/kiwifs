@@ -7,6 +7,14 @@ import { PlaybackControls } from "@kw/widgets/PlaybackControls";
 import { ArrayView } from "@kw/widgets/ArrayView";
 import { PropertyBar } from "@kw/widgets/PropertyBar";
 import { CodeHighlight } from "@kw/widgets/CodeHighlight";
+import { TreeView } from "@kw/widgets/TreeView";
+import { MatrixView } from "@kw/widgets/MatrixView";
+import { GraphView } from "@kw/widgets/GraphView";
+import { LinkedListView } from "@kw/widgets/LinkedListView";
+import { AnnotationBar } from "@kw/widgets/AnnotationBar";
+import { WidgetLayout, WidgetPanel } from "@kw/widgets/WidgetLayout";
+import { StateInspector } from "@kw/widgets/StateInspector";
+import { InputPanel } from "@kw/widgets/InputPanel";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 const liveScope = {
@@ -20,6 +28,15 @@ const liveScope = {
   ArrayView,
   PropertyBar,
   CodeHighlight,
+  TreeView,
+  MatrixView,
+  GraphView,
+  LinkedListView,
+  AnnotationBar,
+  WidgetLayout,
+  WidgetPanel,
+  StateInspector,
+  InputPanel,
 };
 
 interface Props {

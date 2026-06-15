@@ -31,7 +31,15 @@ export function usePlayback<T>(
   /** Optional ref to the container element for scoping keyboard events. */
   containerRef?: React.RefObject<HTMLElement | null>,
 ): PlaybackReturn<T> {
-  const [currentStep, setCurrentStep] = useState(0);
+  const initialStep = (() => {
+    if (typeof window === "undefined") return 0;
+    const match = window.location.hash.match(/[?&]step=(\d+)/);
+    if (!match) return 0;
+    const s = parseInt(match[1], 10);
+    return isNaN(s) ? 0 : Math.min(s, steps.length - 1);
+  })();
+
+  const [currentStep, setCurrentStep] = useState(initialStep);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
