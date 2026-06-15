@@ -6,7 +6,7 @@
 
 KiwiFS stores content as markdown with YAML frontmatter, versions every write via git, and exposes 80+ REST endpoints. With targeted additions it becomes a git-based headless CMS — like Decap/TinaCMS for the content model, but with the programmability of Strapi and zero external database.
 
-## What Already Exists
+## Features
 
 | Feature | Status | Location |
 |---------|--------|----------|
@@ -14,13 +14,16 @@ KiwiFS stores content as markdown with YAML frontmatter, versions every write vi
 | Public reader at `/p/*` (server-rendered HTML) | ✅ | `internal/api/handlers_reader.go` |
 | Content negotiation on `/p/*` (`Accept`: HTML, markdown, JSON) | ✅ | `internal/api/accept.go`, `handlers_reader.go` |
 | REST file CRUD, search, metadata queries, DQL | ✅ | `internal/api/` |
-| Export to JSONL, CSV, Parquet, HTML, PDF, slides, static site | ✅ | `internal/exporter/`, `internal/docexport/` |
-| Atom/JSON feed syndication | ✅ | `internal/api/handlers_feed.go` |
+| Export to JSONL, CSV, Parquet, HTML, PDF, slides, MkDocs | ✅ | `internal/exporter/`, `internal/docexport/` |
+| Atom/JSON feed syndication with `published_at` timestamps | ✅ | `internal/api/handlers_feed.go` |
 | Webhooks with HMAC signing and retry | ✅ | `internal/webhooks/` |
+| Export webhook flag (`kiwifs export --webhook`) | ✅ | `internal/exporter/` |
 | JSON Schema validation on writes | ✅ | `internal/schema/` |
 | Multi-space support | ✅ | `internal/spaces/` |
 | Git versioning (audit trail) | ✅ | `internal/versioning/` |
 | Permalinks and `public_url` config | ✅ | `internal/api/` |
+| Published page visibility + status badges in tree | ✅ | `ui/src/components/KiwiTree.tsx` |
+| OpenAPI 3.0 spec at `/api/openapi.json` | ✅ | `internal/api/` |
 
 ## Industry Comparison
 
@@ -67,7 +70,6 @@ Unsupported `Accept` values (for example `image/png`) return **406 Not Acceptabl
 
 | Gap | Why it matters | Industry reference |
 |-----|---------------|-------------------|
-| Content delivery API | Consumers need `GET /api/content/{path}` returning rendered HTML + structured frontmatter | Strapi Content API |
 | GraphQL API | Next.js/Gatsby ecosystem expects GraphQL for content queries | Strapi GraphQL, TinaCMS |
 | Draft → review → published workflow | Enforced editorial state machine, not just git branches | TinaCMS branch workflows |
 | Preview URLs | Shareable draft preview links for reviewers | TinaCMS visual editing |
@@ -78,11 +80,9 @@ Unsupported `Accept` values (for example `image/png`) return **406 Not Acceptabl
 
 ## Proposed Milestones
 
-1. **Content delivery API** — `GET /api/content/{path}` returning rendered HTML + structured frontmatter. Optionally add GraphQL via code-generated schema from `.kiwi/schemas/`.
-2. **Editorial workflow enforcement** — Wire existing workflow engine + drafts into `draft → review → published`. Add `GET /api/preview/{draft-id}`.
-3. **Schema-driven forms** — Auto-generate editor form fields from JSON Schema definitions in the UI.
-4. **Content SDK** — Publish `@kiwifs/client` wrapping the REST API with typed methods.
-5. **Publish event webhooks** — Extend webhooks to fire on publish/unpublish transitions for static site rebuilds (Vercel/Netlify deploy hooks).
+1. **Editorial workflow enforcement** — Wire existing workflow engine + drafts into `draft → review → published`. Add `GET /api/preview/{draft-id}`.
+2. **Schema-driven forms** — Auto-generate editor form fields from JSON Schema definitions in the UI.
+3. **Content SDK** — Publish `@kiwifs/client` wrapping the REST API with typed methods.
 
 ## Good First Issues
 

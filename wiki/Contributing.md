@@ -26,7 +26,7 @@ go test ./... -race
 2. **Filter by label** on GitHub:
    - [`good first issue`](https://github.com/kiwifs/kiwifs/labels/good%20first%20issue) — all beginner-friendly tasks
    - [`help wanted`](https://github.com/kiwifs/kiwifs/labels/help%20wanted) — tasks where help is welcome (may be harder)
-   - Use case labels: [`uc:task-orchestration`](https://github.com/kiwifs/kiwifs/labels/uc%3Atask-orchestration), [`uc:team-wiki`](https://github.com/kiwifs/kiwifs/labels/uc%3Ateam-wiki), [`uc:data-query`](https://github.com/kiwifs/kiwifs/labels/uc%3Adata-query), [`uc:headless-cms`](https://github.com/kiwifs/kiwifs/labels/uc%3Aheadless-cms)
+   - Use case labels: [`uc:task-orchestration`](https://github.com/kiwifs/kiwifs/labels/uc%3Atask-orchestration), [`uc:team-wiki`](https://github.com/kiwifs/kiwifs/labels/uc%3Ateam-wiki), [`uc:data-query`](https://github.com/kiwifs/kiwifs/labels/uc%3Adata-query), [`uc:headless-cms`](https://github.com/kiwifs/kiwifs/labels/uc%3Aheadless-cms), [`uc:agent-memory`](https://github.com/kiwifs/kiwifs/labels/uc%3Aagent-memory)
    - Area labels: `area:frontend`, `area:backend`, `area:mcp`, `area:dql`, `area:docs`, `area:infra`
 3. **Check the [Roadmap](Roadmap)** for larger efforts you can contribute to
 

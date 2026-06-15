@@ -13,6 +13,12 @@ KiwiFS is building toward multiple product surfaces that all share the same prim
 - **[UC-2: Team Wiki](UC-2-Team-Wiki)** — self-hosted Confluence/Outline replacement, pluggable into Cursor and Codex
 - **[UC-3: Structured Data Query](UC-3-Structured-Data-Query)** — import databases into markdown and query without RAG
 - **[UC-4: Headless CMS](UC-4-Headless-CMS)** — git-native content API for static sites and apps
+- **[UC-5: Agent Memory](UC-5-Agent-Memory)** — persistent memory library for AI agents, versioned and queryable
+- **[UC-6: Runbooks](UC-6-Runbooks)** — structured runbooks that agents can execute and evolve
+- **[UC-7: Architecture Decision Records](UC-7-Architecture-Decision-Records)** — decision log with supersession chains and contradiction detection
+- **[UC-8: Prompt Library](UC-8-Prompt-Library)** — versioned prompt management with performance tracking
+- **[UC-9: Research Library](UC-9-Research-Library)** — citation graphs, reading workflows, literature synthesis
+- **[UC-10: Event Log](UC-10-Event-Log)** — tamper-evident audit trails and operation logs
 
 ## Contributing
 

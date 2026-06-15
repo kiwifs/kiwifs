@@ -6,19 +6,22 @@
 
 A user wants to import their Firebase database into markdown and query user behavior data using KiwiFS — potentially outperforming a RAG solution. This is compelling because KiwiFS has one of the most complete import + query stacks in the markdown ecosystem, and recent research shows structured markdown queries outperform RAG for bounded domains.
 
-## What Already Exists
+## Features
 
 | Feature | Status | Location |
 |---------|--------|----------|
 | Import from 18+ sources (Firestore, MongoDB, PostgreSQL, MySQL, DynamoDB, Redis, Elasticsearch, CSV, JSON/JSONL, YAML, Excel, etc.) | ✅ | `internal/importer/` |
 | Airbyte protocol support (hundreds more connectors) | ✅ | `internal/importer/airbyte*.go` |
 | DQL with TABLE, LIST, COUNT, WHERE, SORT, GROUP BY, FLATTEN, aggregates | ✅ | `internal/dataview/` |
+| `DAYS_AGO()` DQL function for temporal queries | ✅ | `internal/dataview/` |
 | Full-text search (FTS5/BM25) | ✅ | `internal/search/` |
 | Semantic/vector search (7 backends) | ✅ | `internal/vectorstore/` |
 | Structured frontmatter queries (JSON path filters) | ✅ | `GET /api/kiwi/meta?where=` |
 | Graph queries (backlinks, communities, centrality) | ✅ | `internal/api/handlers_graph.go` |
 | Export to JSONL/CSV/Parquet with embeddings | ✅ | `internal/exporter/` |
-| Import wizard UI | ✅ | `ui/src/components/KiwiImportWizard.tsx` |
+| Import wizard UI with field mapping and type coercion | ✅ | `ui/src/components/KiwiImportWizard.tsx` |
+| Schema inference on CSV/JSON import | ✅ | `internal/importer/` |
+| Inferred schemas saved to `.kiwi/schemas/` | ✅ | `internal/importer/` |
 | Inline `kiwi-chart` blocks | ✅ | `ui/src/components/KiwiPage.tsx` |
 
 ## Why Markdown Query Can Outperform RAG
@@ -43,22 +46,19 @@ The [LLM Wiki pattern](https://pasqualepillitteri.it/en/news/1496/rag-llm-wiki-a
 
 | Gap | Why it matters |
 |-----|---------------|
-| Import field mapping UI | Users need a visual way to map source document fields → frontmatter keys |
 | Incremental sync / CDC | Import is batch-only; user behavior data needs continuous ingestion |
-| Temporal queries in DQL | No `DATE()`, `NOW()`, `DAYS_AGO(n)`, `BETWEEN` for date filtering |
+| Full temporal DQL | `DATE()`, `NOW()`, `BETWEEN` for date filtering (partial: `DAYS_AGO` shipped) |
 | Multi-stage aggregation | `COUNT`/`SUM`/`AVG` exist but composable pipelines (funnel, cohort) are missing |
 | Computed fields / formulas | Derived frontmatter fields without duplicating data |
 | Large dataset performance | DQL over 100K+ pages needs pagination, query planning, partitioning |
 | Dashboard view | `kiwi-chart` blocks exist but no combined dashboard view |
-| Schema inference on import | Auto-detect field types from source data |
 
 ## Proposed Milestones
 
-1. **Import mapping wizard** — Extend import wizard UI for field mapping, type coercion, preview.
-2. **Temporal DQL** — Date/time functions: `DATE()`, `NOW()`, `DAYS_AGO(n)`, `BETWEEN`, date arithmetic.
-3. **Incremental import** — `--watch` mode for `kiwifs import` that polls for changes (Firestore listeners, PostgreSQL logical replication, CDC via Airbyte).
-4. **Multi-stage aggregation** — Pipeline chaining in DQL, funnel/retention templates.
-5. **Dashboard view** — UI view combining multiple `kiwi-chart` + `kiwi-query` blocks as a single dashboard.
+1. **Temporal DQL** — Remaining date/time functions: `DATE()`, `NOW()`, `BETWEEN`, date arithmetic (`DAYS_AGO` already shipped).
+2. **Incremental import** — `--watch` mode for `kiwifs import` that polls for changes (Firestore listeners, PostgreSQL logical replication, CDC via Airbyte).
+3. **Multi-stage aggregation** — Pipeline chaining in DQL, funnel/retention templates.
+4. **Dashboard view** — UI view combining multiple `kiwi-chart` + `kiwi-query` blocks as a single dashboard.
 
 ## Good First Issues
 

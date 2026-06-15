@@ -21,24 +21,28 @@ KiwiFS is a **memory library**, not a memory engine. The distinction matters:
 
 **One-sentence positioning:** KiwiFS is the filesystem for agent memory — it stores, indexes, and versions your memories as markdown. It doesn't decide what to remember. Your agent does.
 
-## What Already Exists
+## Features
 
-KiwiFS already has the data-model primitives for agent memory. What's missing is the query, lifecycle, and convenience layers on top.
-
-| Primitive | Status | Location |
-|-----------|--------|----------|
+| Feature | Status | Location |
+|---------|--------|----------|
 | `memory_kind` classification (`episodic`, `semantic`, `consolidation`, `working`) | ✅ | `internal/memory/kind.go` |
 | `episodes/` path convention (configurable prefix) | ✅ | `internal/memory/scan.go`, `.kiwi/config.toml` `[memory]` |
 | `episode_id` identity for episodic files | ✅ | Frontmatter convention, `internal/memory/scan.go` |
 | `merged-from` provenance (episodic → semantic lineage) | ✅ | `internal/memory/merge.go`, `docs/MEMORY.md` |
 | `InjectMergedFrom()` Go helper for consolidation scripts | ✅ | `internal/memory/merge.go` |
-| `kiwifs memory report` CLI (coverage, unmerged episodes) | ✅ | `cmd/memory.go` |
-| `GET /api/kiwi/memory/report` REST endpoint | ✅ | `internal/api/handlers_memory.go` |
-| `kiwi_memory_report` MCP tool | ✅ | `internal/mcpserver/mcpserver.go` |
+| `memory_status` field indexed, search excludes `superseded` | ✅ | `internal/memory/`, `internal/search/` |
+| `expires_at` / `ttl` janitor rule for memory expiration | ✅ | `internal/janitor/` |
+| `scope` field with scope-filtered search | ✅ | `internal/search/` |
+| `contradicts` frontmatter indexed as backlinks | ✅ | `internal/links/` |
+| Recency-weighted search ranking | ✅ | `internal/search/` |
+| `kiwi_remember` MCP tool (write to episodes with defaults) | ✅ | `internal/mcpserver/` |
+| `kiwi_forget` MCP tool (set superseded + valid_until) | ✅ | `internal/mcpserver/` |
+| `kiwifs memory report` CLI + REST + MCP (coverage, freshness, scope) | ✅ | `cmd/memory.go`, `internal/api/handlers_memory.go` |
 | `X-Actor` / `X-Provenance` → `derived-from` on writes | ✅ | `internal/pipeline/` |
 | Git commit per write (audit trail, blame, restore) | ✅ | `internal/versioning/` |
 | Full-text search (FTS5/BM25) | ✅ | `internal/search/` |
 | Semantic/vector search (7 embedding backends) | ✅ | `internal/vectorstore/` |
+| `DAYS_AGO()` DQL function for temporal memory queries | ✅ | `internal/dataview/` |
 | Wiki links + backlinks (graph structure) | ✅ | `internal/links/` |
 | DQL queries over frontmatter | ✅ | `internal/dataview/` |
 | Content health janitor (stale, orphan, broken links, contradictions) | ✅ | `internal/janitor/` |
@@ -46,61 +50,12 @@ KiwiFS already has the data-model primitives for agent memory. What's missing is
 
 ## What's Missing
 
-### Data model conventions
-
-These are **indexed frontmatter fields** the agent writes and KiwiFS queries. No LLM, no decisions — just schema.
-
 | Gap | What it enables |
 |-----|----------------|
-| `memory_status` field (`active` / `contested` / `superseded` / `stale`) | Search excludes `superseded` by default. Janitor reports `contested` pages. Agent sets it, KiwiFS respects it. |
-| `valid_from` / `valid_until` temporal window | DQL can filter "what was true on date X?" Agent writes these; KiwiFS indexes them. |
-| `confidence` score (0–1) | Search uses as ranking signal. Agent writes it based on its own judgment. |
-| `expires_at` / `ttl` expiration | Janitor flags expired pages. Search deprioritizes them. |
-| `scope` field (`user:alice`, `agent:cursor`, `project:kiwifs`) | Scoped retrieval prevents cross-user memory leakage. |
-| `contradicts` field (path to conflicting page) | Indexed like backlinks. Memory report surfaces contradictions. |
-
-### Query primitives
-
-The index, not the engine. KiwiFS already has all the signals — they just need to be composable.
-
-| Gap | What it enables |
-|-----|----------------|
-| Temporal DQL functions (`NOW()`, `DAYS_AGO(n)`, `DATE()`, `BETWEEN`) | Queries like `WHERE valid_until > NOW()` and `WHERE created > DAYS_AGO(7)`. Shared with UC-3. |
-| Retrieval fusion endpoint (`/api/kiwi/recall`, `kiwi_recall` MCP tool) | Single call combining FTS5 + vector + backlink-graph with reciprocal rank fusion. Caller controls weights and filters. |
-| Scope-filtered search | Filter search results by `scope` frontmatter field. |
-| Recency-weighted ranking | Search parameter (`recency_weight`) that boosts recent documents. A knob, not an algorithm. |
-
-### Lifecycle infrastructure
-
-Hooks, not engines. KiwiFS is the event bus, not the processor.
-
-| Gap | What it enables |
-|-----|----------------|
-| Janitor rules for memory | Flag pages past `expires_at`, episodes unmerged for N days, `memory_status: stale` pages. Reports, not deletes. |
-| Pipeline events for memory writes | SSE event `memory:episodic` on episodic writes, `memory:status_change` on status changes. Operators hook webhooks. |
-| Contradiction surface in memory report | Memory report shows pages with `contradicts` links or `memory_status: contested`. |
-
-### MCP convenience tools
-
-Ergonomic wrappers that enforce conventions. The agent still decides what to remember and when to forget.
-
-| Gap | What it does |
-|-----|-------------|
-| `kiwi_remember` | Write to `episodes/{date}/{id}.md` with correct frontmatter defaults (`memory_kind`, `episode_id`, `scope`, `derived-from`). |
-| `kiwi_recall` | Fused retrieval with scope filter and recency weight. |
-| `kiwi_forget` | Set `memory_status: superseded` and `valid_until: now` on a page. |
-
-### Reporting
-
-Observability, not automation. The dashboard an operator looks at to decide "should I run my consolidation script?"
-
-| Gap | What it adds to `memory report` |
-|-----|-------------------------------|
-| Coverage metric | % of episodes with a `merged-from` reference |
-| Freshness metric | Average age of `memory_status: active` pages |
-| Contradiction count | Pages with `contradicts` links or `memory_status: contested` |
-| Scope breakdown | Memory count per `scope` value |
-| Expiration count | Pages past `expires_at` |
+| Full temporal DQL | `DATE()`, `NOW()`, `BETWEEN` (partial: `DAYS_AGO` shipped). Shared with UC-3. |
+| Retrieval fusion (`kiwi_recall`) | Single call combining FTS5 + vector + backlink-graph with reciprocal rank fusion. Caller controls weights and filters. |
+| Pipeline events for memory | SSE event `memory:episodic` on episodic writes, `memory:status_change` on status changes. Operators hook webhooks. |
+| `confidence` as search signal | Search uses `confidence` score (0–1) as ranking boost. |
 
 ## What KiwiFS Should Explicitly NOT Build
 
@@ -112,12 +67,9 @@ Observability, not automation. The dashboard an operator looks at to decide "sho
 
 ## Proposed Milestones
 
-1. **Memory frontmatter schema** — Document and index `memory_status`, `valid_from`/`valid_until`, `confidence`, `expires_at`, `scope`, and `contradicts` as recognized frontmatter fields. Update the `knowledge` template and `SCHEMA.md`. Ship a `.kiwi/schemas/memory.json` for validation.
-2. **Temporal DQL** — Add `NOW()`, `DAYS_AGO(n)`, `DATE()`, `BETWEEN` to the DQL parser. (Shared with UC-3.)
-3. **Memory janitor rules** — Extend the janitor to flag expired pages, long-unmerged episodes, and contested pages.
-4. **`kiwi_remember` / `kiwi_forget` MCP tools** — Convenience wrappers that enforce the memory schema conventions.
-5. **Retrieval fusion** — `/api/kiwi/recall` endpoint combining FTS5 + vector + graph with RRF, scope filtering, and recency weighting. `kiwi_recall` MCP tool.
-6. **Extended memory report** — Coverage, freshness, contradictions, scope breakdown, expiration counts.
+1. **Temporal DQL** — Remaining: `NOW()`, `DATE()`, `BETWEEN` (`DAYS_AGO` already shipped). Shared with UC-3.
+2. **Retrieval fusion** — `/api/kiwi/recall` endpoint combining FTS5 + vector + graph with RRF, scope filtering, and recency weighting. `kiwi_recall` MCP tool.
+3. **`confidence` as search signal** — Use `confidence` score (0–1) as ranking boost in search results.
 
 ## Good First Issues
 

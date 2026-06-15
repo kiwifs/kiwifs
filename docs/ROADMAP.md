@@ -61,7 +61,8 @@ You can't replace Confluence if you can't migrate from it.
 - [x] `kiwifs import --from confluence` — convert XHTML storage format to markdown
 - [x] `kiwifs import` — 18 total sources (PostgreSQL, MySQL, SQLite, MongoDB, DynamoDB, Redis, Elasticsearch, CSV, JSON, JSONL, YAML, Excel, Notion, Airtable, Google Sheets, Confluence, Obsidian, Firestore)
 - [x] `kiwifs export --format jsonl` / `--format csv` — export with optional embeddings, content, and link graph
-- [ ] `kiwifs export --format mkdocs` / `--format docusaurus` — generate static doc sites
+- [x] `kiwifs export --format mkdocs` — generate MkDocs static doc site projects
+- [ ] `kiwifs export --format docusaurus` — generate Docusaurus static doc sites
 
 ## v0.4 — Webhooks & analytics (current)
 
