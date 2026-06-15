@@ -65,11 +65,60 @@ Scoped, beginner-friendly tasks for new contributors. Each issue has:
 
 | # | Issue | Difficulty | Area | Status |
 |---|-------|-----------|------|--------|
-| — | Add `DATE()` and `NOW()` functions to DQL | Intermediate | Go | Open |
-| — | Add `BETWEEN` operator to DQL WHERE clauses | Beginner | Go | Open (shared with UC-3) |
 | — | Implement retrieval fusion endpoint (`/api/kiwi/recall`) | Intermediate | Go | Open |
 | — | Add `kiwi_recall` MCP tool (fused FTS + vector + graph) | Intermediate | Go | Open |
 | — | Add `confidence` as search ranking signal | Beginner | Go | Open |
+
+## UC-6: Runbooks
+
+> Structured runbooks that agents can execute and evolve. [Read more →](UC-6-Runbooks)
+
+| # | Issue | Difficulty | Area | Status |
+|---|-------|-----------|------|--------|
+| [#325](https://github.com/kiwifs/kiwifs/issues/325) | Ship runbook init template and frontmatter schema | Beginner | Markdown + Go | Open |
+| [#326](https://github.com/kiwifs/kiwifs/issues/326) | Add execution staleness janitor rule for runbooks | Beginner | Go | Open |
+| [#327](https://github.com/kiwifs/kiwifs/issues/327) | Add frontmatter-only PATCH mode for file updates | Intermediate | Go | Open |
+
+## UC-7: Architecture Decision Records
+
+> Decision log with supersession chains and contradiction detection. [Read more →](UC-7-Architecture-Decision-Records)
+
+| # | Issue | Difficulty | Area | Status |
+|---|-------|-----------|------|--------|
+| [#328](https://github.com/kiwifs/kiwifs/issues/328) | Ship ADR init template with workflow and schema | Beginner | Markdown + Go | Open |
+| [#329](https://github.com/kiwifs/kiwifs/issues/329) | Index `supersedes` and `superseded_by` as backlinks | Beginner | Go | Open |
+| [#330](https://github.com/kiwifs/kiwifs/issues/330) | Add auto-sequence FormatWrite hook for directories | Intermediate | Go | Open |
+
+## UC-8: Prompt Library
+
+> Versioned prompt management with performance tracking. [Read more →](UC-8-Prompt-Library)
+
+| # | Issue | Difficulty | Area | Status |
+|---|-------|-----------|------|--------|
+| [#331](https://github.com/kiwifs/kiwifs/issues/331) | Ship prompt library init template and schema | Beginner | Markdown + Go | Open |
+| [#332](https://github.com/kiwifs/kiwifs/issues/332) | Extract template variables from markdown body at index time | Intermediate | Go | Open |
+| [#333](https://github.com/kiwifs/kiwifs/issues/333) | Add word-level diff granularity | Intermediate | Go | Open |
+
+## UC-9: Research Library
+
+> Citation graphs, reading workflows, literature synthesis. [Read more →](UC-9-Research-Library)
+
+| # | Issue | Difficulty | Area | Status |
+|---|-------|-----------|------|--------|
+| [#334](https://github.com/kiwifs/kiwifs/issues/334) | Ship research library init template with reading workflow | Beginner | Markdown + Go | Open |
+| [#335](https://github.com/kiwifs/kiwifs/issues/335) | Add BibTeX import source | Intermediate | Go | Open |
+| [#336](https://github.com/kiwifs/kiwifs/issues/336) | Add `kiwi_cite` MCP tool for DOI/arXiv metadata fetch | Intermediate | Go | Open |
+| [#340](https://github.com/kiwifs/kiwifs/issues/340) | Add link-type filter controls to graph view | Intermediate | React/TS | Open |
+
+## UC-10: Event Log
+
+> Tamper-evident audit trails and operation logs. [Read more →](UC-10-Event-Log)
+
+| # | Issue | Difficulty | Area | Status |
+|---|-------|-----------|------|--------|
+| [#337](https://github.com/kiwifs/kiwifs/issues/337) | Add `append_only` frontmatter enforcement | Intermediate | Go | Open |
+| [#338](https://github.com/kiwifs/kiwifs/issues/338) | Add monotonic sequence numbering on append | Intermediate | Go | Open |
+| [#339](https://github.com/kiwifs/kiwifs/issues/339) | Add `FLATTEN` clause to DQL for querying nested arrays | Intermediate | Go | Open |
 
 ## Cross-Cutting / Infrastructure
 
@@ -77,6 +126,9 @@ Scoped, beginner-friendly tasks for new contributors. Each issue has:
 
 | # | Issue | Difficulty | Area | Status |
 |---|-------|-----------|------|--------|
+| [#322](https://github.com/kiwifs/kiwifs/issues/322) | Add `DATE()`, `NOW()`, and `BETWEEN` to DQL parser | Intermediate | Go | Open |
+| [#323](https://github.com/kiwifs/kiwifs/issues/323) | Add generic typed-link indexing for frontmatter fields | Intermediate | Go | Open |
+| [#324](https://github.com/kiwifs/kiwifs/issues/324) | Add configurable `ValidateWrite` hooks via config.toml | Intermediate | Go | Open |
 | [#156](https://github.com/kiwifs/kiwifs/issues/156) | Add integration test harness for MCP tools | Intermediate | Go | Open |
 | [#157](https://github.com/kiwifs/kiwifs/issues/157) | Generate OpenAPI 3.0 spec from REST API routes | Intermediate | Go | ✅ Done |
 | [#158](https://github.com/kiwifs/kiwifs/issues/158) | Add Docker Compose dev setup with hot-reload | Beginner | Docker/Docs | ✅ Done |
