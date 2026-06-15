@@ -36,6 +36,7 @@ import { KiwiColumns } from "./KiwiColumns";
 import { ExcalidrawMarkdownPreview, isExcalidrawMarkdown } from "./ExcalidrawMarkdownPreview";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { KiwiWidget } from "./KiwiWidget";
+import { CodeRunner } from "@kw/widgets/CodeRunner";
 
 import { PageSkeleton } from "./PageSkeleton";
 import { trackRecent } from "./KiwiFavorites";
@@ -802,6 +803,12 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                       const match = /language-([A-Za-z0-9_:.-]+)/.exec(className || "");
                       const lang = match ? match[1] : undefined;
                       const raw = String(children).replace(/\n$/, "");
+                      if (lang === "widget:code") {
+                        const codeMeta: string = node?.data?.meta || node?.properties?.metastring || "";
+                        const codeLangMatch = codeMeta.match(/lang=(\w+)/);
+                        const codeLang = codeLangMatch ? codeLangMatch[1] : "python";
+                        return <CodeRunner source={raw} lang={codeLang} />;
+                      }
                       if (lang?.startsWith("widget:")) {
                         return <KiwiWidget name={lang.slice("widget:".length)} source={raw} />;
                       }

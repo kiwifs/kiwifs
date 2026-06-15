@@ -19,3 +19,4 @@ export { AnnotationBar, type AnnotationBarProps } from "./AnnotationBar";
 export { WidgetLayout, WidgetPanel, type WidgetLayoutProps, type WidgetPanelProps } from "./WidgetLayout";
 export { StateInspector, type StateInspectorProps } from "./StateInspector";
 export { InputPanel, type InputPanelProps, type InputField } from "./InputPanel";
+export { CodeRunner } from "./CodeRunner";
