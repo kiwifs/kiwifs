@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.38](https://github.com/kiwifs/kiwifs/compare/v0.19.37...v0.19.38) (2026-06-15)
+
+
+### Features
+
+* **memory:** index contradicts frontmatter as backlinks ([#310](https://github.com/kiwifs/kiwifs/issues/310)) ([acc49b0](https://github.com/kiwifs/kiwifs/commit/acc49b0ad30cc0c9baac57d6b6f3f4a4efb3468b))
+
+
+### Bug Fixes
+
+* **serve:** mount MCP Streamable HTTP on main server ([#315](https://github.com/kiwifs/kiwifs/issues/315)) ([95c287f](https://github.com/kiwifs/kiwifs/commit/95c287fb5360d78a4511bf694e04df3a921df19c))
+
 ## [0.19.37](https://github.com/kiwifs/kiwifs/compare/v0.19.36...v0.19.37) (2026-06-14)
 
 
