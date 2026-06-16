@@ -7,6 +7,7 @@ import {
   Clock,
   File,
   FileAxis3D,
+  FolderTree,
   Pin,
   Plus,
   Rss,
@@ -21,6 +22,13 @@ import { cn } from "../lib/cn";
 import type { TreeSortMode } from "../lib/treeTransform";
 import type { TreeRevealRequest } from "../lib/treeReveal";
 import { usePublishedPagesStore } from "../stores/publishedPagesStore";
+import {
+  collectSectionPrefixes,
+  filterPathsByQuery,
+  mergeSidebarExcludePatterns,
+  type SidebarConfig,
+} from "../lib/sidebarStructure";
+import { api, type TreeEntry } from "../lib/api";
 
 type RecentPage = { path: string };
 
@@ -37,6 +45,7 @@ type AppSidebarProps = {
   treeSortMode: TreeSortMode;
   refreshKey: number;
   kanbanOpen: boolean;
+  sidebarConfig: SidebarConfig;
   starred: string[];
   pinned: string[];
   recent: RecentPage[];
@@ -64,6 +73,7 @@ export function AppSidebar({
   treeSortMode,
   refreshKey,
   kanbanOpen,
+  sidebarConfig,
   starred,
   pinned,
   recent,
@@ -82,7 +92,43 @@ export function AppSidebar({
   const toggleShowPublishedList = usePublishedPagesStore((state) => state.toggleShowList);
   const refreshPublishedPages = usePublishedPagesStore((state) => state.refresh);
   const publishedPathSet = useMemo(() => new Set(publishedPages.map((page) => page.path)), [publishedPages]);
-  const hasShortcutSections = starred.length > 0 || pinned.length > 0 || recent.length > 0 || (showPublishedList && publishedPages.length > 0);
+  const configPinned = useMemo(
+    () => filterPathsByQuery(sidebarConfig.pinned, treeFilter),
+    [sidebarConfig.pinned, treeFilter],
+  );
+  const sectionPrefixes = useMemo(
+    () => collectSectionPrefixes(sidebarConfig.sections),
+    [sidebarConfig.sections],
+  );
+  const treeExcludePatterns = useMemo(
+    () => mergeSidebarExcludePatterns(sidebarConfig.hidden),
+    [sidebarConfig.hidden],
+  );
+  const usesStructuredSidebar = configPinned.length > 0
+    || sectionPrefixes.length > 0
+    || sidebarConfig.hidden.length > 0;
+  const [sharedTreeRoot, setSharedTreeRoot] = useState<TreeEntry | null>(null);
+
+  useEffect(() => {
+    if (!usesStructuredSidebar) {
+      setSharedTreeRoot(null);
+      return;
+    }
+    let cancelled = false;
+    api.tree("/").then((tree) => {
+      if (!cancelled) setSharedTreeRoot(tree);
+    }).catch(() => {
+      if (!cancelled) setSharedTreeRoot(null);
+    });
+    return () => { cancelled = true; };
+  }, [refreshKey, usesStructuredSidebar]);
+
+  const hasShortcutSections = configPinned.length > 0
+    || starred.length > 0
+    || pinned.length > 0
+    || recent.length > 0
+    || (showPublishedList && publishedPages.length > 0)
+    || sidebarConfig.sections.length > 0;
 
   return (
     <aside
@@ -99,6 +145,21 @@ export function AppSidebar({
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {hasShortcutSections && (
             <div className="shrink-0 overflow-auto kiwi-scroll max-h-[40vh]">
+              {configPinned.length > 0 && (
+                <SidebarSection icon={<Pin className="h-3.5 w-3.5" />} title="Pinned" storageKey="config-pinned">
+                  {configPinned.map((path) => (
+                    <SidebarPageItem
+                      key={path}
+                      path={path}
+                      active={activePath === path}
+                      published={publishedPathSet.has(path)}
+                      onSelect={onNavigate}
+                      leading={<Pin className="h-3.5 w-3.5 text-primary shrink-0 fill-current" />}
+                    />
+                  ))}
+                </SidebarSection>
+              )}
+
               {starred.length > 0 && (
                 <SidebarSection icon={<Star className="h-3.5 w-3.5" />} title="Starred" storageKey="starred">
                   {starred.map((path) => (
@@ -123,7 +184,7 @@ export function AppSidebar({
               )}
 
               {pinned.length > 0 && (
-                <SidebarSection icon={<Pin className="h-3.5 w-3.5" />} title="Pinned" storageKey="pinned">
+                <SidebarSection icon={<Pin className="h-3.5 w-3.5" />} title="My pins" storageKey="pinned">
                   {pinned.map((path) => (
                     <SidebarPageItem
                       key={path}
@@ -172,6 +233,46 @@ export function AppSidebar({
                   ))}
                 </SidebarSection>
               )}
+
+              {sidebarConfig.sections.map((section) => (
+                <SidebarSection
+                  key={section.label}
+                  icon={<FolderTree className="h-3.5 w-3.5" />}
+                  title={section.label}
+                  storageKey={`section-${section.label}`}
+                  defaultOpen
+                >
+                  <KiwiTree
+                    activePath={activePath}
+                    revealRequest={treeRevealRequest}
+                    onSelect={onNavigate}
+                    refreshKey={refreshKey}
+                    filterQuery={treeFilter}
+                    sortMode={treeSortMode}
+                    publishedPaths={publishedPathSet}
+                    onPublishedChanged={refreshPublishedPages}
+                    compactFolders
+                    enableFileNesting
+                    excludePatterns={treeExcludePatterns}
+                    includePrefixes={section.paths}
+                    treeRoot={usesStructuredSidebar ? sharedTreeRoot : undefined}
+                    autoReveal={false}
+                    onCreateChild={onCreatePage}
+                    onDeleted={() => {
+                      onActivePathChange(null);
+                      onTreeRefresh();
+                    }}
+                    onDuplicated={(path) => {
+                      onTreeRefresh();
+                      onNavigate(path);
+                    }}
+                    onMoved={(path, options) => {
+                      onTreeRefresh({ background: true, reconcile: options?.refresh === false ? false : undefined });
+                      if (path) onNavigate(path);
+                    }}
+                  />
+                </SidebarSection>
+              ))}
             </div>
           )}
 
@@ -236,6 +337,10 @@ export function AppSidebar({
               onPublishedChanged={refreshPublishedPages}
               compactFolders
               enableFileNesting
+              excludePatterns={treeExcludePatterns}
+              excludePrefixes={sectionPrefixes}
+              excludePaths={sidebarConfig.pinned}
+              treeRoot={usesStructuredSidebar ? sharedTreeRoot : undefined}
               onCreateChild={onCreatePage}
               onDeleted={() => {
                 onActivePathChange(null);
@@ -357,10 +462,11 @@ type SidebarPageItemProps = {
   active: boolean;
   onSelect: (path: string) => void;
   trailing?: ReactNode;
+  leading?: ReactNode;
   published?: boolean;
 };
 
-function SidebarPageItem({ path, active, onSelect, trailing, published }: SidebarPageItemProps) {
+function SidebarPageItem({ path, active, onSelect, trailing, leading, published }: SidebarPageItemProps) {
   return (
     <button
       type="button"
@@ -372,10 +478,12 @@ function SidebarPageItem({ path, active, onSelect, trailing, published }: Sideba
         active && (published ? "ring-1 ring-primary/40 font-medium" : "bg-accent text-accent-foreground font-medium"),
       )}
     >
-      {published ? (
-        <Rss className="h-3.5 w-3.5 text-primary shrink-0" />
-      ) : (
-        <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      {leading ?? (
+        published ? (
+          <Rss className="h-3.5 w-3.5 text-primary shrink-0" />
+        ) : (
+          <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        )
       )}
       <span className="truncate flex-1">{titleize(path)}</span>
       {published && (

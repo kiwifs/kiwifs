@@ -580,7 +580,15 @@ export const api = {
     return request(`${kiwiBase()}/recent-pages?${qs}`);
   },
 
-  async getUIConfig(): Promise<{ themeLocked: boolean; startPage: string }> {
+  async getUIConfig(): Promise<{
+    themeLocked: boolean;
+    startPage: string;
+    sidebar?: {
+      pinned: string[];
+      hidden: string[];
+      sections: { label: string; paths: string[] }[];
+    };
+  }> {
     return request(`${kiwiBase()}/ui-config`);
   },
 

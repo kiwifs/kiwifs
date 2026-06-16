@@ -344,9 +344,21 @@ func (h *Handlers) GetTheme(c echo.Context) error {
 	return c.JSON(http.StatusOK, theme)
 }
 
+type sidebarSectionResponse struct {
+	Label string   `json:"label"`
+	Paths []string `json:"paths"`
+}
+
+type sidebarConfigResponse struct {
+	Pinned   []string                 `json:"pinned"`
+	Hidden   []string                 `json:"hidden"`
+	Sections []sidebarSectionResponse `json:"sections"`
+}
+
 type uiConfigResponse struct {
-	ThemeLocked bool   `json:"themeLocked"`
-	StartPage   string `json:"startPage"`
+	ThemeLocked bool                  `json:"themeLocked"`
+	StartPage   string                `json:"startPage"`
+	Sidebar     sidebarConfigResponse `json:"sidebar"`
 }
 
 // UIConfig godoc
@@ -358,9 +370,29 @@ type uiConfigResponse struct {
 //	@Success		200		{object}	uiConfigResponse
 //	@Router			/api/kiwi/ui-config [get]
 func (h *Handlers) UIConfig(c echo.Context) error {
+	sections := make([]sidebarSectionResponse, 0, len(h.ui.Sidebar.ResolvedSections()))
+	for _, sec := range h.ui.Sidebar.ResolvedSections() {
+		sections = append(sections, sidebarSectionResponse{
+			Label: sec.Label,
+			Paths: sec.Paths,
+		})
+	}
+	pinned := h.ui.Sidebar.Pinned
+	if pinned == nil {
+		pinned = []string{}
+	}
+	hidden := h.ui.Sidebar.Hidden
+	if hidden == nil {
+		hidden = []string{}
+	}
 	return c.JSON(http.StatusOK, uiConfigResponse{
 		ThemeLocked: h.ui.ThemeLocked,
 		StartPage:   h.ui.ResolvedStartPage(),
+		Sidebar: sidebarConfigResponse{
+			Pinned:   pinned,
+			Hidden:   hidden,
+			Sections: sections,
+		},
 	})
 }
 

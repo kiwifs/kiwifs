@@ -449,3 +449,37 @@ new_page = "Ctrl+Shift+N"
 		t.Fatalf("search binding = %q", cfg.UI.Keybindings["search"])
 	}
 }
+
+func TestUIConfigSidebar(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[ui.sidebar]
+pinned = ["index.md", "team/handbook.md"]
+hidden = [".kiwi", "templates", "_archive"]
+
+[[ui.sidebar.sections]]
+label = "Core"
+paths = ["architecture/", "api/"]
+
+[[ui.sidebar.sections]]
+label = "Team"
+paths = ["team/", "onboarding/"]
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(cfg.UI.Sidebar.Pinned) != 2 {
+		t.Fatalf("pinned = %+v", cfg.UI.Sidebar.Pinned)
+	}
+	if len(cfg.UI.Sidebar.Hidden) != 3 {
+		t.Fatalf("hidden = %+v", cfg.UI.Sidebar.Hidden)
+	}
+	sections := cfg.UI.Sidebar.ResolvedSections()
+	if len(sections) != 2 || sections[0].Label != "Core" {
+		t.Fatalf("sections = %+v", sections)
+	}
+}

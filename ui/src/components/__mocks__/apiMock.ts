@@ -308,7 +308,11 @@ function createMockFetch(overrides: MockOverrides = {}) {
       }
 
       if (url.includes("/ui-config")) {
-        return jsonResponse({ themeLocked: false, startPage: "welcome" });
+        return jsonResponse({
+          themeLocked: false,
+          startPage: "welcome",
+          sidebar: { pinned: [], hidden: [], sections: [] },
+        });
       }
 
       if (url.includes("/theme") && method === "GET") {

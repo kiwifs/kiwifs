@@ -62,6 +62,10 @@ import { createTreePageDragData } from "@kw/lib/kanbanDnd";
 import { shouldApplyTreeLoad } from "@kw/lib/treeRefresh";
 import { applyOptimisticTreeMove } from "@kw/lib/treeReorder";
 import { persistSiblingOrder } from "@kw/lib/treeOrderPersistence";
+import {
+  filterTreeForExclude,
+  filterTreeForInclude,
+} from "@kw/lib/sidebarStructure";
 import { useFileOpsStore } from "@kw/stores/fileOpsStore";
 import { useKiwiTreeUiStore, type ConfirmDialog, type PromptDialog } from "@kw/stores/kiwiTreeUiStore";
 import { KiwiTreeDialogs } from "@kw/components/tree/KiwiTreeDialogs";
@@ -81,6 +85,10 @@ type Props = {
   sortMode?: TreeSortMode;
   enableFileNesting?: boolean;
   excludePatterns?: string[];
+  includePrefixes?: string[];
+  excludePrefixes?: string[];
+  excludePaths?: string[];
+  treeRoot?: TreeEntry | null;
   autoReveal?: boolean;
   publishedPaths?: Set<string>;
   onPublishedChanged?: () => void;
@@ -224,6 +232,10 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
     sortMode = "name",
     enableFileNesting = true,
     excludePatterns = DEFAULT_TREE_EXCLUDE_PATTERNS,
+    includePrefixes,
+    excludePrefixes,
+    excludePaths,
+    treeRoot,
     autoReveal = true,
     publishedPaths,
     onPublishedChanged,
@@ -329,6 +341,7 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
   }
 
   useEffect(() => {
+    if (treeRoot !== undefined) return;
     const requestStartedAt = Date.now();
     api
       .tree("/")
@@ -343,7 +356,13 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
         setError(null);
       })
       .catch((e) => setError(String(e)));
-  }, [refreshKey, retryCount, setRootPreservingScroll]);
+  }, [refreshKey, retryCount, setRootPreservingScroll, treeRoot]);
+
+  useEffect(() => {
+    if (treeRoot === undefined) return;
+    setRoot(treeRoot);
+    setError(null);
+  }, [treeRoot]);
 
   // Reveal support: open parents when reveal request comes in
   useEffect(() => {
@@ -368,14 +387,25 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
 
   const data = useMemo(() => {
     if (!root) return [];
-    const built = buildFlatTree(root, {
+    let scoped = root;
+    if (includePrefixes?.length) {
+      const included = filterTreeForInclude(scoped, includePrefixes);
+      if (!included) return [];
+      scoped = included;
+    }
+    if (excludePrefixes?.length || excludePaths?.length) {
+      const excluded = filterTreeForExclude(scoped, excludePrefixes ?? [], excludePaths ?? []);
+      if (!excluded) return [];
+      scoped = excluded;
+    }
+    const built = buildFlatTree(scoped, {
       compactFolders,
       sortMode,
       enableFileNesting,
       excludePatterns,
     });
     return built;
-  }, [root, compactFolders, sortMode, enableFileNesting, excludePatterns]);
+  }, [root, compactFolders, sortMode, enableFileNesting, excludePatterns, includePrefixes, excludePrefixes, excludePaths]);
 
   const initialOpenState = useMemo(() => {
     const map: Record<string, boolean> = { "": true };

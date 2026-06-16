@@ -208,7 +208,35 @@ type UIConfig struct {
 	Keybindings     map[string]string `toml:"keybindings"`      // inline [ui.keybindings] overrides
 	// StartPage controls the first-load landing view when no deep link is present.
 	// "welcome" (default) | "recent" | "dashboard" | a file path such as "index.md".
-	StartPage string `toml:"start_page"`
+	StartPage string          `toml:"start_page"`
+	Sidebar   UISidebarConfig `toml:"sidebar"`
+}
+
+// UISidebarConfig controls workspace sidebar layout: pinned pages, hidden
+// paths, and custom section groupings declared in [ui.sidebar].
+type UISidebarConfig struct {
+	Pinned   []string                 `toml:"pinned"`
+	Hidden   []string                 `toml:"hidden"`
+	Sections []UISidebarSectionConfig `toml:"sections"`
+}
+
+// UISidebarSectionConfig is one [[ui.sidebar.sections]] entry grouping tree
+// paths under a labeled sidebar section.
+type UISidebarSectionConfig struct {
+	Label string   `toml:"label"`
+	Paths []string `toml:"paths"`
+}
+
+// ResolvedSections returns sidebar sections with non-empty labels.
+func (s UISidebarConfig) ResolvedSections() []UISidebarSectionConfig {
+	out := make([]UISidebarSectionConfig, 0, len(s.Sections))
+	for _, sec := range s.Sections {
+		if strings.TrimSpace(sec.Label) == "" {
+			continue
+		}
+		out = append(out, sec)
+	}
+	return out
 }
 
 // ResolvedStartPage returns the normalized start page mode. Empty config defaults to "welcome".
