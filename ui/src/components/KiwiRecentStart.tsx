@@ -77,8 +77,12 @@ export function KiwiRecentStart({ onOpen, onEdit }: Props) {
                   <div className="font-medium text-foreground truncate">{page.title}</div>
                   <div className="text-xs text-muted-foreground truncate">{page.path}</div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {page.actor}
-                    {" · "}
+                    {page.actor ? (
+                      <>
+                        {page.actor}
+                        {" · "}
+                      </>
+                    ) : null}
                     {formatDistanceToNow(parseISO(page.timestamp), { addSuffix: true })}
                   </div>
                 </div>
