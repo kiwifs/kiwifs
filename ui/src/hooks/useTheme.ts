@@ -6,6 +6,7 @@ import {
   type KiwiThemeOverrides,
 } from "../lib/kiwiTheme";
 import { api, getCurrentSpace, onSpaceChange } from "../lib/api";
+import { guardedThemeAction } from "../lib/themeEditLock";
 import { useUIConfigStore } from "../lib/uiConfigStore";
 import { presets, presetToOverrides, findPreset } from "../themes";
 
@@ -214,24 +215,26 @@ export function useTheme(): {
   }, []);
 
   const toggleTheme = useCallback(() => {
-    if (themeLocked) return;
-    const ext = externalThemeAPI();
-    if (ext) {
-      ext.toggle();
-    } else {
-      setTheme((t) => (t === "dark" ? "light" : "dark"));
-    }
+    guardedThemeAction(themeLocked, () => {
+      const ext = externalThemeAPI();
+      if (ext) {
+        ext.toggle();
+      } else {
+        setTheme((t) => (t === "dark" ? "light" : "dark"));
+      }
+    });
   }, [themeLocked]);
 
   const setPreset = useCallback((name: string) => {
-    if (themeLocked) return;
-    setCustomTheme(null);
-    setPresetState(name);
-    writeLS(lsPreset(), name);
-    const found = findPreset(name);
-    if (found) {
-      api.putTheme({ preset: name, ...presetToOverrides(found) } as unknown as Record<string, unknown>).catch(() => {});
-    }
+    guardedThemeAction(themeLocked, () => {
+      setCustomTheme(null);
+      setPresetState(name);
+      writeLS(lsPreset(), name);
+      const found = findPreset(name);
+      if (found) {
+        api.putTheme({ preset: name, ...presetToOverrides(found) } as unknown as Record<string, unknown>).catch(() => {});
+      }
+    });
   }, [themeLocked]);
 
   return { theme, toggleTheme, preset, setPreset, presets, themeLocked };

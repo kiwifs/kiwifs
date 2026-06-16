@@ -15,13 +15,16 @@ Fix kiwifs/kiwifs#346: call `getUIConfig()` on boot and disable theme editing wh
 - Searched Kiwi (`themeLocked ui-config 346`) — no prior fix doc.
 - Branch: `feat/issue-346-theme-locked` from `origin/main`.
 - Added `uiConfigStore` (Zustand) loaded in `main.tsx` before render.
-- Gated `useTheme` toggle/preset; hid header toggle in `App.tsx`.
+- Gated `useTheme` toggle/preset via `guardedThemeAction`; hid header toggle in `App.tsx`.
+- Durable fix doc: `pages/fixes/kiwifs-kiwifs/issue-346-theme-locked-ui-config.md`.
 
 ## Verification
 
 ```bash
-cd ui && npm test -- --run src/lib/uiConfigStore.test.ts
-# 4 passed
+cd ui && npm test -- --run src/lib/uiConfigStore.test.ts src/lib/themeEditLock.test.ts
+# 6 passed
+cd ui && npm test -- --run
+# 114 passed (full suite)
 ```
 
 ## Outcome
