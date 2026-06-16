@@ -483,3 +483,17 @@ paths = ["team/", "onboarding/"]
 		t.Fatalf("sections = %+v", sections)
 	}
 }
+
+func TestUIConfigSidebarResolvedSectionsSkipsEmptyLabels(t *testing.T) {
+	cfg := UISidebarConfig{
+		Sections: []UISidebarSectionConfig{
+			{Label: "Core", Paths: []string{"architecture/"}},
+			{Label: "  ", Paths: []string{"skip/"}},
+			{Label: "", Paths: []string{"also-skip/"}},
+		},
+	}
+	sections := cfg.ResolvedSections()
+	if len(sections) != 1 || sections[0].Label != "Core" {
+		t.Fatalf("sections = %+v", sections)
+	}
+}

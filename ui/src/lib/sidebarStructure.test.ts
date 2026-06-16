@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TreeEntry } from "./api";
 import {
+  applySidebarHidden,
   collectSectionPrefixes,
   filterPathsByQuery,
   filterTreeForExclude,
@@ -74,5 +75,16 @@ describe("sidebarStructure", () => {
     expect(mergeSidebarExcludePatterns(["templates"])).toEqual(
       expect.arrayContaining(["**/.gitkeep", "templates"]),
     );
+  });
+
+  it("removes hidden paths from the visible tree", () => {
+    const filtered = applySidebarHidden(sampleRoot, ["templates"]);
+    expect(filtered?.children?.map((c) => c.path)).toEqual([
+      "index.md",
+      "getting-started.md",
+      "architecture/",
+      "api/",
+      "team/",
+    ]);
   });
 });
