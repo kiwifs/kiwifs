@@ -142,7 +142,7 @@ export default function App() {
     } catch { return 272; }
   });
   const resizing = useRef(false);
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, themeLocked } = useTheme();
   const currentSpace = getCurrentSpace() || "default";
   const { recent, recordVisit } = useRecentPages(currentSpace);
   const { starred, toggle: toggleStar, isStarred } = useStarredPages(currentSpace);
@@ -646,9 +646,11 @@ const handleSpaceSwitch = useCallback(() => {
               <Database className="h-4 w-4" />
             </ToolbarButton>
             <HostToolbarActions />
-            <ToolbarButton onClick={toggleTheme} label={theme === "dark" ? "Light mode" : "Dark mode"}>
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </ToolbarButton>
+            {!themeLocked && (
+              <ToolbarButton onClick={toggleTheme} label={theme === "dark" ? "Light mode" : "Dark mode"}>
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </ToolbarButton>
+            )}
           </div>
         </header>
 

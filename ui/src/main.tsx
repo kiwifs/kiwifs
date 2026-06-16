@@ -8,6 +8,7 @@ import {
   listenForKiwiTheme,
 } from "./lib/kiwiTheme";
 import type { KiwiHostConfig } from "./lib/hostConfig";
+import { useUIConfigStore } from "./lib/uiConfigStore";
 
 declare global {
   interface Window {
@@ -27,6 +28,7 @@ async function boot() {
   applyKiwiThemeFromUrl();
   await applyKiwiThemeFromThemeUrl();
   listenForKiwiTheme(getThemeOrigins());
+  await useUIConfigStore.getState().load();
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>

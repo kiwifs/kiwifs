@@ -6,6 +6,7 @@ import {
   type KiwiThemeOverrides,
 } from "../lib/kiwiTheme";
 import { api, getCurrentSpace, onSpaceChange } from "../lib/api";
+import { useUIConfigStore } from "../lib/uiConfigStore";
 import { presets, presetToOverrides, findPreset } from "../themes";
 
 export type Theme = "light" | "dark";
@@ -87,7 +88,9 @@ export function useTheme(): {
   preset: string;
   setPreset: (name: string) => void;
   presets: typeof presets;
+  themeLocked: boolean;
 } {
+  const themeLocked = useUIConfigStore((s) => s.themeLocked);
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof document === "undefined") return "light";
     return document.documentElement.classList.contains("dark") ? "dark" : "light";
@@ -211,15 +214,17 @@ export function useTheme(): {
   }, []);
 
   const toggleTheme = useCallback(() => {
+    if (themeLocked) return;
     const ext = externalThemeAPI();
     if (ext) {
       ext.toggle();
     } else {
       setTheme((t) => (t === "dark" ? "light" : "dark"));
     }
-  }, []);
+  }, [themeLocked]);
 
   const setPreset = useCallback((name: string) => {
+    if (themeLocked) return;
     setCustomTheme(null);
     setPresetState(name);
     writeLS(lsPreset(), name);
@@ -227,7 +232,7 @@ export function useTheme(): {
     if (found) {
       api.putTheme({ preset: name, ...presetToOverrides(found) } as unknown as Record<string, unknown>).catch(() => {});
     }
-  }, []);
+  }, [themeLocked]);
 
-  return { theme, toggleTheme, preset, setPreset, presets };
+  return { theme, toggleTheme, preset, setPreset, presets, themeLocked };
 }
