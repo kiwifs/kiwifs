@@ -575,7 +575,12 @@ export const api = {
     });
   },
 
-  async getUIConfig(): Promise<{ themeLocked: boolean }> {
+  async getRecentPages(limit = 10): Promise<{ pages: RecentPageEntry[] }> {
+    const qs = new URLSearchParams({ limit: String(limit) });
+    return request(`${kiwiBase()}/recent-pages?${qs}`);
+  },
+
+  async getUIConfig(): Promise<{ themeLocked: boolean; startPage: string }> {
     return request(`${kiwiBase()}/ui-config`);
   },
 
@@ -1014,6 +1019,15 @@ export const api = {
       body: JSON.stringify({ connection_id: connectionId }),
     });
   },
+};
+
+// --- Recent pages (startup view) ---
+
+export type RecentPageEntry = {
+  path: string;
+  title: string;
+  actor: string;
+  timestamp: string;
 };
 
 // --- Timeline types ---

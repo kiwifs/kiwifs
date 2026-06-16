@@ -294,8 +294,21 @@ function createMockFetch(overrides: MockOverrides = {}) {
         });
       }
 
+      if (url.includes("/recent-pages")) {
+        return jsonResponse({
+          pages: [
+            {
+              path: "pages/use-sqlite-for-search.md",
+              title: "SQLite for Search",
+              actor: "alice",
+              timestamp: new Date(Date.now() - 3600000).toISOString(),
+            },
+          ],
+        });
+      }
+
       if (url.includes("/ui-config")) {
-        return jsonResponse({ themeLocked: false });
+        return jsonResponse({ themeLocked: false, startPage: "welcome" });
       }
 
       if (url.includes("/theme") && method === "GET") {

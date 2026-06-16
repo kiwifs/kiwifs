@@ -206,6 +206,17 @@ type UIConfig struct {
 	CustomCSS       string            `toml:"custom_css"`       // relative path, default .kiwi/custom.css
 	KeybindingsFile string            `toml:"keybindings_file"` // relative path, default .kiwi/keybindings.json
 	Keybindings     map[string]string `toml:"keybindings"`      // inline [ui.keybindings] overrides
+	// StartPage controls the first-load landing view when no deep link is present.
+	// "welcome" (default) | "recent" | "dashboard" | a file path such as "index.md".
+	StartPage string `toml:"start_page"`
+}
+
+// ResolvedStartPage returns the normalized start page mode. Empty config defaults to "welcome".
+func (u UIConfig) ResolvedStartPage() string {
+	if s := strings.TrimSpace(u.StartPage); s != "" {
+		return s
+	}
+	return "welcome"
 }
 
 // AssetsConfig controls binary upload limits and MIME allowlist. Zero values

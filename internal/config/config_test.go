@@ -399,6 +399,32 @@ custom_css = ".kiwi/brand.css"
 	}
 }
 
+func TestUIConfigStartPage(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[ui]
+start_page = "recent"
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.UI.StartPage != "recent" {
+		t.Fatalf("start_page = %q", cfg.UI.StartPage)
+	}
+	if cfg.UI.ResolvedStartPage() != "recent" {
+		t.Fatalf("resolved = %q", cfg.UI.ResolvedStartPage())
+	}
+
+	empty := UIConfig{}
+	if empty.ResolvedStartPage() != "welcome" {
+		t.Fatalf("empty should default to welcome, got %q", empty.ResolvedStartPage())
+	}
+}
+
 func TestUIConfigKeybindings(t *testing.T) {
 	root := t.TempDir()
 	cfgDir := filepath.Join(root, ".kiwi")

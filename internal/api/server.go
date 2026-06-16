@@ -542,6 +542,7 @@ func (s *Server) setupRoutes() {
 	api.GET("/custom.css", h.GetCustomCSS)
 	api.GET("/keybindings", h.GetKeybindings)
 	api.GET("/ui-config", h.UIConfig)
+	api.GET("/recent-pages", h.RecentPages)
 	api.GET("/janitor", h.Janitor)
 	api.GET("/memory/report", h.MemoryReport)
 	api.GET("/query", h.Query)

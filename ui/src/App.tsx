@@ -31,6 +31,7 @@ import { KiwiCanvasScreen } from "./components/KiwiCanvasScreen";
 import { KiwiWhiteboardScreen } from "./components/KiwiWhiteboardScreen";
 import { KiwiTimeline } from "./components/KiwiTimeline";
 import { KiwiKanban } from "./components/KiwiKanban";
+import { KiwiRecentStart } from "./components/KiwiRecentStart";
 import { KanbanDragProvider } from "./components/kanban/KanbanDragProvider";
 import { NewPageDialog } from "./components/NewPageDialog";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
@@ -39,8 +40,10 @@ import { useRecentPages } from "./hooks/useRecentPages";
 import { useStarredPages } from "./hooks/useStarredPages";
 import { usePinnedPages } from "./hooks/usePinnedPages";
 import { useKeybindings } from "./hooks/useKeybindings";
+import { useUIConfig } from "./hooks/useUIConfig";
 import { formatChordDisplay, matchBoundAction, type KeybindingAction } from "./lib/kiwiKeybindings";
 import { resolveOverlayDismiss } from "./lib/overlayDismiss";
+import { hasDeepLinkPath, resolveDashboardPath, resolveStartPage, shouldApplyStartPage } from "./lib/startPage";
 import { Button } from "./components/ui/button";
 import {
   Tooltip,
@@ -145,6 +148,8 @@ export default function App() {
   const { starred, toggle: toggleStar, isStarred } = useStarredPages(currentSpace);
   const { pinned, toggle: togglePin, isPinned } = usePinnedPages(currentSpace);
   const { bindings, conflicts } = useKeybindings();
+  const { config: uiConfig, loaded: uiConfigLoaded } = useUIConfig();
+  const resolvedStartPage = resolveStartPage(uiConfig.startPage);
   const editorRef = useRef<{ save: () => Promise<void>; toggleMode?: () => void } | null>(null);
   const [spaceKey, setSpaceKey] = useState(0);
   const refreshPublishedPages = usePublishedPagesStore((state) => state.refresh);
@@ -256,10 +261,16 @@ export default function App() {
   }, [refreshKey, spaceKey, refreshPublishedPages]);
 
   useEffect(() => {
-    if (!tree || activePath) return;
-    const firstMd = firstMarkdown(tree);
-    if (firstMd) setActivePath(firstMd);
-  }, [tree, activePath]);
+    if (!tree || !uiConfigLoaded || activePath) return;
+    if (!shouldApplyStartPage(activePath, hasDeepLinkPath())) return;
+    if (resolvedStartPage.mode === "dashboard") {
+      setActivePath(resolveDashboardPath(tree));
+      return;
+    }
+    if (resolvedStartPage.mode === "path") {
+      setActivePath(resolvedStartPage.path);
+    }
+  }, [tree, uiConfigLoaded, activePath, resolvedStartPage]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -516,8 +527,7 @@ const handleSpaceSwitch = useCallback(() => {
 
   function navigate(path: string) {
     if (!path) {
-      const firstMd = tree ? firstMarkdown(tree) : null;
-      if (firstMd) setActivePath(firstMd);
+      setActivePath(null);
       if (isMobile) setSidebarOpen(false);
       return;
     }
@@ -563,6 +573,14 @@ const handleSpaceSwitch = useCallback(() => {
   useEffect(() => {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
+
+  const atStartPage =
+    !activePath &&
+    uiConfigLoaded &&
+    !treeLoading &&
+    shouldApplyStartPage(activePath, hasDeepLinkPath());
+  const showWelcomeStart = atStartPage && resolvedStartPage.mode === "welcome";
+  const showRecentStart = atStartPage && resolvedStartPage.mode === "recent";
 
   return (
     <TooltipProvider delayDuration={250}>
@@ -793,11 +811,19 @@ const handleSpaceSwitch = useCallback(() => {
                 refreshKey={refreshKey}
                 onPublishedChanged={refreshPublishedPages}
               />
-            ) : treeLoading ? (
+            ) : treeLoading || !uiConfigLoaded ? (
               <div className="flex h-full items-center justify-center">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               </div>
-            ) : (
+            ) : showRecentStart ? (
+              <KiwiRecentStart
+                onOpen={(p) => navigate(p)}
+                onEdit={(p) => {
+                  setActivePath(p);
+                  setEditing(true);
+                }}
+              />
+            ) : showWelcomeStart ? (
               <WelcomeScreen
                 bindings={bindings}
                 onNewPage={() => { setNewFolder(undefined); setNewOpen(true); }}
@@ -807,6 +833,10 @@ const handleSpaceSwitch = useCallback(() => {
                 onBases={() => setBasesOpen(true)}
                 onTimeline={() => setTimelineOpen(true)}
               />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              </div>
             )}
           </main>
         </div>
