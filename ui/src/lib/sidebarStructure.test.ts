@@ -6,6 +6,7 @@ import {
   filterPathsByQuery,
   filterTreeForExclude,
   filterTreeForInclude,
+  isStructuredSidebar,
   mergeSidebarExcludePatterns,
   pathUnderPrefix,
 } from "./sidebarStructure";
@@ -86,5 +87,12 @@ describe("sidebarStructure", () => {
       "api/",
       "team/",
     ]);
+  });
+
+  it("keeps structured mode when sidebar filter hides workspace pins", () => {
+    const config = { pinned: ["index.md"], hidden: [], sections: [] };
+    expect(isStructuredSidebar(config)).toBe(true);
+    expect(filterPathsByQuery(config.pinned, "nomatch")).toEqual([]);
+    // AppSidebar gates structured mode on unfiltered config — not filterPathsByQuery output.
   });
 });

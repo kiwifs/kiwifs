@@ -19,6 +19,13 @@ export const DEFAULT_SIDEBAR_CONFIG: SidebarConfig = {
   sections: [],
 };
 
+/** True when workspace sidebar config drives tree include/exclude behavior. */
+export function isStructuredSidebar(config: SidebarConfig): boolean {
+  return config.pinned.length > 0
+    || collectSectionPrefixes(config.sections).length > 0
+    || config.hidden.length > 0;
+}
+
 /**
  * Reports whether a tree path falls under a configured prefix.
  * Prefixes may be files or folders, with or without a trailing slash.

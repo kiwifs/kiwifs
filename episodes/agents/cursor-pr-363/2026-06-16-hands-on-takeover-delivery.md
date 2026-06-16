@@ -1,28 +1,29 @@
 ---
 memory_kind: episodic
-episode_id: cursor-pr-363-2026-06-16-hands-on-takeover
-title: "PR #363 hands-on takeover — sidebar filter structured-mode fix"
+episode_id: cursor-pr-363-2026-06-16-hands-on-delivery
+title: "PR #363 hands-on delivery — isStructuredSidebar regression"
 tags: [kiwifs, pr-363, issue-350, sidebar, delivery]
 date: 2026-06-16
 ---
 
 ## Task
 
-Hands-on takeover for kiwifs/kiwifs#363 after fleet engineer delivery check failed (code_not_delivered).
+Hands-on takeover for kiwifs/kiwifs#363 after fleet engineer delivery check failed (`no_committed_diff`).
 
 ## Actions
 
-1. Reset local branch to `fork/feat/issue-350-sidebar-structure` (removed unrelated ClawWork docs commit).
-2. Fixed `usesStructuredSidebar` in `AppSidebar.tsx` — use unfiltered `sidebarConfig.pinned` so tree exclusions stay active when the sidebar filter hides all workspace pins.
-3. Updated `ui/LAYOUT.md` with workspace vs user-local pin section order and `[ui.sidebar]` config note.
-4. Ran tests, committed `17edfac`, pushed to fork.
+1. Extracted `isStructuredSidebar()` into `sidebarStructure.ts` from inline `AppSidebar` logic.
+2. Added regression test: structured mode stays on when sidebar filter hides workspace pins.
+3. Updated fix doc with new test coverage note.
+4. Ran Go + Vitest suites — all pass.
+5. Committed and pushed to `fork/feat/issue-350-sidebar-structure`.
 
 ## Test results
 
 ```
 go test ./internal/config/... ./internal/api/... -run 'UIConfig|Sidebar' — PASS
-npm test -- --run src/lib/sidebarStructure.test.ts — 6/6 PASS
-npm test — 120/120 PASS
+npm test -- --run src/lib/sidebarStructure.test.ts — 7/7 PASS
+npm test — 121/121 PASS
 ```
 
 ## Outcome

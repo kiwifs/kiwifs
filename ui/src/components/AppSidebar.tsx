@@ -25,6 +25,7 @@ import { usePublishedPagesStore } from "../stores/publishedPagesStore";
 import {
   collectSectionPrefixes,
   filterPathsByQuery,
+  isStructuredSidebar,
   mergeSidebarExcludePatterns,
   type SidebarConfig,
 } from "../lib/sidebarStructure";
@@ -104,9 +105,7 @@ export function AppSidebar({
     () => mergeSidebarExcludePatterns(sidebarConfig.hidden),
     [sidebarConfig.hidden],
   );
-  const usesStructuredSidebar = sidebarConfig.pinned.length > 0
-    || sectionPrefixes.length > 0
-    || sidebarConfig.hidden.length > 0;
+  const usesStructuredSidebar = isStructuredSidebar(sidebarConfig);
   const [sharedTreeRoot, setSharedTreeRoot] = useState<TreeEntry | null>(null);
 
   useEffect(() => {
