@@ -123,6 +123,19 @@ func TestPutPreferences_Merge(t *testing.T) {
 	}
 }
 
+func TestPutPreferences_PathTraversalActor(t *testing.T) {
+	s := buildTestServer(t)
+	body, _ := json.Marshal(map[string]any{"theme": "ocean"})
+	req := httptest.NewRequest(http.MethodPut, "/api/kiwi/preferences", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Actor", "..")
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for path traversal actor, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestPutPreferences_InvalidField(t *testing.T) {
 	s := buildTestServer(t)
 	body, _ := json.Marshal(map[string]any{"default_view": "invalid"})

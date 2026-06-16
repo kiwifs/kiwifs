@@ -3,6 +3,7 @@ package preferences
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -15,11 +16,29 @@ func TestUserID(t *testing.T) {
 		{"human:bot", "human_bot"},
 		{"", ""},
 		{"  ", ""},
+		{"..", ""},
+		{".", ""},
 	}
 	for _, tt := range tests {
 		got := UserID(tt.actor)
 		if got != tt.want {
 			t.Errorf("UserID(%q) = %q, want %q", tt.actor, got, tt.want)
+		}
+	}
+}
+
+func TestUserID_RejectsPathTraversal(t *testing.T) {
+	for _, actor := range []string{"..", "."} {
+		userID := UserID(actor)
+		if userID != "" {
+			t.Fatalf("UserID(%q) = %q, want empty", actor, userID)
+		}
+	}
+	for _, actor := range []string{"alice@example.com", "human:bot"} {
+		userID := UserID(actor)
+		rel := filepath.ToSlash(filepath.Clean(RelPath(userID)))
+		if !strings.HasPrefix(rel, ".kiwi/users/") {
+			t.Fatalf("UserID(%q) rel %q escapes users dir", actor, rel)
 		}
 	}
 }

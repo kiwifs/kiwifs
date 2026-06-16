@@ -63,7 +63,20 @@ func UserID(actor string) string {
 	if len(s) > 128 {
 		s = s[:128]
 	}
+	if !safeUserID(s) {
+		return ""
+	}
 	return s
+}
+
+// safeUserID rejects directory names that would escape .kiwi/users/ via Clean.
+func safeUserID(id string) bool {
+	if id == "" || id == "." || id == ".." {
+		return false
+	}
+	rel := filepath.ToSlash(filepath.Clean(filepath.Join(".kiwi", "users", id, "preferences.json")))
+	prefix := ".kiwi/users/"
+	return strings.HasPrefix(rel, prefix) && rel != prefix && rel != prefix[:len(prefix)-1]
 }
 
 // RelPath returns the git-tracked preferences path for a user.
