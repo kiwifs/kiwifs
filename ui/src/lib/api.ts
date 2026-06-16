@@ -614,6 +614,39 @@ export const api = {
     return request(`${kiwiBase()}/keybindings`);
   },
 
+  async getPreferences(): Promise<{
+    theme?: string;
+    sidebar_collapsed?: boolean;
+    default_view?: "editor" | "source";
+    font_size?: "base" | "sm" | "lg";
+    editor_line_numbers?: boolean;
+    vim_mode?: boolean;
+  }> {
+    return request(`${kiwiBase()}/preferences`);
+  },
+
+  async putPreferences(prefs: {
+    theme?: string;
+    sidebar_collapsed?: boolean;
+    default_view?: "editor" | "source";
+    font_size?: "base" | "sm" | "lg";
+    editor_line_numbers?: boolean;
+    vim_mode?: boolean;
+  }): Promise<{
+    theme?: string;
+    sidebar_collapsed?: boolean;
+    default_view?: "editor" | "source";
+    font_size?: "base" | "sm" | "lg";
+    editor_line_numbers?: boolean;
+    vim_mode?: boolean;
+  }> {
+    return request(`${kiwiBase()}/preferences`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(prefs),
+    });
+  },
+
   async putTheme(theme: Record<string, unknown>): Promise<Record<string, unknown>> {
     return request(`${kiwiBase()}/theme`, {
       method: "PUT",

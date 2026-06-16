@@ -154,9 +154,11 @@ type Props = {
   onSaved: (path: string) => void;
   onNavigate?: (path: string) => void;
   saveRef?: React.MutableRefObject<SaveHandle | null>;
+  editorModePref?: "editor" | "source";
+  onEditorModeChange?: (mode: EditorMode) => void;
 };
 
-export function KiwiEditor({ path, tree, onClose, onSaved, onNavigate, saveRef }: Props) {
+export function KiwiEditor({ path, tree, onClose, onSaved, onNavigate, saveRef, editorModePref, onEditorModeChange }: Props) {
   const [initialMd, setInitialMd] = useState<string | null>(null);
   const etagRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -236,6 +238,8 @@ export function KiwiEditor({ path, tree, onClose, onSaved, onNavigate, saveRef }
       onSaved={onSaved}
       onNavigate={onNavigate}
       saveRef={saveRef}
+      editorModePref={editorModePref}
+      onEditorModeChange={onEditorModeChange}
     />
   );
 }
@@ -373,6 +377,8 @@ function EditorInner({
   onSaved,
   onNavigate,
   saveRef,
+  editorModePref,
+  onEditorModeChange,
 }: {
   path: string;
   tree?: import("@kw/lib/api").TreeEntry | null;
@@ -386,6 +392,8 @@ function EditorInner({
   onSaved: (p: string) => void;
   onNavigate?: (path: string) => void;
   saveRef?: React.MutableRefObject<SaveHandle | null>;
+  editorModePref?: "editor" | "source";
+  onEditorModeChange?: (mode: EditorMode) => void;
 }) {
   const [editorMode, setEditorMode] = useState<EditorMode>(() => loadEditorModePreference());
   const [sourceText, setSourceText] = useState(initialMd);
@@ -424,6 +432,19 @@ function EditorInner({
     setSaveStatus("clean");
     setVisualParseError(null);
   }, [path, initialMd, frontmatterSplit.frontmatter, initialVisualBody]);
+
+  useEffect(() => {
+    if (!editorModePref) return;
+    setEditorMode(editorModePref === "source" ? "source" : "visual");
+  }, [editorModePref]);
+
+  const persistEditorMode = useCallback(
+    (mode: EditorMode) => {
+      saveEditorModePreference(mode);
+      onEditorModeChange?.(mode);
+    },
+    [onEditorModeChange],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -581,7 +602,7 @@ function EditorInner({
           setSourceText(syncedMdRef.current);
         }
         setEditorMode("source");
-        saveEditorModePreference("source");
+        persistEditorMode("source");
         setReady(true);
       } else {
         const text = opts?.discard ? syncedMdRef.current : sourceText;
@@ -590,7 +611,7 @@ function EditorInner({
         setFmText(nextFm);
         setVisualParseBody(body);
         setEditorMode("visual");
-        saveEditorModePreference("visual");
+        persistEditorMode("visual");
       }
       setSaveStatus("clean");
       if (autoSaveTimer.current) {
@@ -598,7 +619,7 @@ function EditorInner({
         autoSaveTimer.current = null;
       }
     },
-    [editor, fmText, sourceText],
+    [editor, fmText, sourceText, persistEditorMode],
   );
 
   const requestModeSwitch = useCallback(

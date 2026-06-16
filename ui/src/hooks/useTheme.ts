@@ -9,6 +9,7 @@ import { api, getCurrentSpace, onSpaceChange } from "../lib/api";
 import { guardedThemeAction } from "../lib/themeEditLock";
 import { useUIConfigStore } from "../lib/uiConfigStore";
 import { presets, presetToOverrides, findPreset } from "../themes";
+import type { UserPreferences } from "../lib/userPreferences";
 
 export type Theme = "light" | "dark";
 
@@ -83,7 +84,10 @@ function externalThemeAPI(): {
   return null;
 }
 
-export function useTheme(): {
+export function useTheme(options?: {
+  serverPrefs?: UserPreferences | null;
+  onPresetChange?: (preset: string) => void;
+}): {
   theme: Theme;
   toggleTheme: () => void;
   preset: string;
@@ -92,12 +96,20 @@ export function useTheme(): {
   themeLocked: boolean;
 } {
   const themeLocked = useUIConfigStore((s) => s.themeLocked);
+  const serverPreset = options?.serverPrefs?.theme;
+  const onPresetChange = options?.onPresetChange;
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof document === "undefined") return "light";
     return document.documentElement.classList.contains("dark") ? "dark" : "light";
   });
 
-  const [preset, setPresetState] = useState(() => readLS(lsPreset(), "Kiwi"));
+  const [preset, setPresetState] = useState(() => serverPreset || readLS(lsPreset(), "Kiwi"));
+
+  useEffect(() => {
+    if (serverPreset) {
+      setPresetState(serverPreset);
+    }
+  }, [serverPreset]);
 
   // Keep local state in sync with the DOM (handles both cloud-managed and
   // standalone scenarios — the cloud ThemeProvider changes the class,
@@ -230,12 +242,13 @@ export function useTheme(): {
       setCustomTheme(null);
       setPresetState(name);
       writeLS(lsPreset(), name);
+      onPresetChange?.(name);
       const found = findPreset(name);
       if (found) {
         api.putTheme({ preset: name, ...presetToOverrides(found) } as unknown as Record<string, unknown>).catch(() => {});
       }
     });
-  }, [themeLocked]);
+  }, [themeLocked, onPresetChange]);
 
   return { theme, toggleTheme, preset, setPreset, presets, themeLocked };
 }
