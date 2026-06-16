@@ -104,7 +104,7 @@ export function AppSidebar({
     () => mergeSidebarExcludePatterns(sidebarConfig.hidden),
     [sidebarConfig.hidden],
   );
-  const usesStructuredSidebar = configPinned.length > 0
+  const usesStructuredSidebar = sidebarConfig.pinned.length > 0
     || sectionPrefixes.length > 0
     || sidebarConfig.hidden.length > 0;
   const [sharedTreeRoot, setSharedTreeRoot] = useState<TreeEntry | null>(null);

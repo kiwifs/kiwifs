@@ -34,7 +34,8 @@ customise appearance (theme, colours, fonts) but cannot rearrange the zones.
 ### Sidebar
 - Default width 272px, collapsible via toggle or drag-to-resize (200–480px range).
 - Sections collapse/expand independently; state persisted in localStorage.
-- Section order is fixed: Space selector → Starred → Pinned → Recent → Pages (tree).
+- Section order is fixed: Space selector → workspace **Pinned** (from `[ui.sidebar]` config) → Starred → **My pins** (user-local) → Recent → custom config sections → **Pages** (tree).
+- Workspace layout is driven by `[ui.sidebar]` in `.kiwi/config.toml` (`pinned`, `hidden`, `[[ui.sidebar.sections]]`); the sidebar filter narrows visible pinned paths without disabling tree exclusions.
 
 ### Breadcrumb
 - Sticky at content top, shows path segments as clickable links.
