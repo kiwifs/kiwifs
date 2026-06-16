@@ -23,5 +23,6 @@ Implemented per-user preferences API for [kiwifs/kiwifs#353](https://github.com/
 
 ## Notes
 
-- Kiwi MCP gateway unavailable in workspace; fix doc written to repo `pages/fixes/` for fleet sync.
+- Cherry-picked onto `feat/issue-346-theme-locked`; merged with theme-lock (#346) in `useTheme.ts` and `App.tsx`.
+- Kiwi MCP gateway unavailable; fix doc at `pages/fixes/kiwifs-kiwifs/issue-353-per-user-preferences-api.md`.
 - Fleet agent to publish branch + open PR closing #353.
