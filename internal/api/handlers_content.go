@@ -355,10 +355,20 @@ type sidebarConfigResponse struct {
 	Sections []sidebarSectionResponse `json:"sections"`
 }
 
+type brandingConfigResponse struct {
+	Name           string `json:"name"`
+	LogoURL        string `json:"logoUrl"`
+	FaviconURL     string `json:"faviconUrl"`
+	WelcomeTitle   string `json:"welcomeTitle"`
+	WelcomeMessage string `json:"welcomeMessage"`
+}
+
 type uiConfigResponse struct {
-	ThemeLocked bool                  `json:"themeLocked"`
-	StartPage   string                `json:"startPage"`
-	Sidebar     sidebarConfigResponse `json:"sidebar"`
+	ThemeLocked bool                   `json:"themeLocked"`
+	StartPage   string                 `json:"startPage"`
+	Sidebar     sidebarConfigResponse  `json:"sidebar"`
+	Branding    brandingConfigResponse `json:"branding"`
+	Features    map[string]bool        `json:"features"`
 }
 
 // UIConfig godoc
@@ -385,6 +395,7 @@ func (h *Handlers) UIConfig(c echo.Context) error {
 	if hidden == nil {
 		hidden = []string{}
 	}
+	b := h.ui.Branding
 	return c.JSON(http.StatusOK, uiConfigResponse{
 		ThemeLocked: h.ui.ThemeLocked,
 		StartPage:   h.ui.ResolvedStartPage(),
@@ -393,6 +404,14 @@ func (h *Handlers) UIConfig(c echo.Context) error {
 			Hidden:   hidden,
 			Sections: sections,
 		},
+		Branding: brandingConfigResponse{
+			Name:           b.Name,
+			LogoURL:        b.LogoURL,
+			FaviconURL:     b.FaviconURL,
+			WelcomeTitle:   b.WelcomeTitle,
+			WelcomeMessage: b.WelcomeMessage,
+		},
+		Features: h.ui.Features.Resolved(),
 	})
 }
 

@@ -45,6 +45,12 @@ import { usePreferences } from "./hooks/usePreferences";
 import { formatChordDisplay, matchBoundAction, type KeybindingAction } from "./lib/kiwiKeybindings";
 import { resolveOverlayDismiss } from "./lib/overlayDismiss";
 import { hasDeepLinkPath, resolveDashboardPath, resolveStartPage, shouldApplyStartPage } from "./lib/startPage";
+import { useUIConfigStore } from "./lib/uiConfigStore";
+import {
+  isViewRouteAllowed,
+  type UIFeatureKey,
+  viewFeatureFromPathname,
+} from "./lib/uiFeatures";
 import { Button } from "./components/ui/button";
 import {
   Tooltip,
@@ -130,6 +136,8 @@ export default function App() {
   });
 
   const { prefs, loaded: prefsLoaded, updatePreferences } = usePreferences();
+  const branding = useUIConfigStore((s) => s.branding);
+  const features = useUIConfigStore((s) => s.features);
 
   useEffect(() => {
     if (!prefsLoaded || prefs.sidebar_collapsed === undefined) return;
@@ -612,8 +620,8 @@ const handleSpaceSwitch = useCallback(() => {
                 : <PanelLeftOpen className="h-4 w-4" />}
             </ToolbarButton>
             <div className="flex items-center gap-2">
-              <img src="/kiwifs.png" alt="KiwiFS" className="h-7 w-7 shrink-0" />
-              <span className="font-semibold text-sm hidden sm:inline">KiwiFS</span>
+              <img src={branding.logoUrl} alt={branding.name} className="h-7 w-7 shrink-0" />
+              <span className="font-semibold text-sm hidden sm:inline">{branding.name}</span>
             </div>
           </div>
 
@@ -637,27 +645,41 @@ const handleSpaceSwitch = useCallback(() => {
             <ToolbarButton onClick={() => { setNewFolder(undefined); setNewOpen(true); }} label={`New page (${formatChordDisplay(bindings.new_page)})`}>
               <Plus className="h-4 w-4" />
             </ToolbarButton>
-            <ToolbarButton onClick={() => { const next = !graphOpen; closeAllViews(); setGraphOpen(next); }} label="Knowledge graph">
-              <Network className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton onClick={() => { const next = !basesOpen; closeAllViews(); setBasesOpen(next); }} label="Bases">
-              <LayoutGrid className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton onClick={() => { const next = !canvasOpen; closeAllViews(); setCanvasOpen(next); }} label="Canvas">
-              <Presentation className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton onClick={() => { const next = !whiteboardOpen; closeAllViews(); setWhiteboardOpen(next); }} label="Whiteboard">
-              <PenTool className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton onClick={() => { const next = !timelineOpen; closeAllViews(); setTimelineOpen(next); }} label="Timeline">
-              <Clock4 className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton onClick={() => { const next = !kanbanOpen; closeAllViews(); setKanbanOpen(next); }} label="Kanban">
-              <Columns3 className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton onClick={() => { const next = !dataOpen; closeAllViews(); setDataOpen(next); }} label="Data sources">
-              <Database className="h-4 w-4" />
-            </ToolbarButton>
+            {features.graph && (
+              <ToolbarButton onClick={() => { const next = !graphOpen; closeAllViews(); setGraphOpen(next); }} label="Knowledge graph">
+                <Network className="h-4 w-4" />
+              </ToolbarButton>
+            )}
+            {features.bases && (
+              <ToolbarButton onClick={() => { const next = !basesOpen; closeAllViews(); setBasesOpen(next); }} label="Bases">
+                <LayoutGrid className="h-4 w-4" />
+              </ToolbarButton>
+            )}
+            {features.canvas && (
+              <ToolbarButton onClick={() => { const next = !canvasOpen; closeAllViews(); setCanvasOpen(next); }} label="Canvas">
+                <Presentation className="h-4 w-4" />
+              </ToolbarButton>
+            )}
+            {features.whiteboard && (
+              <ToolbarButton onClick={() => { const next = !whiteboardOpen; closeAllViews(); setWhiteboardOpen(next); }} label="Whiteboard">
+                <PenTool className="h-4 w-4" />
+              </ToolbarButton>
+            )}
+            {features.timeline && (
+              <ToolbarButton onClick={() => { const next = !timelineOpen; closeAllViews(); setTimelineOpen(next); }} label="Timeline">
+                <Clock4 className="h-4 w-4" />
+              </ToolbarButton>
+            )}
+            {features.kanban && (
+              <ToolbarButton onClick={() => { const next = !kanbanOpen; closeAllViews(); setKanbanOpen(next); }} label="Kanban">
+                <Columns3 className="h-4 w-4" />
+              </ToolbarButton>
+            )}
+            {features.data_sources && (
+              <ToolbarButton onClick={() => { const next = !dataOpen; closeAllViews(); setDataOpen(next); }} label="Data sources">
+                <Database className="h-4 w-4" />
+              </ToolbarButton>
+            )}
             <HostToolbarActions />
             {!themeLocked && (
               <ToolbarButton onClick={toggleTheme} label={theme === "dark" ? "Light mode" : "Dark mode"}>
@@ -845,12 +867,13 @@ const handleSpaceSwitch = useCallback(() => {
               />
             ) : showWelcomeStart ? (
               <WelcomeScreen
+                branding={branding}
                 bindings={bindings}
                 onNewPage={() => { setNewFolder(undefined); setNewOpen(true); }}
                 onSearch={() => setSearchOpen(true)}
-                onGraph={() => setGraphOpen(true)}
-                onData={() => setDataOpen(true)}
-                onBases={() => setBasesOpen(true)}
+                onGraph={features.graph ? () => setGraphOpen(true) : undefined}
+                onData={features.data_sources ? () => setDataOpen(true) : undefined}
+                onBases={features.bases ? () => setBasesOpen(true) : undefined}
                 onTimeline={() => setTimelineOpen(true)}
               />
             ) : (
@@ -898,28 +921,34 @@ const handleSpaceSwitch = useCallback(() => {
 /* ── Welcome Screen ── */
 
 function WelcomeScreen({
+  branding,
   bindings,
   onNewPage,
   onSearch,
   onData,
 }: {
+  branding: { name: string; logoUrl: string; welcomeTitle: string; welcomeMessage: string; hasCustomLogo: boolean };
   bindings: Record<KeybindingAction, string>;
   onNewPage: () => void;
   onSearch: () => void;
   onGraph?: () => void;
-  onData: () => void;
+  onData?: () => void;
   onBases?: () => void;
   onTimeline?: () => void;
 }) {
   return (
     <div className="grid place-items-center h-full text-muted-foreground">
       <div className="text-center max-w-md">
-        <img src="/kiwi-mascot.png" alt="KiwiFS" className="h-24 mx-auto mb-4" />
+        {branding.hasCustomLogo ? (
+          <img src={branding.logoUrl} alt={branding.name} className="h-24 mx-auto mb-4 object-contain" />
+        ) : (
+          <img src="/kiwi-mascot.png" alt={branding.name} className="h-24 mx-auto mb-4" />
+        )}
         <div className="text-2xl font-semibold mb-2 text-foreground">
-          Welcome to KiwiFS
+          {branding.welcomeTitle}
         </div>
         <div className="text-sm mb-6">
-          Your knowledge base is ready. Get started by creating a page or exploring existing content.
+          {branding.welcomeMessage}
         </div>
         <div className="flex flex-col gap-2 items-center">
           <Button onClick={onNewPage} className="gap-2">
@@ -933,10 +962,12 @@ function WelcomeScreen({
               {formatChordDisplay(bindings.search)}
             </kbd>
           </Button>
-          <Button variant="ghost" onClick={onData} className="gap-2 text-muted-foreground">
-            <Database className="h-4 w-4" />
-            Import from a source
-          </Button>
+          {onData && (
+            <Button variant="ghost" onClick={onData} className="gap-2 text-muted-foreground">
+              <Database className="h-4 w-4" />
+              Import from a source
+            </Button>
+          )}
         </div>
         <div className="mt-8 text-xs space-y-1">
           <div><kbd className="bg-muted px-1.5 py-0.5 rounded font-mono">{formatChordDisplay(bindings.new_page)}</kbd> New page</div>

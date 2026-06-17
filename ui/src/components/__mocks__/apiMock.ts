@@ -312,6 +312,16 @@ function createMockFetch(overrides: MockOverrides = {}) {
           themeLocked: false,
           startPage: "welcome",
           sidebar: { pinned: [], hidden: [], sections: [] },
+          branding: {},
+          features: {
+            graph: true,
+            kanban: true,
+            canvas: true,
+            whiteboard: true,
+            timeline: true,
+            bases: true,
+            data_sources: true,
+          },
         });
       }
 

@@ -208,8 +208,77 @@ type UIConfig struct {
 	Keybindings     map[string]string `toml:"keybindings"`      // inline [ui.keybindings] overrides
 	// StartPage controls the first-load landing view when no deep link is present.
 	// "welcome" (default) | "recent" | "dashboard" | a file path such as "index.md".
-	StartPage string          `toml:"start_page"`
+	StartPage string           `toml:"start_page"`
 	Sidebar   UISidebarConfig `toml:"sidebar"`
+	Branding  BrandingConfig  `toml:"branding"`
+	Features  UIFeaturesConfig `toml:"features"`
+}
+
+// BrandingConfig controls white-label app name, logo, favicon, and welcome copy.
+type BrandingConfig struct {
+	Name           string `toml:"name"`
+	LogoURL        string `toml:"logo_url"`
+	FaviconURL     string `toml:"favicon_url"`
+	WelcomeTitle   string `toml:"welcome_title"`
+	WelcomeMessage string `toml:"welcome_message"`
+}
+
+const (
+	DefaultBrandingName           = "KiwiFS"
+	DefaultBrandingLogoURL        = "/kiwifs.png"
+	DefaultBrandingFaviconURL     = "/favicon.svg"
+	DefaultBrandingWelcomeTitle   = "Welcome to KiwiFS"
+	DefaultBrandingWelcomeMessage = "Your knowledge base is ready. Get started by creating a page or exploring existing content."
+)
+
+func (b BrandingConfig) ResolvedName() string {
+	if b.Name != "" {
+		return b.Name
+	}
+	return DefaultBrandingName
+}
+
+func (b BrandingConfig) ResolvedLogoURL() string {
+	if b.LogoURL != "" {
+		return ResolveBrandingAssetURL(b.LogoURL)
+	}
+	return DefaultBrandingLogoURL
+}
+
+func (b BrandingConfig) ResolvedFaviconURL() string {
+	if b.FaviconURL != "" {
+		return ResolveBrandingAssetURL(b.FaviconURL)
+	}
+	return DefaultBrandingFaviconURL
+}
+
+func (b BrandingConfig) ResolvedWelcomeTitle() string {
+	if b.WelcomeTitle != "" {
+		return b.WelcomeTitle
+	}
+	return DefaultBrandingWelcomeTitle
+}
+
+func (b BrandingConfig) ResolvedWelcomeMessage() string {
+	if b.WelcomeMessage != "" {
+		return b.WelcomeMessage
+	}
+	return DefaultBrandingWelcomeMessage
+}
+
+func (b BrandingConfig) HasCustomLogo() bool {
+	return b.LogoURL != ""
+}
+
+// ResolveBrandingAssetURL maps workspace-relative paths to /raw/ URLs.
+func ResolveBrandingAssetURL(u string) string {
+	if u == "" {
+		return ""
+	}
+	if strings.HasPrefix(u, "/") || strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+		return u
+	}
+	return "/raw/" + strings.TrimPrefix(u, "./")
 }
 
 // UISidebarConfig controls workspace sidebar layout: pinned pages, hidden

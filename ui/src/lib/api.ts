@@ -588,6 +588,17 @@ export const api = {
       hidden: string[];
       sections: { label: string; paths: string[] }[];
     };
+    branding?: {
+      name?: string;
+      logoUrl?: string;
+      faviconUrl?: string;
+      welcomeTitle?: string;
+      welcomeMessage?: string;
+    };
+    features?: Partial<Record<
+      "graph" | "kanban" | "canvas" | "whiteboard" | "timeline" | "bases" | "data_sources",
+      boolean
+    >>;
   }> {
     return request(`${kiwiBase()}/ui-config`);
   },
