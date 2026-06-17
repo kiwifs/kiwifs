@@ -538,6 +538,7 @@ func (s *Server) setupRoutes() {
 	api.DELETE("/comments/:id", h.DeleteComment)
 	api.PATCH("/comments/:id", h.ResolveComment)
 	api.GET("/theme", h.GetTheme)
+	api.GET("/theme/presets", h.GetThemePresets)
 	api.PUT("/theme", h.PutTheme)
 	api.GET("/custom.css", h.GetCustomCSS)
 	api.GET("/keybindings", h.GetKeybindings)

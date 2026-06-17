@@ -5,9 +5,24 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { applyKiwiTheme, type KiwiThemeOverrides, type KiwiTokens } from "../lib/kiwiTheme";
 import { getCustomTheme, setCustomTheme } from "../hooks/useTheme";
 import { api } from "../lib/api";
+import {
+  builtinPresets,
+  findPreset,
+  mergeThemePresets,
+  presetToOverrides,
+  type ThemePreset,
+  type ThemePresetLoadError,
+} from "../themes";
 
 interface TokenGroup {
   label: string;
@@ -269,13 +284,59 @@ interface Props {
   onClose: () => void;
   onPresetReset: () => void;
   embedded?: boolean;
+  presets?: ThemePreset[];
+  presetErrors?: ThemePresetLoadError[];
+  activePreset?: string;
+  onSelectPreset?: (name: string) => void;
 }
 
-export function KiwiThemeEditor({ onClose, onPresetReset, embedded }: Props) {
+export function KiwiThemeEditor({
+  onClose,
+  onPresetReset,
+  embedded,
+  presets: presetsProp,
+  presetErrors: presetErrorsProp,
+  activePreset,
+  onSelectPreset,
+}: Props) {
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const [lightTokens, setLightTokens] = useState<KiwiTokens>({});
   const [darkTokens, setDarkTokens] = useState<KiwiTokens>({});
+  const [availablePresets, setAvailablePresets] = useState<ThemePreset[]>(presetsProp || builtinPresets);
+  const [presetErrors, setPresetErrors] = useState<ThemePresetLoadError[]>(presetErrorsProp || []);
+  const [selectedPreset, setSelectedPreset] = useState(activePreset || "");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (presetsProp) {
+      setAvailablePresets(presetsProp);
+    }
+  }, [presetsProp]);
+
+  useEffect(() => {
+    if (presetErrorsProp) {
+      setPresetErrors(presetErrorsProp);
+    }
+  }, [presetErrorsProp]);
+
+  useEffect(() => {
+    if (activePreset) {
+      setSelectedPreset(activePreset);
+    }
+  }, [activePreset]);
+
+  useEffect(() => {
+    if (presetsProp) return;
+    api.getThemePresets().then((res) => {
+      setAvailablePresets(
+        mergeThemePresets(res.presets, res.allowed ? res.builtin : undefined),
+      );
+      setPresetErrors(res.errors || []);
+    }).catch(() => {
+      setAvailablePresets(builtinPresets);
+      setPresetErrors([]);
+    });
+  }, [presetsProp]);
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -385,6 +446,20 @@ export function KiwiThemeEditor({ onClose, onPresetReset, embedded }: Props) {
     onClose();
   }, [onPresetReset, onClose]);
 
+  const handlePresetSelect = useCallback(
+    (name: string) => {
+      setSelectedPreset(name);
+      setCustomTheme(null);
+      const found = findPreset(name, availablePresets);
+      if (!found) return;
+      setLightTokens(found.light);
+      setDarkTokens(found.dark);
+      applyKiwiTheme(presetToOverrides(found));
+      onSelectPreset?.(name);
+    },
+    [availablePresets, onSelectPreset],
+  );
+
   return (
     <div className="h-full flex flex-col">
       {!embedded && (
@@ -400,6 +475,34 @@ export function KiwiThemeEditor({ onClose, onPresetReset, embedded }: Props) {
       )}
 
       <div className={`flex-1 overflow-auto ${embedded ? "p-0 pt-2" : "p-4 sm:p-6"} space-y-6 kiwi-scroll`}>
+        <div className="space-y-2">
+          <Label className="text-sm">Preset</Label>
+          <Select value={selectedPreset} onValueChange={handlePresetSelect}>
+            <SelectTrigger className="w-full sm:w-72">
+              <SelectValue placeholder="Choose a preset" />
+            </SelectTrigger>
+            <SelectContent>
+              {availablePresets.map((p) => (
+                <SelectItem key={p.id} value={p.name}>
+                  {p.name}
+                  {p.source === "workspace" ? " (workspace)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {presetErrors.length > 0 && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive space-y-1">
+              {presetErrors.map((err) => (
+                <div key={err.file}>
+                  <span className="font-mono">{err.file}</span>: {err.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="h-px bg-border" />
+
         {TOKEN_GROUPS.map((group) => (
           <div key={group.label}>
             <h3 className="text-sm font-medium text-muted-foreground mb-3">

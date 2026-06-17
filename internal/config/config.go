@@ -203,6 +203,7 @@ func (b BackupConfig) IsRebaseBeforePush() bool {
 // UIConfig controls frontend behaviour. Toggled via [ui] in config.toml.
 type UIConfig struct {
 	ThemeLocked     bool              `toml:"theme_locked"`
+	Theme           UIThemeConfig     `toml:"theme"`
 	CustomCSS       string            `toml:"custom_css"`       // relative path, default .kiwi/custom.css
 	KeybindingsFile string            `toml:"keybindings_file"` // relative path, default .kiwi/keybindings.json
 	Keybindings     map[string]string `toml:"keybindings"`      // inline [ui.keybindings] overrides
@@ -212,6 +213,12 @@ type UIConfig struct {
 	Sidebar   UISidebarConfig `toml:"sidebar"`
 	Branding  BrandingConfig  `toml:"branding"`
 	Features  UIFeaturesConfig `toml:"features"`
+}
+
+// UIThemeConfig controls workspace theme presets via [ui.theme] in config.toml.
+type UIThemeConfig struct {
+	PresetsDir     string   `toml:"presets_dir"`     // relative path, default .kiwi/themes
+	AllowedPresets []string `toml:"allowed_presets"` // optional slug allowlist; empty = all presets
 }
 
 // BrandingConfig controls white-label app name, logo, favicon, and welcome copy.

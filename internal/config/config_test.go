@@ -497,3 +497,25 @@ func TestUIConfigSidebarResolvedSectionsSkipsEmptyLabels(t *testing.T) {
 		t.Fatalf("sections = %+v", sections)
 	}
 }
+
+func TestUIConfigThemePresets(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[ui.theme]
+presets_dir = ".kiwi/themes/"
+allowed_presets = ["default", "corporate-light", "corporate-dark"]
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.UI.Theme.PresetsDir != ".kiwi/themes/" {
+		t.Fatalf("presets_dir = %q", cfg.UI.Theme.PresetsDir)
+	}
+	if len(cfg.UI.Theme.AllowedPresets) != 3 {
+		t.Fatalf("allowed_presets = %+v", cfg.UI.Theme.AllowedPresets)
+	}
+}

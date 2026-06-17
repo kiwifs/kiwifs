@@ -325,6 +325,14 @@ function createMockFetch(overrides: MockOverrides = {}) {
         });
       }
 
+      if (url.includes("/theme/presets") && method === "GET") {
+        return jsonResponse({
+          presets: [],
+          builtin: ["kiwi", "neutral", "ocean", "sunset", "forest"],
+          errors: [],
+        });
+      }
+
       if (url.includes("/theme") && method === "GET") {
         return jsonResponse({});
       }
