@@ -40,8 +40,9 @@ type Entry struct {
 // Target is the string inside [[...]] — unresolved — so callers can apply
 // their own path-resolution rules (exact/stem/prefix).
 type Edge struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
+	Source   string `json:"source"`
+	Target   string `json:"target"`
+	Relation string `json:"relation,omitempty"`
 }
 
 // Linker manages the reverse index of wiki links. Engines that don't support
@@ -283,46 +284,70 @@ func findClosingBackticks(data []byte, n int) int {
 	return -1
 }
 
-// ExtractForIndex returns wiki links from the body plus contradicts from frontmatter.
-func ExtractForIndex(content []byte) []Link {
+// DefaultTypedLinkFields is used when [links] typed_fields is unset in config.
+func DefaultTypedLinkFields() []string {
+	return []string{RelationContradicts}
+}
+
+// ExtractForIndex returns wiki links from the body plus configured typed
+// frontmatter fields.
+func ExtractForIndex(content []byte, typedFields []string) []Link {
+	if len(typedFields) == 0 {
+		typedFields = DefaultTypedLinkFields()
+	}
 	var out []Link
 	for _, t := range Unique(Extract(content)) {
 		out = append(out, Link{Target: t})
 	}
 	fm, _ := markdown.Frontmatter(content)
-	for _, t := range ExtractContradicts(fm) {
-		out = append(out, Link{Target: t, Relation: RelationContradicts})
-	}
+	out = append(out, ExtractTypedFields(fm, typedFields)...)
 	return UniqueLinks(out)
 }
 
-// ExtractContradicts reads the contradicts frontmatter field (string or sequence).
-// Values may be plain paths or [[wiki-link]] syntax; leading slashes are stripped.
-func ExtractContradicts(fm map[string]any) []string {
-	if fm == nil {
+// ExtractTypedFields reads wiki-link values from the listed frontmatter fields.
+func ExtractTypedFields(fm map[string]any, fields []string) []Link {
+	if fm == nil || len(fields) == 0 {
 		return nil
 	}
-	raw, ok := fm["contradicts"]
+	var out []Link
+	for _, field := range fields {
+		if field == "" {
+			continue
+		}
+		for _, t := range ExtractTypedField(fm, field) {
+			out = append(out, Link{Target: t, Relation: field})
+		}
+	}
+	return out
+}
+
+// ExtractTypedField reads one frontmatter field (string or sequence).
+// Values may be plain paths or [[wiki-link]] syntax; leading slashes are stripped.
+func ExtractTypedField(fm map[string]any, field string) []string {
+	if fm == nil || field == "" {
+		return nil
+	}
+	raw, ok := fm[field]
 	if !ok || raw == nil {
 		return nil
 	}
 	var paths []string
 	switch v := raw.(type) {
 	case string:
-		if t := normalizeContradictTarget(v); t != "" {
+		if t := normalizeTypedLinkTarget(v); t != "" {
 			paths = append(paths, t)
 		}
 	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
-				if t := normalizeContradictTarget(s); t != "" {
+				if t := normalizeTypedLinkTarget(s); t != "" {
 					paths = append(paths, t)
 				}
 			}
 		}
 	case []string:
 		for _, s := range v {
-			if t := normalizeContradictTarget(s); t != "" {
+			if t := normalizeTypedLinkTarget(s); t != "" {
 				paths = append(paths, t)
 			}
 		}
@@ -330,7 +355,12 @@ func ExtractContradicts(fm map[string]any) []string {
 	return paths
 }
 
-func normalizeContradictTarget(s string) string {
+// ExtractContradicts reads the contradicts frontmatter field.
+func ExtractContradicts(fm map[string]any) []string {
+	return ExtractTypedField(fm, RelationContradicts)
+}
+
+func normalizeTypedLinkTarget(s string) string {
 	s = strings.TrimSpace(s)
 	if strings.HasPrefix(s, "[[") && strings.HasSuffix(s, "]]") {
 		inner := strings.TrimSuffix(strings.TrimPrefix(s, "[["), "]]")

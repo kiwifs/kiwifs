@@ -31,6 +31,7 @@ type Config struct {
 	Drafts     DraftsConfig     `toml:"drafts"`
 	Audit      AuditConfig      `toml:"audit"`
 	Import     ImportConfig     `toml:"import"`
+	Links      LinksConfig      `toml:"links"`
 	// Space holds per-space settings (visibility, etc.) loaded from
 	// the space's own .kiwi/config.toml [space] section.
 	Space SpaceSettingsConfig `toml:"space"`
@@ -49,6 +50,20 @@ type Config struct {
 // B.3 — Audit log config.
 type AuditConfig struct {
 	Enabled bool `toml:"enabled"` // default false
+}
+
+// LinksConfig controls typed frontmatter fields indexed as wiki links.
+type LinksConfig struct {
+	TypedFields []string `toml:"typed_fields"`
+}
+
+// TypedLinkFields returns configured typed-link frontmatter fields.
+// When unset, defaults to ["contradicts"] for backward compatibility.
+func (l LinksConfig) TypedLinkFields() []string {
+	if len(l.TypedFields) > 0 {
+		return l.TypedFields
+	}
+	return []string{"contradicts"}
 }
 
 // ImportConfig controls the data import subsystem — Airbyte integration,

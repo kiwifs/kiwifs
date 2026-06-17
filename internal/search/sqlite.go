@@ -118,6 +118,7 @@ type SQLite struct {
 	readDB               *sql.DB           // MaxOpenConns=N — read-only snapshot reads
 	computedFields       bool              // when true, _word_count etc. are injected into frontmatter
 	customComputedFields map[string]string // user-defined computed fields: key → expression
+	typedLinkFields      []string          // frontmatter fields indexed as typed links
 }
 
 // NewSQLite opens (or creates) the FTS5 index at <root>/.kiwi/state/search.db.
@@ -127,6 +128,10 @@ type SQLite struct {
 // customComputed maps user-defined field names to expressions evaluated at
 // index time (e.g. "quality_score" → "(word_count > 100) * 0.3").
 func NewSQLite(root string, store storage.Storage, customComputed ...map[string]string) (*SQLite, error) {
+	return NewSQLiteWithTypedFields(root, store, nil, customComputed...)
+}
+
+func NewSQLiteWithTypedFields(root string, store storage.Storage, typedLinkFields []string, customComputed ...map[string]string) (*SQLite, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root: %w", err)
@@ -172,7 +177,10 @@ func NewSQLite(root string, store storage.Storage, customComputed ...map[string]
 	if len(customComputed) > 0 && customComputed[0] != nil {
 		ccf = customComputed[0]
 	}
-	s := &SQLite{root: abs, store: store, writeDB: writeDB, readDB: readDB, computedFields: true, customComputedFields: ccf}
+	if len(typedLinkFields) == 0 {
+		typedLinkFields = links.DefaultTypedLinkFields()
+	}
+	s := &SQLite{root: abs, store: store, writeDB: writeDB, readDB: readDB, computedFields: true, customComputedFields: ccf, typedLinkFields: typedLinkFields}
 
 	// Construction has no caller ctx — the schema bootstrap and initial
 	// reindex run with Background. Production calls pass a real ctx.
@@ -1006,8 +1014,8 @@ func (s *SQLite) Close() error {
 
 // IndexLinks replaces every link row emitted by `source`. Atomic: either all
 // old rows for this source are gone and all new rows are in, or neither.
-// Wiki links use an empty relation; contradicts frontmatter is indexed
-// separately via indexContradicts during IndexMeta.
+// Wiki links use an empty relation; typed frontmatter fields are indexed
+// separately via indexTypedFields during IndexMeta.
 func (s *SQLite) IndexLinks(ctx context.Context, source string, targets []string) error {
 	tx, err := s.writeDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -1033,25 +1041,25 @@ func (s *SQLite) IndexLinks(ctx context.Context, source string, targets []string
 	return tx.Commit()
 }
 
-func (s *SQLite) indexContradicts(ctx context.Context, source string, fm map[string]any) error {
-	targets := links.ExtractContradicts(fm)
+func (s *SQLite) indexTypedFields(ctx context.Context, source string, fm map[string]any) error {
 	tx, err := s.writeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM links WHERE source = ? AND relation = ?`, source, links.RelationContradicts); err != nil {
+	stmt, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO links(source, target, target_lc, relation) VALUES (?, ?, ?, ?)`)
+	if err != nil {
 		return err
 	}
-	if len(targets) > 0 {
-		stmt, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO links(source, target, target_lc, relation) VALUES (?, ?, ?, ?)`)
-		if err != nil {
+	defer stmt.Close()
+
+	for _, field := range s.typedLinkFields {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM links WHERE source = ? AND relation = ?`, source, field); err != nil {
 			return err
 		}
-		defer stmt.Close()
-		for _, t := range links.Unique(targets) {
-			if _, err := stmt.ExecContext(ctx, source, t, strings.ToLower(t), links.RelationContradicts); err != nil {
+		for _, t := range links.Unique(links.ExtractTypedField(fm, field)) {
+			if _, err := stmt.ExecContext(ctx, source, t, strings.ToLower(t), field); err != nil {
 				return err
 			}
 		}
@@ -1153,7 +1161,7 @@ func (s *SQLite) IndexMeta(ctx context.Context, path string, content []byte) err
 		}
 	}
 
-	if err := s.indexContradicts(ctx, path, fm); err != nil {
+	if err := s.indexTypedFields(ctx, path, fm); err != nil {
 		return err
 	}
 
@@ -1390,18 +1398,18 @@ func toJSONSafe(v any) any {
 // by the graph view, which resolves target strings to paths client-side via
 // the same fuzzy rules used for in-page wiki-link rendering.
 func (s *SQLite) AllEdges(ctx context.Context) ([]links.Edge, error) {
-	rows, err := s.readDB.QueryContext(ctx, `SELECT source, target FROM links ORDER BY source, target`)
+	rows, err := s.readDB.QueryContext(ctx, `SELECT source, target, relation FROM links ORDER BY source, target, relation`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []links.Edge
 	for rows.Next() {
-		var src, tgt string
-		if err := rows.Scan(&src, &tgt); err != nil {
+		var src, tgt, rel string
+		if err := rows.Scan(&src, &tgt, &rel); err != nil {
 			return nil, err
 		}
-		out = append(out, links.Edge{Source: src, Target: tgt})
+		out = append(out, links.Edge{Source: src, Target: tgt, Relation: rel})
 	}
 	return out, rows.Err()
 }
@@ -1930,9 +1938,11 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 			if fm == nil {
 				fm = map[string]any{}
 			}
-			for _, t := range links.Unique(links.ExtractContradicts(fm)) {
-				if _, err := linkStmt.ExecContext(ctx, e.Path, t, strings.ToLower(t), links.RelationContradicts); err != nil {
-					return fmt.Errorf("insert contradicts link %s→%s: %w", e.Path, t, err)
+			for _, field := range s.typedLinkFields {
+				for _, t := range links.Unique(links.ExtractTypedField(fm, field)) {
+					if _, err := linkStmt.ExecContext(ctx, e.Path, t, strings.ToLower(t), field); err != nil {
+						return fmt.Errorf("insert typed link %s→%s (%s): %w", e.Path, t, field, err)
+					}
 				}
 			}
 			if s.computedFields {

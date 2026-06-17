@@ -891,3 +891,141 @@ memory_kind: semantic
 		t.Fatalf("relation: got %q want contradicts", backlinks[0].Relation)
 	}
 }
+
+func TestIndexMetaTypedFieldsBacklinks(t *testing.T) {
+	s := newTestSQLite(t)
+	s.typedLinkFields = []string{"contradicts", "cites", "supersedes"}
+
+	pageA := []byte("---\ncites: pages/b.md\nsupersedes: \"[[pages/c.md]]\"\n---\n# A\n")
+	pageB := []byte("---\n---\n# B\n")
+	pageC := []byte("---\n---\n# C\n")
+
+	if err := s.IndexMeta(ctxBG, "pages/a.md", pageA); err != nil {
+		t.Fatalf("IndexMeta a: %v", err)
+	}
+	if err := s.IndexMeta(ctxBG, "pages/b.md", pageB); err != nil {
+		t.Fatalf("IndexMeta b: %v", err)
+	}
+	if err := s.IndexMeta(ctxBG, "pages/c.md", pageC); err != nil {
+		t.Fatalf("IndexMeta c: %v", err)
+	}
+
+	backlinks, err := s.Backlinks(ctxBG, "pages/b.md")
+	if err != nil {
+		t.Fatalf("Backlinks b: %v", err)
+	}
+	if len(backlinks) != 1 || backlinks[0].Relation != "cites" {
+		t.Fatalf("cites backlink: %+v", backlinks)
+	}
+
+	backlinks, err = s.Backlinks(ctxBG, "pages/c.md")
+	if err != nil {
+		t.Fatalf("Backlinks c: %v", err)
+	}
+	if len(backlinks) != 1 || backlinks[0].Relation != "supersedes" {
+		t.Fatalf("supersedes backlink: %+v", backlinks)
+	}
+}
+
+func TestIndexMetaClearsTypedField(t *testing.T) {
+	s := newTestSQLite(t)
+	s.typedLinkFields = []string{"cites"}
+
+	withCites := []byte("---\ncites: pages/b.md\n---\n# A\n")
+	withoutCites := []byte("---\n---\n# A\n")
+
+	if err := s.IndexMeta(ctxBG, "pages/a.md", withCites); err != nil {
+		t.Fatalf("IndexMeta with cites: %v", err)
+	}
+	if err := s.IndexMeta(ctxBG, "pages/b.md", []byte("---\n---\n# B\n")); err != nil {
+		t.Fatalf("IndexMeta b: %v", err)
+	}
+
+	backlinks, err := s.Backlinks(ctxBG, "pages/b.md")
+	if err != nil {
+		t.Fatalf("Backlinks: %v", err)
+	}
+	if len(backlinks) != 1 || backlinks[0].Relation != "cites" {
+		t.Fatalf("expected cites backlink, got %+v", backlinks)
+	}
+
+	if err := s.IndexMeta(ctxBG, "pages/a.md", withoutCites); err != nil {
+		t.Fatalf("IndexMeta without cites: %v", err)
+	}
+	backlinks, err = s.Backlinks(ctxBG, "pages/b.md")
+	if err != nil {
+		t.Fatalf("Backlinks after clear: %v", err)
+	}
+	if len(backlinks) != 0 {
+		t.Fatalf("cites should be cleared, got %+v", backlinks)
+	}
+}
+
+func TestAllEdgesIncludesTypedRelations(t *testing.T) {
+	s := newTestSQLite(t)
+	s.typedLinkFields = []string{"cites"}
+
+	content := []byte("---\ncites: pages/b.md\n---\nSee [[pages/c.md]].\n")
+	if err := s.IndexLinks(ctxBG, "pages/a.md", links.Extract(content)); err != nil {
+		t.Fatalf("IndexLinks: %v", err)
+	}
+	if err := s.IndexMeta(ctxBG, "pages/a.md", content); err != nil {
+		t.Fatalf("IndexMeta: %v", err)
+	}
+
+	edges, err := s.AllEdges(ctxBG)
+	if err != nil {
+		t.Fatalf("AllEdges: %v", err)
+	}
+	relations := map[string]string{}
+	for _, e := range edges {
+		if e.Source == "pages/a.md" {
+			relations[e.Target] = e.Relation
+		}
+	}
+	if relations["pages/c.md"] != "" {
+		t.Fatalf("wiki edge relation: %+v", relations)
+	}
+	if relations["pages/b.md"] != "cites" {
+		t.Fatalf("typed edge relation: %+v", relations)
+	}
+}
+
+func TestReindexTypedFieldsBacklinks(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewLocal(dir)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+
+	pageA := []byte("---\ncites: pages/b.md\n---\n# A cites B\n")
+	pageB := []byte("---\n---\n# B\n")
+	if err := store.Write(ctxBG, "pages/a.md", pageA); err != nil {
+		t.Fatalf("write a: %v", err)
+	}
+	if err := store.Write(ctxBG, "pages/b.md", pageB); err != nil {
+		t.Fatalf("write b: %v", err)
+	}
+
+	s, err := NewSQLiteWithTypedFields(dir, store, []string{"cites"})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer s.Close()
+
+	count, err := s.Reindex(ctxBG)
+	if err != nil {
+		t.Fatalf("Reindex: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("reindexed %d files, want 2", count)
+	}
+
+	backlinks, err := s.Backlinks(ctxBG, "pages/b.md")
+	if err != nil {
+		t.Fatalf("Backlinks: %v", err)
+	}
+	if len(backlinks) != 1 || backlinks[0].Relation != "cites" {
+		t.Fatalf("backlinks: %+v", backlinks)
+	}
+}

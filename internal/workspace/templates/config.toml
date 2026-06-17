@@ -34,3 +34,6 @@ strategy = "git"
 [auth]
 type = "none"
 # type = "apikey" / "perspace" / "oidc" ...
+
+# [links]
+# typed_fields = ["supersedes", "superseded_by", "variant_of", "cites", "extends", "services", "contradicts"]

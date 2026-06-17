@@ -93,7 +93,7 @@ contradicts: pages/b.md
 ---
 See [[foo]] and [[bar|label]].
 `)
-	got := ExtractForIndex(content)
+	got := ExtractForIndex(content, nil)
 	want := []Link{
 		{Target: "foo"},
 		{Target: "bar"},
@@ -629,5 +629,74 @@ func BenchmarkResolverResolve(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r.Resolve(ctx, content, "https://wiki.co")
+	}
+}
+
+func TestExtractTypedField(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, field string
+		fm          map[string]any
+		want        []string
+	}{
+		{
+			name: "string wiki link", field: "cites",
+			fm: map[string]any{"cites": "[[pages/ref.md]]"},
+			want: []string{"pages/ref.md"},
+		},
+		{
+			name: "array values", field: "supersedes",
+			fm: map[string]any{"supersedes": []any{"pages/a.md", "[[pages/b.md]]"}},
+			want: []string{"pages/a.md", "pages/b.md"},
+		},
+		{
+			name: "missing field", field: "extends",
+			fm: map[string]any{"title": "x"},
+			want: nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ExtractTypedField(tc.fm, tc.field)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractTypedFieldsMultipleRelations(t *testing.T) {
+	t.Parallel()
+	fm := map[string]any{
+		"cites":       "pages/a.md",
+		"extends":     []any{"pages/b.md"},
+		"contradicts": "pages/c.md",
+	}
+	got := ExtractTypedFields(fm, []string{"cites", "extends", "contradicts"})
+	want := []Link{
+		{Target: "pages/a.md", Relation: "cites"},
+		{Target: "pages/b.md", Relation: "extends"},
+		{Target: "pages/c.md", Relation: "contradicts"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+}
+
+func TestExtractForIndexRespectsTypedFieldsConfig(t *testing.T) {
+	t.Parallel()
+	content := []byte(`---
+cites: pages/b.md
+contradicts: pages/c.md
+---
+See [[foo]].
+`)
+	got := ExtractForIndex(content, []string{"cites"})
+	want := []Link{
+		{Target: "foo"},
+		{Target: "pages/b.md", Relation: "cites"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v want %v", got, want)
 	}
 }
