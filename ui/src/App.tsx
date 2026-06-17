@@ -46,11 +46,6 @@ import { formatChordDisplay, matchBoundAction, type KeybindingAction } from "./l
 import { resolveOverlayDismiss } from "./lib/overlayDismiss";
 import { hasDeepLinkPath, resolveDashboardPath, resolveStartPage, shouldApplyStartPage } from "./lib/startPage";
 import { useUIConfigStore } from "./lib/uiConfigStore";
-import {
-  isViewRouteAllowed,
-  type UIFeatureKey,
-  viewFeatureFromPathname,
-} from "./lib/uiFeatures";
 import { Button } from "./components/ui/button";
 import {
   Tooltip,
