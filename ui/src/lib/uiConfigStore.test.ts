@@ -14,7 +14,7 @@ describe("uiConfigStore", () => {
   });
 
   it("stores themeLocked from ui-config when true", async () => {
-    vi.spyOn(api, "getUIConfig").mockResolvedValue({ themeLocked: true });
+    vi.spyOn(api, "getUIConfig").mockResolvedValue({ themeLocked: true, startPage: "welcome" });
 
     await useUIConfigStore.getState().load();
 
@@ -23,7 +23,7 @@ describe("uiConfigStore", () => {
   });
 
   it("stores themeLocked as false when ui-config returns false", async () => {
-    vi.spyOn(api, "getUIConfig").mockResolvedValue({ themeLocked: false });
+    vi.spyOn(api, "getUIConfig").mockResolvedValue({ themeLocked: false, startPage: "welcome" });
 
     await useUIConfigStore.getState().load();
 
