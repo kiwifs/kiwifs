@@ -40,7 +40,8 @@ func Handler() echo.HandlerFunc {
 	}
 
 	fileServer := http.FileServer(http.FS(assets))
-	indexBytes, _ := fs.ReadFile(assets, "index.html")
+	rawIndex, _ := fs.ReadFile(assets, "index.html")
+	indexBytes := injectBranding(rawIndex)
 
 	return func(c echo.Context) error {
 		req := c.Request()
