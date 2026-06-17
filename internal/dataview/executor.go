@@ -381,19 +381,22 @@ func compareTaskValues(left, right any, op Operator) bool {
 			return lf >= rf
 		}
 	}
-	if lt, lok := normalizeComparableTime(left); lok {
-		if rt, rok := normalizeComparableTime(right); rok {
-			switch op {
-			case OpLt:
-				return lt.Before(rt)
-			case OpGt:
-				return lt.After(rt)
-			case OpLte:
-				return !lt.After(rt)
-			case OpGte:
-				return !lt.Before(rt)
-			}
+	lt, lok := normalizeComparableTime(left)
+	rt, rok := normalizeComparableTime(right)
+	if lok && rok {
+		switch op {
+		case OpLt:
+			return lt.Before(rt)
+		case OpGt:
+			return lt.After(rt)
+		case OpLte:
+			return !lt.After(rt)
+		case OpGte:
+			return !lt.Before(rt)
 		}
+	}
+	if lok || rok {
+		return false
 	}
 	ls, rs := fmt.Sprintf("%v", left), fmt.Sprintf("%v", right)
 	cmp := strings.Compare(ls, rs)
