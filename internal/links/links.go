@@ -23,6 +23,12 @@ import (
 // RelationContradicts is the link relation for frontmatter contradicts: fields.
 const RelationContradicts = "contradicts"
 
+// RelationSupersedes is the link relation for frontmatter supersedes: fields.
+const RelationSupersedes = "supersedes"
+
+// RelationSupersededBy is the link relation for frontmatter superseded_by: fields.
+const RelationSupersededBy = "superseded_by"
+
 // validTypedFieldNameRe limits typed-link field names to safe frontmatter keys.
 // Values are bound as SQL parameters; this guards config against odd keys.
 var validTypedFieldNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
@@ -309,7 +315,7 @@ func findClosingBackticks(data []byte, n int) int {
 
 // DefaultTypedLinkFields is used when [links] typed_fields is unset in config.
 func DefaultTypedLinkFields() []string {
-	return []string{RelationContradicts}
+	return []string{RelationContradicts, RelationSupersedes, RelationSupersededBy}
 }
 
 // ExtractForIndex returns wiki links from the body plus configured typed

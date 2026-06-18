@@ -3,7 +3,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"github.com/kiwifs/kiwifs/internal/links"
 )
 
 func TestLoadExpandsEnv(t *testing.T) {
@@ -500,8 +503,9 @@ func TestUIConfigSidebarResolvedSectionsSkipsEmptyLabels(t *testing.T) {
 
 func TestLinksConfigTypedLinkFields(t *testing.T) {
 	t.Parallel()
-	if got := (LinksConfig{}).TypedLinkFields(); len(got) != 1 || got[0] != "contradicts" {
-		t.Fatalf("default: %+v", got)
+	wantDefault := links.DefaultTypedLinkFields()
+	if got := (LinksConfig{}).TypedLinkFields(); !reflect.DeepEqual(got, wantDefault) {
+		t.Fatalf("default: got %+v want %+v", got, wantDefault)
 	}
 	cfg := LinksConfig{TypedFields: []string{"cites", "extends"}}
 	if got := cfg.TypedLinkFields(); len(got) != 2 || got[0] != "cites" || got[1] != "extends" {

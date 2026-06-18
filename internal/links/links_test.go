@@ -645,6 +645,16 @@ func TestExtractTypedField(t *testing.T) {
 			want: []string{"pages/ref.md"},
 		},
 		{
+			name: "supersedes string", field: "supersedes",
+			fm: map[string]any{"supersedes": "[[pages/old.md]]"},
+			want: []string{"pages/old.md"},
+		},
+		{
+			name: "superseded_by string", field: "superseded_by",
+			fm: map[string]any{"superseded_by": "/pages/new.md"},
+			want: []string{"pages/new.md"},
+		},
+		{
 			name: "array values", field: "supersedes",
 			fm: map[string]any{"supersedes": []any{"pages/a.md", "[[pages/b.md]]"}},
 			want: []string{"pages/a.md", "pages/b.md"},

@@ -892,6 +892,231 @@ memory_kind: semantic
 	}
 }
 
+func TestIndexMetaSupersedesBacklinks(t *testing.T) {
+	s := newTestSQLite(t)
+
+	pageNew := []byte(`---
+status: accepted
+supersedes: "[[pages/adr-012.md]]"
+---
+# ADR-047
+`)
+	pageOld := []byte(`---
+status: superseded
+---
+# ADR-012
+`)
+
+	if err := s.IndexMeta(ctxBG, "pages/adr-047.md", pageNew); err != nil {
+		t.Fatalf("IndexMeta new: %v", err)
+	}
+	if err := s.IndexMeta(ctxBG, "pages/adr-012.md", pageOld); err != nil {
+		t.Fatalf("IndexMeta old: %v", err)
+	}
+
+	backlinks, err := s.Backlinks(ctxBG, "pages/adr-012.md")
+	if err != nil {
+		t.Fatalf("Backlinks: %v", err)
+	}
+	if len(backlinks) != 1 {
+		t.Fatalf("backlinks: %+v", backlinks)
+	}
+	if backlinks[0].Path != "pages/adr-047.md" {
+		t.Fatalf("source path: got %q", backlinks[0].Path)
+	}
+	if backlinks[0].Relation != links.RelationSupersedes {
+		t.Fatalf("relation: got %q want supersedes", backlinks[0].Relation)
+	}
+
+	edges, err := s.AllEdges(ctxBG)
+	if err != nil {
+		t.Fatalf("AllEdges: %v", err)
+	}
+	found := false
+	for _, e := range edges {
+		if e.Source == "pages/adr-047.md" && e.Target == "pages/adr-012.md" && e.Relation == links.RelationSupersedes {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("graph missing supersedes edge: %+v", edges)
+	}
+}
+
+func TestIndexMetaSupersededByBacklinks(t *testing.T) {
+	s := newTestSQLite(t)
+
+	pageOld := []byte(`---
+status: superseded
+superseded_by: pages/adr-047.md
+---
+# ADR-012
+`)
+	pageNew := []byte(`---
+status: accepted
+---
+# ADR-047
+`)
+
+	if err := s.IndexMeta(ctxBG, "pages/adr-012.md", pageOld); err != nil {
+		t.Fatalf("IndexMeta old: %v", err)
+	}
+	if err := s.IndexMeta(ctxBG, "pages/adr-047.md", pageNew); err != nil {
+		t.Fatalf("IndexMeta new: %v", err)
+	}
+
+	backlinks, err := s.Backlinks(ctxBG, "pages/adr-047.md")
+	if err != nil {
+		t.Fatalf("Backlinks: %v", err)
+	}
+	if len(backlinks) != 1 {
+		t.Fatalf("backlinks: %+v", backlinks)
+	}
+	if backlinks[0].Path != "pages/adr-012.md" {
+		t.Fatalf("source path: got %q", backlinks[0].Path)
+	}
+	if backlinks[0].Relation != links.RelationSupersededBy {
+		t.Fatalf("relation: got %q want superseded_by", backlinks[0].Relation)
+	}
+}
+
+func TestIndexMetaSupersedesStringAndArrayValues(t *testing.T) {
+	s := newTestSQLite(t)
+
+	pageA := []byte(`---
+supersedes: pages/b.md
+---
+# A
+`)
+	pageB := []byte(`---
+supersedes: ["pages/c.md", "[[pages/d.md]]"]
+---
+# B
+`)
+	for path, content := range map[string][]byte{
+		"pages/a.md": pageA,
+		"pages/b.md": pageB,
+		"pages/c.md": []byte("---\n---\n# C\n"),
+		"pages/d.md": []byte("---\n---\n# D\n"),
+	} {
+		if err := s.IndexMeta(ctxBG, path, content); err != nil {
+			t.Fatalf("IndexMeta %s: %v", path, err)
+		}
+	}
+
+	backlinks, err := s.Backlinks(ctxBG, "pages/b.md")
+	if err != nil {
+		t.Fatalf("Backlinks b: %v", err)
+	}
+	if len(backlinks) != 1 || backlinks[0].Relation != links.RelationSupersedes {
+		t.Fatalf("supersedes string backlink: %+v", backlinks)
+	}
+
+	for _, target := range []string{"pages/c.md", "pages/d.md"} {
+		backlinks, err = s.Backlinks(ctxBG, target)
+		if err != nil {
+			t.Fatalf("Backlinks %s: %v", target, err)
+		}
+		if len(backlinks) != 1 || backlinks[0].Relation != links.RelationSupersedes {
+			t.Fatalf("supersedes array backlink for %s: %+v", target, backlinks)
+		}
+	}
+}
+
+func TestIndexMetaClearsSupersedes(t *testing.T) {
+	s := newTestSQLite(t)
+
+	withSupersedes := []byte(`---
+supersedes: pages/b.md
+---
+# A supersedes B
+`)
+	withoutSupersedes := []byte(`---
+---
+# A no longer supersedes B
+`)
+
+	if err := s.IndexMeta(ctxBG, "pages/a.md", withSupersedes); err != nil {
+		t.Fatalf("IndexMeta with supersedes: %v", err)
+	}
+	if err := s.IndexMeta(ctxBG, "pages/b.md", []byte("---\n---\n# B\n")); err != nil {
+		t.Fatalf("IndexMeta b: %v", err)
+	}
+
+	backlinks, err := s.Backlinks(ctxBG, "pages/b.md")
+	if err != nil {
+		t.Fatalf("Backlinks: %v", err)
+	}
+	if len(backlinks) != 1 || backlinks[0].Relation != links.RelationSupersedes {
+		t.Fatalf("expected supersedes backlink, got %+v", backlinks)
+	}
+
+	if err := s.IndexMeta(ctxBG, "pages/a.md", withoutSupersedes); err != nil {
+		t.Fatalf("IndexMeta without supersedes: %v", err)
+	}
+	backlinks, err = s.Backlinks(ctxBG, "pages/b.md")
+	if err != nil {
+		t.Fatalf("Backlinks after clear: %v", err)
+	}
+	if len(backlinks) != 0 {
+		t.Fatalf("supersedes should be cleared, got %+v", backlinks)
+	}
+}
+
+func TestReindexSupersedesBacklinks(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewLocal(dir)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+
+	pageNew := []byte(`---
+supersedes: pages/adr-012.md
+---
+# ADR-047
+`)
+	pageOld := []byte(`---
+status: superseded
+---
+# ADR-012
+`)
+	if err := store.Write(ctxBG, "pages/adr-047.md", pageNew); err != nil {
+		t.Fatalf("write new: %v", err)
+	}
+	if err := store.Write(ctxBG, "pages/adr-012.md", pageOld); err != nil {
+		t.Fatalf("write old: %v", err)
+	}
+
+	s, err := NewSQLite(dir, store)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer s.Close()
+
+	count, err := s.Reindex(ctxBG)
+	if err != nil {
+		t.Fatalf("Reindex: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("reindexed %d files, want 2", count)
+	}
+
+	backlinks, err := s.Backlinks(ctxBG, "pages/adr-012.md")
+	if err != nil {
+		t.Fatalf("Backlinks: %v", err)
+	}
+	if len(backlinks) != 1 {
+		t.Fatalf("backlinks: %+v", backlinks)
+	}
+	if backlinks[0].Path != "pages/adr-047.md" {
+		t.Fatalf("source path: got %q", backlinks[0].Path)
+	}
+	if backlinks[0].Relation != links.RelationSupersedes {
+		t.Fatalf("relation: got %q want supersedes", backlinks[0].Relation)
+	}
+}
+
 func TestIndexMetaTypedFieldsBacklinks(t *testing.T) {
 	s := newTestSQLite(t)
 	s.typedLinkFields = []string{"contradicts", "cites", "supersedes"}
