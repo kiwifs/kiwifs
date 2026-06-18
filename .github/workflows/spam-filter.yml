@@ -142,21 +142,25 @@ jobs:
             // 3. Log to private tracking issue (triggers email to maintainer)
             const snippet = body.substring(0, 200).replace(/\n/g, ' ');
             const action = isComment ? 'comment' : 'issue';
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: SPAM_LOG_ISSUE,
-              body: [
-                `@${MAINTAINER} 🚨 **Spam ${action} hidden**`,
-                '',
-                `| Field | Value |`,
-                `|-------|-------|`,
-                `| Author | \`${author}\` |`,
-                `| Issue/PR | #${issueNumber} |`,
-                `| CJK ratio | ${(cjkRatio * 100).toFixed(0)}% |`,
-                `| Action taken | ${isComment ? 'Comment minimized' : 'Issue closed + locked'} + user blocked |`,
-                '',
-                `**Content preview:**`,
-                `> ${snippet}${body.length > 200 ? '...' : ''}`,
-              ].join('\n'),
-            });
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: SPAM_LOG_ISSUE,
+                body: [
+                  `@${MAINTAINER} 🚨 **Spam ${action} hidden**`,
+                  '',
+                  `| Field | Value |`,
+                  `|-------|-------|`,
+                  `| Author | \`${author}\` |`,
+                  `| Issue/PR | #${issueNumber} |`,
+                  `| CJK ratio | ${(cjkRatio * 100).toFixed(0)}% |`,
+                  `| Action taken | ${isComment ? 'Comment minimized' : 'Issue closed + locked'} + user blocked |`,
+                  '',
+                  `**Content preview:**`,
+                  `> ${snippet}${body.length > 200 ? '...' : ''}`,
+                ].join('\n'),
+              });
+            } catch (e) {
+              console.log(`Failed to log spam to #${SPAM_LOG_ISSUE}: ${e.message}`);
+            }
