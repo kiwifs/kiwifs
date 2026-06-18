@@ -67,6 +67,8 @@ type Stack struct {
 	DraftMgr            *draft.Manager
 	AuditLogger         *api.AuditLogger // B.3
 	claimCancel         context.CancelFunc
+	resyncCancel        context.CancelFunc
+	resyncDone          chan struct{}
 }
 
 func Build(name, root string, cfg *config.Config) (*Stack, error) {
@@ -446,13 +448,19 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 	pipe.DrainUncommitted(context.Background())
 
 	if rs, ok := searcher.(search.Resyncer); ok {
+		resyncCtx, resyncCancel := context.WithCancel(context.Background())
+		stack.resyncCancel = resyncCancel
+		stack.resyncDone = make(chan struct{})
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer close(stack.resyncDone)
+			ctx, cancel := context.WithTimeout(resyncCtx, 10*time.Minute)
 			defer cancel()
 			start := time.Now()
 			added, removed, rerr := rs.Resync(ctx)
 			if rerr != nil {
-				log.Printf("%ssearch: resync failed: %v", prefix, rerr)
+				if ctx.Err() == nil {
+					log.Printf("%ssearch: resync failed: %v", prefix, rerr)
+				}
 				return
 			}
 			if added == 0 && removed == 0 {
@@ -488,6 +496,12 @@ func (s *Stack) Close() error {
 		if err := s.ClaimStore.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
+	}
+	if s.resyncCancel != nil {
+		s.resyncCancel()
+	}
+	if s.resyncDone != nil {
+		<-s.resyncDone
 	}
 	// Flush async indexer before closing the searcher it writes to.
 	if s.Pipeline != nil && s.Pipeline.AsyncIdx != nil {
