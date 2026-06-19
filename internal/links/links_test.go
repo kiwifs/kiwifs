@@ -664,6 +664,21 @@ func TestExtractTypedField(t *testing.T) {
 			fm: map[string]any{"title": "x"},
 			want: nil,
 		},
+		{
+			name: "nested array from YAML [[wiki-link]]", field: "supersedes",
+			fm:   map[string]any{"supersedes": []any{[]any{"adrs/0001-use-kiwifs"}}},
+			want: []string{"adrs/0001-use-kiwifs"},
+		},
+		{
+			name: "deeply nested arrays", field: "supersedes",
+			fm:   map[string]any{"supersedes": []any{[]any{[]any{"a.md"}, "b.md"}}},
+			want: []string{"a.md", "b.md"},
+		},
+		{
+			name: "mixed nested and flat", field: "cites",
+			fm:   map[string]any{"cites": []any{"direct.md", []any{"nested.md"}}},
+			want: []string{"direct.md", "nested.md"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

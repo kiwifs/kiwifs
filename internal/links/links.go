@@ -352,6 +352,8 @@ func ExtractTypedFields(fm map[string]any, fields []string) []Link {
 
 // ExtractTypedField reads one frontmatter field (string or sequence).
 // Values may be plain paths or [[wiki-link]] syntax; leading slashes are stripped.
+// Nested arrays are flattened so that YAML values like `[[target]]` (parsed as
+// a nested sequence) are handled the same as `[target]`.
 func ExtractTypedField(fm map[string]any, field string) []string {
 	if fm == nil || field == "" {
 		return nil
@@ -361,27 +363,30 @@ func ExtractTypedField(fm map[string]any, field string) []string {
 		return nil
 	}
 	var paths []string
-	switch v := raw.(type) {
+	collectStrings(raw, &paths)
+	return paths
+}
+
+// collectStrings recursively extracts string leaves from arbitrarily nested
+// slices, normalising each via normalizeTypedLinkTarget. This handles the
+// common YAML pitfall where [[wiki-link]] is parsed as a nested array.
+func collectStrings(v any, out *[]string) {
+	switch val := v.(type) {
 	case string:
-		if t := normalizeTypedLinkTarget(v); t != "" {
-			paths = append(paths, t)
+		if t := normalizeTypedLinkTarget(val); t != "" {
+			*out = append(*out, t)
 		}
 	case []any:
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				if t := normalizeTypedLinkTarget(s); t != "" {
-					paths = append(paths, t)
-				}
-			}
+		for _, item := range val {
+			collectStrings(item, out)
 		}
 	case []string:
-		for _, s := range v {
+		for _, s := range val {
 			if t := normalizeTypedLinkTarget(s); t != "" {
-				paths = append(paths, t)
+				*out = append(*out, t)
 			}
 		}
 	}
-	return paths
 }
 
 // ExtractContradicts reads the contradicts frontmatter field.
