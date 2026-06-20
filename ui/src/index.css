@@ -373,8 +373,8 @@
 /* ─── Inline tags ─── */
 .kiwi-inline-tag {
   @apply inline-flex items-center gap-0.5 text-xs font-medium rounded-full px-2 py-0.5
-         bg-primary/10 text-primary border border-primary/20
-         cursor-pointer hover:bg-primary/20 transition-colors;
+         bg-muted text-muted-foreground border border-border
+         cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors;
 }
 
 /* ─── Search snippet highlights ─── */
