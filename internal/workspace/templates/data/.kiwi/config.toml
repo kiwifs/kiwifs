@@ -1,0 +1,7 @@
+[workspace]
+name = "Data Workspace"
+template = "data"
+
+[janitor]
+check_orphans = true
+check_broken_links = true

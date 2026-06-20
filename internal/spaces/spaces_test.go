@@ -270,17 +270,17 @@ func TestHTTPListInitTemplates(t *testing.T) {
 	if len(resp.Templates) == 0 {
 		t.Fatal("expected at least one init template")
 	}
-	foundKnowledge := false
+	foundMemory := false
 	for _, tpl := range resp.Templates {
-		if tpl.ID == "knowledge" {
-			foundKnowledge = true
+		if tpl.ID == "memory" {
+			foundMemory = true
 			if tpl.Label == "" {
-				t.Fatal("knowledge template missing label")
+				t.Fatal("memory template missing label")
 			}
 		}
 	}
-	if !foundKnowledge {
-		t.Fatalf("knowledge template not found in %v", resp.Templates)
+	if !foundMemory {
+		t.Fatalf("memory template not found in %v", resp.Templates)
 	}
 }
 

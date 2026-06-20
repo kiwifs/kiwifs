@@ -1,0 +1,11 @@
+[workspace]
+name = "Event Log"
+template = "log"
+
+[log]
+append_only = true
+partition_by = "daily"
+rotation_max_entries = 500
+
+[janitor]
+check_broken_links = true

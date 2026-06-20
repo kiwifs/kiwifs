@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Data Record",
+  "description": "Base schema for data workspace records. Extend per collection.",
+  "type": "object",
+  "required": ["title", "type"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable record title"
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Record type matching the collection"
+    },
+    "status": {
+      "type": "string",
+      "description": "Record status"
+    },
+    "created_at": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Creation date"
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Tags for filtering"
+    }
+  },
+  "additionalProperties": true
+}

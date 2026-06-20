@@ -1,0 +1,12 @@
+[workspace]
+name = "Content Site"
+template = "cms"
+
+[publish]
+public_url = "https://example.com"
+feed_title = "Site Name"
+feed_description = "Latest articles and updates"
+
+[janitor]
+check_broken_links = true
+check_orphans = true

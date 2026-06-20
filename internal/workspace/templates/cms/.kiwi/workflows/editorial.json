@@ -1,0 +1,19 @@
+{
+  "name": "editorial",
+  "description": "Content publishing editorial workflow",
+  "states": [
+    {"name": "draft", "color": "#9B59B6"},
+    {"name": "review", "color": "#F39C12"},
+    {"name": "scheduled", "color": "#3498DB"},
+    {"name": "published", "color": "#2ECC71"},
+    {"name": "archived", "color": "#95A5A6", "terminal": true}
+  ],
+  "transitions": [
+    {"from": "draft", "to": "review"},
+    {"from": "review", "to": "draft"},
+    {"from": "review", "to": "scheduled"},
+    {"from": "review", "to": "published"},
+    {"from": "scheduled", "to": "published"},
+    {"from": "published", "to": "archived"}
+  ]
+}

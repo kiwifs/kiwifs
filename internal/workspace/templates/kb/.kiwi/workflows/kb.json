@@ -1,0 +1,20 @@
+{
+  "name": "kb",
+  "description": "Knowledge base article verification workflow",
+  "states": [
+    {"name": "draft", "color": "#9B59B6"},
+    {"name": "review", "color": "#F39C12"},
+    {"name": "verified", "color": "#2ECC71"},
+    {"name": "stale", "color": "#E74C3C"},
+    {"name": "archived", "color": "#95A5A6", "terminal": true}
+  ],
+  "transitions": [
+    {"from": "draft", "to": "review"},
+    {"from": "review", "to": "draft"},
+    {"from": "review", "to": "verified"},
+    {"from": "verified", "to": "stale"},
+    {"from": "stale", "to": "review"},
+    {"from": "stale", "to": "archived"},
+    {"from": "verified", "to": "archived"}
+  ]
+}

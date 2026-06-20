@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Knowledge Base Article",
+  "type": "object",
+  "required": ["title", "type", "owner", "status", "tags", "review_interval"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable article title"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["how-to", "troubleshooting", "faq", "reference"],
+      "description": "Article type determines expected body structure"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Person responsible for article accuracy"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "verified", "stale", "archived"],
+      "description": "Current state in the verification workflow"
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1,
+      "description": "Category and topic tags for discoverability"
+    },
+    "verified_at": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date of last verification"
+    },
+    "review_interval": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 90,
+      "description": "Days before next review is due"
+    },
+    "estimated_time": {
+      "type": "string",
+      "description": "Time to complete (how-to articles)"
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["beginner", "intermediate", "advanced"],
+      "description": "Difficulty level (how-to articles)"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Issue severity (troubleshooting articles)"
+    }
+  }
+}

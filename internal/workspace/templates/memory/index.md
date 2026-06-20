@@ -1,4 +1,4 @@
-# Knowledge Base
+# Memory
 
 Auto-maintained table of contents. Updated by the agent on each operation.
 

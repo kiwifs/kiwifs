@@ -10,15 +10,15 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a knowledge directory",
-	Example: `  kiwifs init --root ~/my-knowledge
-  kiwifs init --root ~/my-knowledge --template knowledge
-  kiwifs init --root ~/my-wiki --template wiki`,
+	Example: `  kiwifs init --root ~/my-kb --template kb
+  kiwifs init --root ~/my-wiki --template wiki
+  kiwifs init --root ~/my-blog --template cms`,
 	RunE: runInit,
 }
 
 func init() {
 	initCmd.Flags().StringP("root", "r", "./knowledge", "directory to initialize")
-	initCmd.Flags().String("template", "knowledge", "template: knowledge | wiki | runbook | research | tasks | prompt-library | adr | blank")
+	initCmd.Flags().String("template", "kb", "template: kb | wiki | data | cms | memory | runbook | adr | prompt | research | log | tasks | blank")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {

@@ -24,17 +24,17 @@ func TestListInitTemplatesIncludesKnown(t *testing.T) {
 		}
 		ids[item.ID] = true
 	}
-	for _, want := range []string{"blank", "knowledge", "wiki", "research", "prompt-library", "adr"} {
+	for _, want := range []string{"blank", "memory", "wiki", "research", "prompt", "adr", "kb", "cms", "data", "log"} {
 		if !ids[want] {
 			t.Fatalf("missing template %q in %v", want, list)
 		}
 	}
 }
 
-func TestInitPromptLibraryTemplate(t *testing.T) {
+func TestInitPromptTemplate(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "prompts")
-	if err := Init(root, "prompt-library"); err != nil {
+	if err := Init(root, "prompt"); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range []string{
@@ -56,10 +56,10 @@ func TestInitPromptLibraryTemplate(t *testing.T) {
 	}
 }
 
-func TestPromptLibraryTemplateLintClean(t *testing.T) {
+func TestPromptTemplateLintClean(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "prompts-lint")
-	if err := Init(root, "prompt-library"); err != nil {
+	if err := Init(root, "prompt"); err != nil {
 		t.Fatal(err)
 	}
 	res, err := schema.Lint(root)
@@ -113,10 +113,10 @@ func TestTasksTemplateLintIssueKinds(t *testing.T) {
 	}
 }
 
-func TestInitKnowledgeTemplate(t *testing.T) {
+func TestInitMemoryTemplate(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "kb")
-	if err := Init(root, "knowledge"); err != nil {
+	if err := Init(root, "memory"); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range []string{
@@ -165,21 +165,21 @@ func TestInitTasksTemplateIncludesWorkflow(t *testing.T) {
 	}
 }
 
-func TestKnowledgeTemplateEmbedded(t *testing.T) {
+func TestTemplatesEmbedded(t *testing.T) {
 	t.Parallel()
 	paths := []string{
-		"templates/knowledge/SCHEMA.md",
-		"templates/knowledge/index.md",
-		"templates/knowledge/playbook.md",
-		"templates/prompt-library/SCHEMA.md",
-		"templates/prompt-library/index.md",
-		"templates/prompt-library/playbook.md",
-		"templates/prompt-library/.kiwi/schemas/prompt.json",
-		"templates/prompt-library/.kiwi/schemas/rubric.json",
-		"templates/prompt-library/.kiwi/config.toml",
-		"templates/prompt-library/system-prompts/code-assistant.md",
-		"templates/prompt-library/task-prompts/summarize.md",
-		"templates/prompt-library/evaluation/summarize-rubric.md",
+		"templates/memory/SCHEMA.md",
+		"templates/memory/index.md",
+		"templates/memory/playbook.md",
+		"templates/prompt/SCHEMA.md",
+		"templates/prompt/index.md",
+		"templates/prompt/playbook.md",
+		"templates/prompt/.kiwi/schemas/prompt.json",
+		"templates/prompt/.kiwi/schemas/rubric.json",
+		"templates/prompt/.kiwi/config.toml",
+		"templates/prompt/system-prompts/code-assistant.md",
+		"templates/prompt/task-prompts/summarize.md",
+		"templates/prompt/evaluation/summarize-rubric.md",
 		"templates/research/SCHEMA.md",
 		"templates/research/index.md",
 		"templates/research/playbook.md",
@@ -195,6 +195,20 @@ func TestKnowledgeTemplateEmbedded(t *testing.T) {
 		"templates/adr/.kiwi/templates/adr.md",
 		"templates/adr/.kiwi/config.toml",
 		"templates/adr/decisions/ADR-001-use-markdown-for-adrs.md",
+		"templates/kb/index.md",
+		"templates/kb/playbook.md",
+		"templates/kb/.kiwi/workflows/kb.json",
+		"templates/kb/.kiwi/schemas/article.json",
+		"templates/cms/index.md",
+		"templates/cms/playbook.md",
+		"templates/cms/.kiwi/workflows/editorial.json",
+		"templates/cms/.kiwi/schemas/blog-post.json",
+		"templates/data/index.md",
+		"templates/data/playbook.md",
+		"templates/data/.kiwi/schemas/record.json",
+		"templates/log/index.md",
+		"templates/log/playbook.md",
+		"templates/log/.kiwi/schemas/event.json",
 	}
 	for _, p := range paths {
 		if _, err := fs.Stat(templates, p); err != nil {
@@ -203,7 +217,7 @@ func TestKnowledgeTemplateEmbedded(t *testing.T) {
 	}
 }
 
-func TestInitPromptLibraryTemplateMetadata(t *testing.T) {
+func TestInitPromptTemplateMetadata(t *testing.T) {
 	t.Parallel()
 	list, err := ListInitTemplates()
 	if err != nil {
@@ -211,27 +225,27 @@ func TestInitPromptLibraryTemplateMetadata(t *testing.T) {
 	}
 	var found *InitTemplate
 	for i := range list {
-		if list[i].ID == "prompt-library" {
+		if list[i].ID == "prompt" {
 			found = &list[i]
 			break
 		}
 	}
 	if found == nil {
-		t.Fatal("prompt-library template not listed")
+		t.Fatal("prompt template not listed")
 	}
-	if found.Label != "Prompt Library" {
-		t.Fatalf("label = %q, want %q", found.Label, "Prompt Library")
+	if found.Label != "Prompt" {
+		t.Fatalf("label = %q, want %q", found.Label, "Prompt")
 	}
 	if !strings.Contains(found.Description, "prompt") {
 		t.Fatalf("description should mention prompts: %q", found.Description)
 	}
 }
 
-func TestInitPromptLibraryIntoEmptyParent(t *testing.T) {
+func TestInitPromptIntoEmptyParent(t *testing.T) {
 	t.Parallel()
 	parent := t.TempDir()
 	root := filepath.Join(parent, "nested", "prompts")
-	if err := Init(root, "prompt-library"); err != nil {
+	if err := Init(root, "prompt"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "index.md")); err != nil {
@@ -239,7 +253,7 @@ func TestInitPromptLibraryIntoEmptyParent(t *testing.T) {
 	}
 }
 
-func TestInitPromptLibraryDoesNotOverwriteExisting(t *testing.T) {
+func TestInitPromptDoesNotOverwriteExisting(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "prompts")
 	if err := os.MkdirAll(root, 0755); err != nil {
@@ -249,7 +263,7 @@ func TestInitPromptLibraryDoesNotOverwriteExisting(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "index.md"), custom, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := Init(root, "prompt-library"); err != nil {
+	if err := Init(root, "prompt"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(root, "index.md"))
@@ -300,10 +314,10 @@ func TestInitUnknownTemplate(t *testing.T) {
 	}
 }
 
-func TestPromptLibrarySchemaRejectsInvalidFrontmatter(t *testing.T) {
+func TestPromptSchemaRejectsInvalidFrontmatter(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "prompts-schema")
-	if err := Init(root, "prompt-library"); err != nil {
+	if err := Init(root, "prompt"); err != nil {
 		t.Fatal(err)
 	}
 	sv := schema.NewValidator(root)
@@ -371,10 +385,10 @@ func TestPromptLibrarySchemaRejectsInvalidFrontmatter(t *testing.T) {
 	}
 }
 
-func TestPromptLibraryConfigHasAuthGuidance(t *testing.T) {
+func TestPromptConfigHasAuthGuidance(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "prompts-config")
-	if err := Init(root, "prompt-library"); err != nil {
+	if err := Init(root, "prompt"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(root, ".kiwi/config.toml"))

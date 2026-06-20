@@ -1,7 +1,7 @@
-# Agent Playbook — Knowledge Base
+# Agent Playbook — Memory
 
-This knowledge base follows the LLM Wiki pattern. When connected
-via MCP, use these operations to maintain it.
+This memory workspace follows the LLM Wiki pattern for agent memory.
+When connected via MCP, use these operations to maintain it.
 
 ## Quick Start
 

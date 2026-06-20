@@ -14,16 +14,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestKnowledgeTemplateEmbedded(t *testing.T) {
+func TestMemoryTemplateEmbedded(t *testing.T) {
 	t.Parallel()
 	embedded := workspace.EmbeddedTemplates()
 	paths := []string{
-		"templates/knowledge/SCHEMA.md",
-		"templates/knowledge/index.md",
-		"templates/knowledge/log.md",
-		"templates/knowledge/episodes/example-episode.md",
-		"templates/knowledge/pages/getting-started.md",
-		"templates/knowledge/playbook.md",
+		"templates/memory/SCHEMA.md",
+		"templates/memory/index.md",
+		"templates/memory/log.md",
+		"templates/memory/episodes/example-episode.md",
+		"templates/memory/pages/getting-started.md",
+		"templates/memory/playbook.md",
 	}
 	for _, p := range paths {
 		if _, err := fs.Stat(embedded, p); err != nil {
@@ -32,11 +32,11 @@ func TestKnowledgeTemplateEmbedded(t *testing.T) {
 	}
 
 	absent := []string{
-		"templates/knowledge/concepts",
-		"templates/knowledge/entities",
-		"templates/knowledge/reports",
-		"templates/knowledge/decisions",
-		"templates/knowledge/welcome.md",
+		"templates/memory/concepts",
+		"templates/memory/entities",
+		"templates/memory/reports",
+		"templates/memory/decisions",
+		"templates/memory/welcome.md",
 	}
 	for _, p := range absent {
 		if _, err := fs.Stat(embedded, p); err == nil {
@@ -45,10 +45,17 @@ func TestKnowledgeTemplateEmbedded(t *testing.T) {
 	}
 }
 
-func TestMemoryTemplateRemoved(t *testing.T) {
+func TestKnowledgeTemplateAliasError(t *testing.T) {
 	t.Parallel()
-	if _, err := fs.Stat(workspace.EmbeddedTemplates(), "templates/memory/SCHEMA.md"); err == nil {
-		t.Fatal("memory template should be removed from embedded files")
+	root := filepath.Join(t.TempDir(), "kb")
+	cmd := newInitCmd()
+	cmd.SetArgs([]string{"--root", root, "--template", "knowledge"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for knowledge template alias")
+	}
+	if !strings.Contains(err.Error(), "renamed to 'memory'") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -58,16 +65,16 @@ func newInitCmd() *cobra.Command {
 		RunE: runInit,
 	}
 	cmd.Flags().StringP("root", "r", "./knowledge", "directory to initialize")
-	cmd.Flags().String("template", "knowledge", "template")
+	cmd.Flags().String("template", "kb", "template")
 	return cmd
 }
 
-func TestKnowledgeTemplateInit(t *testing.T) {
+func TestMemoryTemplateInit(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "kb")
 
 	cmd := newInitCmd()
-	cmd.SetArgs([]string{"--root", root, "--template", "knowledge"})
+	cmd.SetArgs([]string{"--root", root, "--template", "memory"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -101,11 +108,11 @@ func TestKnowledgeTemplateInit(t *testing.T) {
 	}
 }
 
-func TestKnowledgeTemplateMemorySchema(t *testing.T) {
+func TestMemoryTemplateMemorySchema(t *testing.T) {
 	t.Parallel()
 	embedded := workspace.EmbeddedTemplates()
 
-	schema, err := fs.ReadFile(embedded, "templates/knowledge/SCHEMA.md")
+	schema, err := fs.ReadFile(embedded, "templates/memory/SCHEMA.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +132,7 @@ func TestKnowledgeTemplateMemorySchema(t *testing.T) {
 		}
 	}
 
-	episode, err := fs.ReadFile(embedded, "templates/knowledge/episodes/example-episode.md")
+	episode, err := fs.ReadFile(embedded, "templates/memory/episodes/example-episode.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +147,7 @@ func TestKnowledgeTemplateMemorySchema(t *testing.T) {
 		}
 	}
 
-	gettingStarted, err := fs.ReadFile(embedded, "templates/knowledge/pages/getting-started.md")
+	gettingStarted, err := fs.ReadFile(embedded, "templates/memory/pages/getting-started.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +160,7 @@ func TestKnowledgeTemplateMemorySchema(t *testing.T) {
 
 	root := filepath.Join(t.TempDir(), "kb")
 	cmd := newInitCmd()
-	cmd.SetArgs([]string{"--root", root, "--template", "knowledge"})
+	cmd.SetArgs([]string{"--root", root, "--template", "memory"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -288,12 +295,12 @@ func TestWikiTemplateInit(t *testing.T) {
 	}
 }
 
-func TestPromptLibraryTemplateInit(t *testing.T) {
+func TestPromptTemplateInit(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "prompts")
 
 	cmd := newInitCmd()
-	cmd.SetArgs([]string{"--root", root, "--template", "prompt-library"})
+	cmd.SetArgs([]string{"--root", root, "--template", "prompt"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -426,12 +433,12 @@ func TestADRTemplateInitBlankRoot(t *testing.T) {
 	}
 }
 
-func TestPromptLibraryTemplateInitBlankRoot(t *testing.T) {
+func TestPromptTemplateInitBlankRoot(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join(t.TempDir(), "empty-parent", "prompts")
 
 	cmd := newInitCmd()
-	cmd.SetArgs([]string{"--root", root, "--template", "prompt-library"})
+	cmd.SetArgs([]string{"--root", root, "--template", "prompt"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -441,10 +448,10 @@ func TestPromptLibraryTemplateInitBlankRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(cfg), "127.0.0.1") {
-		t.Error("expected localhost bind in prompt-library config.toml")
+		t.Error("expected localhost bind in prompt config.toml")
 	}
 	if !strings.Contains(string(cfg), "[auth]") {
-		t.Error("expected auth section in prompt-library config.toml")
+		t.Error("expected auth section in prompt config.toml")
 	}
 }
 
@@ -459,17 +466,17 @@ func TestInitRejectsUnknownTemplateFlag(t *testing.T) {
 	}
 }
 
-func TestMemoryTemplateMigrationError(t *testing.T) {
+func TestPromptLibraryAliasError(t *testing.T) {
 	t.Parallel()
-	root := filepath.Join(t.TempDir(), "kb")
+	root := filepath.Join(t.TempDir(), "prompts")
 
 	cmd := newInitCmd()
-	cmd.SetArgs([]string{"--root", root, "--template", "memory"})
+	cmd.SetArgs([]string{"--root", root, "--template", "prompt-library"})
 	err := cmd.Execute()
 	if err == nil {
-		t.Fatal("expected error for memory template, got nil")
+		t.Fatal("expected error for prompt-library alias")
 	}
-	if got := err.Error(); got != "the 'memory' template has been merged into 'knowledge' — use --template knowledge instead" {
+	if !strings.Contains(err.Error(), "renamed to 'prompt'") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

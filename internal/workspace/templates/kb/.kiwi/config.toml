@@ -1,0 +1,8 @@
+[workspace]
+name = "Knowledge Base"
+template = "kb"
+
+[janitor]
+stale_days = 90
+check_orphans = true
+check_broken_links = true

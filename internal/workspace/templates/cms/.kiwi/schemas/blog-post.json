@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Blog Post",
+  "type": "object",
+  "required": ["title", "slug", "type", "author", "category", "tags", "published", "published_at"],
+  "properties": {
+    "title": {"type": "string", "minLength": 1},
+    "slug": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "type": {"type": "string", "const": "blog-post"},
+    "author": {"type": "string", "description": "Wiki-link to author profile"},
+    "category": {"type": "string", "minLength": 1},
+    "tags": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "published": {"type": "boolean"},
+    "published_at": {"type": ["string", "null"], "format": "date"},
+    "meta_title": {"type": "string", "maxLength": 60},
+    "meta_description": {"type": "string", "maxLength": 160},
+    "featured": {"type": "boolean", "default": false}
+  }
+}

@@ -26,25 +26,33 @@ var nonSpaceDirs = map[string]bool{
 }
 
 var templateLabels = map[string]string{
-	"knowledge":      "Knowledge Base",
-	"wiki":           "Wiki",
-	"runbook":        "Runbook",
-	"research":       "Research",
-	"tasks":          "Tasks",
-	"prompt-library": "Prompt Library",
-	"adr":            "Architecture Decision Records",
-	"blank":          "Blank",
+	"kb":       "Knowledge Base",
+	"wiki":     "Wiki",
+	"data":     "Data",
+	"cms":      "CMS",
+	"memory":   "Memory",
+	"runbook":  "Runbook",
+	"adr":      "Architecture Decision Records",
+	"prompt":   "Prompt",
+	"research": "Research",
+	"log":      "Log",
+	"tasks":    "Tasks",
+	"blank":    "Blank",
 }
 
 var templateDescriptions = map[string]string{
-	"knowledge":      "LLM-maintained knowledge base with schema, episodes, and agent playbook",
-	"wiki":           "Wiki with onboarding, ADRs, processes, and reference docs",
-	"runbook":        "Operational runbooks and incident response procedures",
-	"research":       "Research library with paper tracking, reading workflow, and literature reviews",
-	"tasks":          "Task tracking with priorities and status workflows",
-	"prompt-library": "Versioned prompt registry with schemas, eval rubrics, and DQL metrics",
-	"adr":            "Architecture Decision Records with MADR format, status workflow, and JSON schema",
-	"blank":          "Empty workspace with Kiwi config only",
+	"kb":       "Curated knowledge base with article types, verification workflow, and freshness enforcement",
+	"wiki":     "Team wiki with onboarding, ADRs, processes, and reference docs",
+	"data":     "Structured data workspace with collections, DQL dashboards, and chart visualizations",
+	"cms":      "Headless CMS with blog, docs, pages, editorial workflow, and feed syndication",
+	"memory":   "Agent memory with episodic/semantic classification, consolidation, and retrieval",
+	"runbook":  "Operational runbooks and incident response procedures",
+	"adr":      "Architecture Decision Records with MADR format, status workflow, and JSON Schema",
+	"prompt":   "Versioned prompt registry with schemas, eval rubrics, and DQL metrics",
+	"research": "Research library with paper tracking, reading workflow, and literature reviews",
+	"log":      "Append-only event log with structured entries, tamper evidence, and daily partitioning",
+	"tasks":    "Task tracking with priorities and status workflows",
+	"blank":    "Empty workspace with Kiwi config only",
 }
 
 // EmbeddedTemplates returns the embedded template filesystem (for tests).
@@ -114,12 +122,14 @@ func Init(root, template string) error {
 	}
 
 	switch template {
-	case "knowledge", "wiki", "runbook", "research", "tasks", "prompt-library", "adr":
+	case "kb", "wiki", "data", "cms", "memory", "runbook", "adr", "prompt", "research", "log", "tasks":
 		if err := copyEmbedDir("templates/"+template, root); err != nil {
 			return err
 		}
-	case "memory":
-		return fmt.Errorf("the 'memory' template has been merged into 'knowledge' — use --template knowledge instead")
+	case "knowledge":
+		return fmt.Errorf("the 'knowledge' template has been renamed to 'memory' — use --template memory instead")
+	case "prompt-library":
+		return fmt.Errorf("the 'prompt-library' template has been renamed to 'prompt' — use --template prompt instead")
 	case "blank":
 		// directory only
 	default:

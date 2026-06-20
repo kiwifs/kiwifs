@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Daily Event Log",
+  "type": "object",
+  "required": ["title", "type", "date", "append_only", "entry_count"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "pattern": "^Events — \\d{4}-\\d{2}-\\d{2}$",
+      "description": "Log file title with date"
+    },
+    "type": {
+      "type": "string",
+      "const": "daily-log"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Log date (YYYY-MM-DD)"
+    },
+    "append_only": {
+      "type": "boolean",
+      "const": true,
+      "description": "Enforces append-only semantics"
+    },
+    "entry_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of event entries in this file"
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}
