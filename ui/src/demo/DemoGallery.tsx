@@ -35,7 +35,7 @@ export function DemoGallery() {
             </div>
             <p className="text-muted-foreground max-w-2xl">
               Explore real workspaces — charts, kanban, graphs, queries, and themes.
-              Each template uses a different preset so you can see how much KiwiFS can be customized.
+              Each template uses a different color &amp; UI preset so you can see how customizable KiwiFS really is.
             </p>
           </div>
           <Button variant="outline" size="icon" onClick={toggle} aria-label="Toggle theme">
