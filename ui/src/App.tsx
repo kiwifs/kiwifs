@@ -35,7 +35,7 @@ import { KiwiRecentStart } from "./components/KiwiRecentStart";
 import { KanbanDragProvider } from "./components/kanban/KanbanDragProvider";
 import { NewPageDialog } from "./components/NewPageDialog";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
-import { dispatchPageChanged, getToolbarBuiltinViews } from "./lib/hostConfig";
+import { dispatchPageChanged, getHostConfig, getToolbarBuiltinViews } from "./lib/hostConfig";
 import {
   filterToolbarViewsByFeatures,
   resolveToolbarViews,
@@ -67,6 +67,8 @@ import { HostToolbarActions } from "./components/HostToolbarActions";
 
 function getInitialActivePath(): string | null {
   if (typeof window === "undefined") return null;
+  const demoPath = getHostConfig().demo?.initialPath;
+  if (demoPath) return demoPath;
   const pathname = window.location.pathname;
   const hash = window.location.hash.replace(/^#\/?/, "");
   const raw = pathname.startsWith("/page/")
@@ -504,9 +506,42 @@ const handleSpaceSwitch = useCallback(() => {
   }, []);
 
   const isCloudMode = typeof window !== "undefined" && (window as any).__kiwi_cloud_mode__;
+  const isDemoMode = Boolean(getHostConfig().demo);
   const fromPopState = useRef(false);
+
   useEffect(() => {
-    if (isCloudMode) return;
+    if (!uiConfigLoaded) return;
+    const initialView = getHostConfig().demo?.initialView;
+    if (!initialView) return;
+    closeAllViews();
+    switch (initialView) {
+      case "graph":
+        setGraphOpen(true);
+        break;
+      case "kanban":
+        setKanbanOpen(true);
+        break;
+      case "bases":
+        setBasesOpen(true);
+        break;
+      case "timeline":
+        setTimelineOpen(true);
+        break;
+      case "canvas":
+        setCanvasOpen(true);
+        break;
+      case "whiteboard":
+        setWhiteboardOpen(true);
+        break;
+      case "data":
+        setDataOpen(true);
+        break;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiConfigLoaded]);
+
+  useEffect(() => {
+    if (isCloudMode || isDemoMode) return;
     if (!activePath) {
       if (window.location.pathname !== "/") {
         window.history.pushState(null, "", "/");
@@ -524,10 +559,10 @@ const handleSpaceSwitch = useCallback(() => {
         window.history.pushState(null, "", target);
       }
     }
-  }, [activePath, spaceKey, isCloudMode]);
+  }, [activePath, spaceKey, isCloudMode, isDemoMode]);
 
   useEffect(() => {
-    if (isCloudMode) return;
+    if (isCloudMode || isDemoMode) return;
     const onPopState = () => {
       const pathname = window.location.pathname;
       if (pathname.startsWith("/page/")) {
@@ -552,7 +587,7 @@ const handleSpaceSwitch = useCallback(() => {
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [isCloudMode]);
+  }, [isCloudMode, isDemoMode]);
 
   function revealActivePageInTree() {
     if (!activePath) return;

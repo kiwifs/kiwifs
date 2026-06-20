@@ -68,12 +68,32 @@ export type KiwiToolbarConfig = {
   actions?: KiwiToolbarAction[];
 };
 
+export type KiwiDemoViewId =
+  | "graph"
+  | "kanban"
+  | "bases"
+  | "timeline"
+  | "canvas"
+  | "whiteboard"
+  | "data";
+
+export type KiwiDemoConfig = {
+  /** Template slug shown in the gallery, e.g. "adr". */
+  slug: string;
+  /** Page to open on load. */
+  initialPath?: string;
+  /** Full-screen view to open on load (toolbar views). */
+  initialView?: KiwiDemoViewId;
+};
+
 export type KiwiHostConfig = {
   allowedOrigins?: string[];
   toolbar?: KiwiToolbarConfig;
   /** @deprecated Use toolbar.actions */
   toolbarActions?: KiwiToolbarAction[];
   pageActions?: KiwiPageAction[];
+  /** Static demo gallery mode — disables /page/* URL rewriting. */
+  demo?: KiwiDemoConfig;
 };
 
 export const KIWI_TOOLBAR_ACTION_EVENT = "kiwifs-toolbar-action";

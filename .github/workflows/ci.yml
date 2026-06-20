@@ -75,6 +75,11 @@ jobs:
         run: npm run build-storybook
         working-directory: ui
 
+      - name: build demo
+        if: ${{ needs.changes.outputs.ui == 'true' }}
+        run: npm run build-demo
+        working-directory: ui
+
       - uses: actions/setup-go@v5
         if: ${{ needs.changes.outputs.go == 'true' || needs.changes.outputs.infra == 'true' }}
         with:

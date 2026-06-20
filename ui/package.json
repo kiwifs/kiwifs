@@ -10,7 +10,9 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "dev-demo": "vite --config vite.demo.config.ts",
+    "build-demo": "vite build --config vite.demo.config.ts && node scripts/copy-demo-routes.mjs"
   },
   "dependencies": {
     "@blocknote/core": "^0.50.0",

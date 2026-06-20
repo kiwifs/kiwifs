@@ -1,4 +1,4 @@
-import { useState, useEffect, createElement, type ReactNode } from "react";
+import { useState, createElement, type ReactNode } from "react";
 import {
   mockTree,
   mockMarkdownRich,
@@ -20,8 +20,27 @@ import type {
   WorkflowPage,
 } from "@kw/lib/api";
 
+export type MockUIConfig = {
+  themeLocked?: boolean;
+  startPage?: string;
+  branding?: Record<string, string>;
+  features?: Record<string, boolean>;
+  toolbarViews?: string[] | null;
+  sidebar?: Record<string, unknown>;
+};
+
+export type MockTimelineEvent = {
+  type: string;
+  path: string;
+  title: string;
+  actor: string;
+  timestamp: string;
+  message: string;
+};
+
 export type MockOverrides = {
   fileContent?: string | null;
+  fileContents?: Record<string, string>;
   fileStatus?: number;
   tree?: typeof mockTree;
   versions?: typeof mockVersions;
@@ -37,8 +56,36 @@ export type MockOverrides = {
   views?: MockSavedView[];
   viewResults?: Record<string, Record<string, unknown>[]>;
   viewsError?: string;
+  queryRows?: Record<string, unknown>[];
+  calendarRows?: Record<string, unknown>[];
+  metaResults?: Record<string, unknown>[];
+  timelineEvents?: MockTimelineEvent[];
+  uiConfig?: MockUIConfig;
   delay?: number;
 };
+
+function resolveFileContent(
+  url: string,
+  overrides: MockOverrides,
+): { content: string; status: number } {
+  const pathMatch = url.match(/[?&]path=([^&]+)/);
+  const path = pathMatch ? decodeURIComponent(pathMatch[1]) : "";
+  const status = overrides.fileStatus ?? 200;
+  if (status !== 200) {
+    return { content: "Not found", status };
+  }
+  if (overrides.fileContents && path in overrides.fileContents) {
+    return { content: overrides.fileContents[path], status: 200 };
+  }
+  if (overrides.fileContents) {
+    for (const [key, value] of Object.entries(overrides.fileContents)) {
+      if (key.replace(/\/+$/, "") === path.replace(/\/+$/, "")) {
+        return { content: value, status: 200 };
+      }
+    }
+  }
+  return { content: overrides.fileContent ?? mockMarkdownRich, status: 200 };
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -71,8 +118,7 @@ function createMockFetch(overrides: MockOverrides = {}) {
 
     if (url.includes("/api/kiwi") || url.includes("/api/spaces") || url.includes("/health")) {
       if (url.includes("/file") && method === "GET") {
-        const content = overrides.fileContent ?? mockMarkdownRich;
-        const status = overrides.fileStatus ?? 200;
+        const { content, status } = resolveFileContent(url, overrides);
         if (status !== 200) {
           return new Response("Not found", { status });
         }
@@ -99,7 +145,11 @@ function createMockFetch(overrides: MockOverrides = {}) {
       }
 
       if (url.includes("/version") && !url.includes("/versions") && method === "GET") {
-        return textResponse(overrides.fileContent ?? mockMarkdownRich);
+        const { content, status } = resolveFileContent(url, overrides);
+        if (status !== 200) {
+          return new Response("Not found", { status });
+        }
+        return textResponse(content);
       }
 
       if (url.includes("/diff") && method === "GET") {
@@ -152,31 +202,29 @@ function createMockFetch(overrides: MockOverrides = {}) {
         const qMatch = url.match(/[?&]q=([^&]+)/);
         const dql = qMatch ? decodeURIComponent(qMatch[1]) : "";
         if (/^\s*CALENDAR\b/i.test(dql)) {
-          const today = new Date();
-          const yyyy = today.getFullYear();
-          const mm = String(today.getMonth() + 1).padStart(2, "0");
+          const rows = overrides.calendarRows ?? [
+            { _path: "pages/frontmatter.md", date: new Date().toISOString().slice(0, 10) },
+          ];
           return jsonResponse({
             columns: ["_path", "date"],
-            rows: [
-              { _path: "pages/frontmatter.md", date: `${yyyy}-${mm}-03` },
-              { _path: "pages/wikilinks.md", date: `${yyyy}-${mm}-07` },
-              { _path: "pages/use-sqlite-for-search.md", date: `${yyyy}-${mm}-12` },
-              { _path: "episodes/example-episode.md", date: `${yyyy}-${mm}-15` },
-              { _path: "welcome.md", date: `${yyyy}-${mm}-15` },
-            ],
-            total: 5,
+            rows,
+            total: rows.length,
             has_more: false,
           });
         }
+        const rows = overrides.queryRows ?? [
+          { _path: "pages/frontmatter.md", title: "Frontmatter Guide", status: "published", priority: "high" },
+          { _path: "pages/wikilinks.md", title: "Wiki Links", status: "published", priority: "medium" },
+          { _path: "pages/use-sqlite-for-search.md", title: "SQLite for Search", status: "draft", priority: "high" },
+          { _path: "episodes/example-episode.md", title: "Example Episode", status: "published", priority: "low" },
+        ];
+        const columns = rows.length > 0
+          ? ["_path", ...Object.keys(rows[0]).filter((k) => k !== "_path")]
+          : ["_path", "title", "status", "priority"];
         return jsonResponse({
-          columns: ["_path", "title", "status", "priority"],
-          rows: [
-            { _path: "pages/frontmatter.md", title: "Frontmatter Guide", status: "published", priority: "high" },
-            { _path: "pages/wikilinks.md", title: "Wiki Links", status: "published", priority: "medium" },
-            { _path: "pages/use-sqlite-for-search.md", title: "SQLite for Search", status: "draft", priority: "high" },
-            { _path: "episodes/example-episode.md", title: "Example Episode", status: "published", priority: "low" },
-          ],
-          total: 4,
+          columns,
+          rows,
+          total: rows.length,
           has_more: false,
         });
       }
@@ -256,16 +304,17 @@ function createMockFetch(overrides: MockOverrides = {}) {
       }
 
       if (url.includes("/meta")) {
+        const results = overrides.metaResults ?? [
+          { path: "pages/frontmatter.md", frontmatter: { title: "Frontmatter Guide", tags: ["documentation", "guide", "metadata"], status: "published" } },
+          { path: "pages/wikilinks.md", frontmatter: { title: "Wiki Links", tags: ["documentation", "links"], status: "published" } },
+          { path: "pages/use-sqlite-for-search.md", frontmatter: { title: "SQLite for Search", tags: ["architecture", "search"], status: "draft" } },
+          { path: "episodes/example-episode.md", frontmatter: { title: "Example Episode", tags: ["episode", "guide"], status: "published" } },
+        ];
         return jsonResponse({
-          count: 4,
+          count: results.length,
           limit: 1000,
           offset: 0,
-          results: [
-            { path: "pages/frontmatter.md", frontmatter: { title: "Frontmatter Guide", tags: ["documentation", "guide", "metadata"], status: "published" } },
-            { path: "pages/wikilinks.md", frontmatter: { title: "Wiki Links", tags: ["documentation", "links"], status: "published" } },
-            { path: "pages/use-sqlite-for-search.md", frontmatter: { title: "SQLite for Search", tags: ["architecture", "search"], status: "draft" } },
-            { path: "episodes/example-episode.md", frontmatter: { title: "Example Episode", tags: ["episode", "guide"], status: "published" } },
-          ],
+          results,
         });
       }
 
@@ -274,15 +323,16 @@ function createMockFetch(overrides: MockOverrides = {}) {
       }
 
       if (url.includes("/timeline")) {
+        const events = overrides.timelineEvents ?? [
+          { type: "write", path: "pages/frontmatter.md", title: "Frontmatter Guide", actor: "alice", timestamp: new Date(Date.now() - 3600000).toISOString(), message: "Update frontmatter documentation" },
+          { type: "write", path: "pages/wikilinks.md", title: "Wiki Links", actor: "bob", timestamp: new Date(Date.now() - 7200000).toISOString(), message: "Add cross-references section" },
+          { type: "delete", path: "old/deprecated.md", title: "Deprecated Page", actor: "charlie", timestamp: new Date(Date.now() - 86400000).toISOString(), message: "Remove outdated content" },
+          { type: "write", path: "pages/use-sqlite-for-search.md", title: "SQLite for Search", actor: "alice", timestamp: new Date(Date.now() - 86400000 * 2).toISOString(), message: "Initial draft" },
+          { type: "write", path: "episodes/example-episode.md", title: "Example Episode", actor: "bob", timestamp: new Date(Date.now() - 86400000 * 3).toISOString(), message: "Add example episode" },
+        ];
         return jsonResponse({
-          events: [
-            { type: "write", path: "pages/frontmatter.md", title: "Frontmatter Guide", actor: "alice", timestamp: new Date(Date.now() - 3600000).toISOString(), message: "Update frontmatter documentation" },
-            { type: "write", path: "pages/wikilinks.md", title: "Wiki Links", actor: "bob", timestamp: new Date(Date.now() - 7200000).toISOString(), message: "Add cross-references section" },
-            { type: "delete", path: "old/deprecated.md", title: "Deprecated Page", actor: "charlie", timestamp: new Date(Date.now() - 86400000).toISOString(), message: "Remove outdated content" },
-            { type: "write", path: "pages/use-sqlite-for-search.md", title: "SQLite for Search", actor: "alice", timestamp: new Date(Date.now() - 86400000 * 2).toISOString(), message: "Initial draft" },
-            { type: "write", path: "episodes/example-episode.md", title: "Example Episode", actor: "bob", timestamp: new Date(Date.now() - 86400000 * 3).toISOString(), message: "Add example episode" },
-          ],
-          total: 5,
+          events,
+          total: events.length,
         });
       }
 
@@ -308,11 +358,12 @@ function createMockFetch(overrides: MockOverrides = {}) {
       }
 
       if (url.includes("/ui-config")) {
+        const cfg = overrides.uiConfig ?? {};
         return jsonResponse({
-          themeLocked: false,
-          startPage: "welcome",
-          sidebar: { pinned: [], hidden: [], sections: [] },
-          branding: {},
+          themeLocked: cfg.themeLocked ?? false,
+          startPage: cfg.startPage ?? "welcome",
+          sidebar: cfg.sidebar ?? { pinned: [], hidden: [], sections: [] },
+          branding: cfg.branding ?? {},
           features: {
             graph: true,
             kanban: true,
@@ -321,8 +372,9 @@ function createMockFetch(overrides: MockOverrides = {}) {
             timeline: true,
             bases: true,
             data_sources: true,
+            ...(cfg.features ?? {}),
           },
-          toolbarViews: null,
+          toolbarViews: cfg.toolbarViews ?? null,
         });
       }
 
@@ -394,9 +446,7 @@ function createMockFetch(overrides: MockOverrides = {}) {
 }
 
 /**
- * Wrapper component that installs mock fetch BEFORE rendering children.
- * Uses a two-phase render: first install the mock, then render children
- * on the next tick so child useEffects see the mocked fetch.
+ * Wrapper component that installs mock fetch synchronously before children render.
  */
 export function MockApiProvider({
   children,
@@ -405,23 +455,16 @@ export function MockApiProvider({
   children: ReactNode;
   overrides?: MockOverrides;
 }) {
-  const [ready, setReady] = useState(false);
-
-  // Install mock synchronously on first render via useState initializer
-  const [cleanup] = useState(() => {
-    const { mockFetch, originalFetch } = createMockFetch(overrides);
+  // Install mock synchronously on first render via useState initializer.
+  // No cleanup — the mock stays for the lifetime of the page, which avoids
+  // StrictMode double-effect ordering issues (child effects run before
+  // parent effects, so App's fetches would hit the real server if cleanup
+  // temporarily restored window.fetch).
+  useState(() => {
+    const { mockFetch } = createMockFetch(overrides);
     window.fetch = mockFetch as typeof window.fetch;
-    return () => {
-      window.fetch = originalFetch;
-    };
   });
 
-  useEffect(() => {
-    setReady(true);
-    return cleanup;
-  }, [cleanup]);
-
-  if (!ready) return null;
   return createElement("div", null, children);
 }
 
