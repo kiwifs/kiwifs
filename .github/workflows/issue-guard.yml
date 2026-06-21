@@ -89,37 +89,70 @@ jobs:
 
             console.log(`Issue #${issue.number} by ${author} does not match any template — closing`);
 
-            await github.rest.issues.createComment({
+            const { data: current } = await github.rest.issues.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issue.number,
-              body: [
-                `Hi @${author}, thanks for reaching out!`,
-                '',
-                'This issue was automatically closed because it doesn\'t appear to use one of our issue templates.',
-                'This helps us keep issues organized and actionable.',
-                '',
-                '**To resubmit, please use one of these templates:**',
-                `- [Bug report](https://github.com/${context.repo.owner}/${context.repo.repo}/issues/new?template=bug_report.yml)`,
-                `- [Feature request](https://github.com/${context.repo.owner}/${context.repo.repo}/issues/new?template=feature_request.yml)`,
-                '',
-                'If you have a question instead, please use [Discussions](https://github.com/${context.repo.owner}/${context.repo.repo}/discussions).',
-                '',
-                '*This is an automated action. If you believe this was a mistake, please re-open with a template or contact the maintainers.*',
-              ].join('\n'),
             });
 
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.number,
-              state: 'closed',
-              state_reason: 'not_planned',
-            });
+            if (current.state === 'closed' && current.locked) {
+              console.log(`Issue #${issue.number} already closed and locked — skipping`);
+              return;
+            }
 
-            await github.rest.issues.lock({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.number,
-              lock_reason: 'spam',
-            });
+            const closeComment = [
+              `Hi @${author}, thanks for reaching out!`,
+              '',
+              'This issue was automatically closed because it doesn\'t appear to use one of our issue templates.',
+              'This helps us keep issues organized and actionable.',
+              '',
+              '**To resubmit, please use one of these templates:**',
+              `- [Bug report](https://github.com/${context.repo.owner}/${context.repo.repo}/issues/new?template=bug_report.yml)`,
+              `- [Feature request](https://github.com/${context.repo.owner}/${context.repo.repo}/issues/new?template=feature_request.yml)`,
+              '',
+              'If you have a question instead, please use [Discussions](https://github.com/${context.repo.owner}/${context.repo.repo}/discussions).',
+              '',
+              '*This is an automated action. If you believe this was a mistake, please re-open with a template or contact the maintainers.*',
+            ].join('\n');
+
+            const tolerateModerationRace = (step, error) => {
+              if (error.status === 403 || error.status === 422) {
+                console.log(`${step}: ${error.message} — continuing`);
+                return;
+              }
+              throw error;
+            };
+
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: closeComment,
+              });
+            } catch (error) {
+              tolerateModerationRace('createComment', error);
+            }
+
+            try {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: 'not_planned',
+              });
+            } catch (error) {
+              tolerateModerationRace('closeIssue', error);
+            }
+
+            try {
+              await github.rest.issues.lock({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                lock_reason: 'spam',
+              });
+            } catch (error) {
+              tolerateModerationRace('lockIssue', error);
+            }
