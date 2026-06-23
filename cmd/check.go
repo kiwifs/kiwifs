@@ -78,11 +78,20 @@ func runKnowledgeScan(cmd *cobra.Command) (*janitor.ScanResult, string, int, boo
 
 func janitorOptsFromConfig(root string) []janitor.Option {
 	cfg, err := config.Load(root)
-	if err != nil || !cfg.Janitor.ExecutionStaleness.Enabled() {
+	if err != nil {
 		return nil
 	}
-	es := cfg.Janitor.ExecutionStaleness
-	return janitor.OptionsFromExecutionStaleness(es.Directory, es.DateField, es.MaxAgeDays, es.FlagValues)
+	var opts []janitor.Option
+	if cfg.Janitor.ExecutionStaleness.Enabled() {
+		es := cfg.Janitor.ExecutionStaleness
+		opts = append(opts, janitor.OptionsFromExecutionStaleness(es.Directory, es.DateField, es.MaxAgeDays, es.FlagValues)...)
+	}
+	if cfg.Janitor.ExternalLinkCheckEnabled() {
+		linkCfg := janitor.ExternalLinkCheckConfigFromJanitor(cfg.Janitor)
+		linkCfg.Background = false
+		opts = append(opts, janitor.WithExternalLinks(root, linkCfg))
+	}
+	return opts
 }
 
 type checkOutput struct {

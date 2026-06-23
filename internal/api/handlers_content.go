@@ -450,12 +450,19 @@ func (h *Handlers) Janitor(c echo.Context) error {
 		}
 	}
 
-	var execOpts []janitor.Option
+	var janitorOpts []janitor.Option
 	if h.cfg != nil && h.cfg.Janitor.ExecutionStaleness.Enabled() {
 		es := h.cfg.Janitor.ExecutionStaleness
-		execOpts = janitor.OptionsFromExecutionStaleness(es.Directory, es.DateField, es.MaxAgeDays, es.FlagValues)
+		janitorOpts = janitor.OptionsFromExecutionStaleness(es.Directory, es.DateField, es.MaxAgeDays, es.FlagValues)
 	}
-	scanner := janitor.New(h.root, h.store, h.searcher, staleDays, execOpts...)
+	if h.cfg != nil && h.cfg.Janitor.ExternalLinkCheckEnabled() {
+		linkCfg := janitor.ExternalLinkCheckConfigFromJanitor(h.cfg.Janitor)
+		if fresh {
+			linkCfg.Background = false
+		}
+		janitorOpts = append(janitorOpts, janitor.WithExternalLinks(h.root, linkCfg))
+	}
+	scanner := janitor.New(h.root, h.store, h.searcher, staleDays, janitorOpts...)
 	result, err := scanner.Scan(c.Request().Context())
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())

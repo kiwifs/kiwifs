@@ -90,6 +90,16 @@ func (s *Scheduler) Stop() {
 	}
 }
 
+// MergeExternalLinks updates the cached scan result with fresh external link findings.
+func (s *Scheduler) MergeExternalLinks(findings []ExternalLinkFinding) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastRes == nil {
+		return
+	}
+	s.lastRes.ExternalLinks = findings
+}
+
 // LastResult returns the most recent cached scan result (may be nil).
 // The handler uses this so an admin opening the panel mid-day sees last
 // night's scan instantly, then a background refresh kicks in.

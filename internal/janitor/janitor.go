@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/links"
 	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/search"
@@ -41,10 +42,11 @@ type Issue struct {
 }
 
 type ScanResult struct {
-	Issues    []Issue `json:"issues"`
-	Scanned   int     `json:"scanned"`
-	Healthy   int     `json:"healthy"`
-	Timestamp string  `json:"timestamp"`
+	Issues        []Issue               `json:"issues"`
+	ExternalLinks []ExternalLinkFinding `json:"external_links,omitempty"`
+	Scanned       int                   `json:"scanned"`
+	Healthy       int                   `json:"healthy"`
+	Timestamp     string                `json:"timestamp"`
 }
 
 // Summary renders a compact human-readable report.
@@ -126,6 +128,7 @@ type Scanner struct {
 	searcher           search.Searcher
 	staleDays          int
 	executionStaleness *ExecutionStalenessRule
+	externalLinks      *ExternalLinkChecker
 }
 
 type Option func(*Scanner)
@@ -161,6 +164,31 @@ func OptionsFromExecutionStaleness(directory, dateField string, maxAgeDays int, 
 		return nil
 	}
 	return []Option{WithExecutionStaleness(rule)}
+}
+
+// WithExternalLinks enables external URL rot detection using workspace config.
+func WithExternalLinks(root string, cfg config.ExternalLinkCheckConfig) Option {
+	return func(s *Scanner) {
+		if !cfg.Enabled() {
+			return
+		}
+		s.externalLinks = newExternalLinkChecker(root, cfg)
+	}
+}
+
+// WithExternalLinkChecker injects a custom checker (tests).
+func WithExternalLinkChecker(c *ExternalLinkChecker) Option {
+	return func(s *Scanner) {
+		s.externalLinks = c
+	}
+}
+
+// ExternalLinkChecker returns the optional external link checker (may be nil).
+func (s *Scanner) ExternalLinkChecker() *ExternalLinkChecker {
+	if s == nil {
+		return nil
+	}
+	return s.externalLinks
 }
 
 func New(root string, store storage.Storage, searcher search.Searcher, staleDays int, opts ...Option) *Scanner {
@@ -229,6 +257,10 @@ func (s *Scanner) Scan(ctx context.Context) (*ScanResult, error) {
 	result.Healthy = result.Scanned - len(pagesWithIssues)
 	if result.Healthy < 0 {
 		result.Healthy = 0
+	}
+
+	if s.externalLinks != nil && s.externalLinks.Enabled() {
+		result.ExternalLinks = s.externalLinks.CheckPages(ctx, pages)
 	}
 
 	return result, nil

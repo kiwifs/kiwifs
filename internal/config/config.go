@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/kiwifs/kiwifs/internal/links"
@@ -184,10 +185,49 @@ type DraftsConfig struct {
 }
 
 type JanitorConfig struct {
-	Interval           string                     `toml:"interval"`
-	StaleDays          int                        `toml:"stale_days"`
-	StartupScan        bool                       `toml:"startup_scan"`
-	ExecutionStaleness ExecutionStalenessConfig   `toml:"execution_staleness"`
+	Interval             string                     `toml:"interval"`
+	StaleDays            int                        `toml:"stale_days"`
+	StartupScan          bool                       `toml:"startup_scan"`
+	ExecutionStaleness   ExecutionStalenessConfig   `toml:"execution_staleness"`
+	ExternalLinkCheck    *bool                      `toml:"external_link_check"`
+	ExternalLinkTimeout  string                     `toml:"external_link_timeout"`
+	ExternalLinkIgnore   []string                   `toml:"external_link_ignore"`
+	ExternalLinkCacheTTL string                     `toml:"external_link_cache_ttl"`
+}
+
+// ExternalLinkCheckEnabled returns true when external link rot detection is on.
+func (j JanitorConfig) ExternalLinkCheckEnabled() bool {
+	return j.ExternalLinkCheck != nil && *j.ExternalLinkCheck
+}
+
+// ExternalLinkCheckConfig returns checker settings derived from [janitor] TOML.
+func (j JanitorConfig) ExternalLinkCheckConfig() ExternalLinkCheckConfig {
+	return ExternalLinkCheckConfig{
+		Check:       j.ExternalLinkCheck,
+		TimeoutRaw:  j.ExternalLinkTimeout,
+		IgnoreHosts: append([]string(nil), j.ExternalLinkIgnore...),
+		CacheTTLRaw: j.ExternalLinkCacheTTL,
+	}
+}
+
+// ExternalLinkCheckConfig holds external link checker settings.
+type ExternalLinkCheckConfig struct {
+	Check         *bool
+	TimeoutRaw    string
+	IgnoreHosts   []string
+	CacheTTLRaw   string
+	Timeout       time.Duration
+	CacheTTL      time.Duration
+	MaxConcurrent int
+	RequestDelay  time.Duration
+	MaxRedirects  int
+	UserAgent     string
+	Background    bool
+}
+
+// Enabled reports whether external link checking is configured on.
+func (c ExternalLinkCheckConfig) Enabled() bool {
+	return c.Check != nil && *c.Check
 }
 
 // ExecutionStalenessConfig flags runbooks (or other directory-scoped pages) when
