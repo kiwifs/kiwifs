@@ -18,6 +18,7 @@ describe("uiFeatures", () => {
 
   it("maps view routes to feature keys", () => {
     expect(viewFeatureFromPathname("/view/kanban")).toBe("kanban");
+    expect(viewFeatureFromPathname("/view/calendar")).toBe("calendar");
     expect(viewFeatureFromPathname("/view/data")).toBe("data_sources");
     expect(viewFeatureFromPathname("/page/foo.md")).toBeNull();
   });

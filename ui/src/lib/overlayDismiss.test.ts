@@ -12,6 +12,7 @@ const closed: OverlayState = {
   canvasOpen: false,
   whiteboardOpen: false,
   timelineOpen: false,
+  calendarOpen: false,
   kanbanOpen: false,
 };
 
@@ -37,6 +38,7 @@ describe("resolveOverlayDismiss", () => {
   it("dismisses full-screen views in stable priority order", () => {
     expect(resolveOverlayDismiss({ ...closed, graphOpen: true, kanbanOpen: true })).toBe("graph");
     expect(resolveOverlayDismiss({ ...closed, historyOpen: true, dataOpen: true })).toBe("history");
+    expect(resolveOverlayDismiss({ ...closed, calendarOpen: true, kanbanOpen: true })).toBe("calendar");
     expect(resolveOverlayDismiss({ ...closed, kanbanOpen: true })).toBe("kanban");
   });
 });

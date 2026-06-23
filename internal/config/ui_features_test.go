@@ -4,7 +4,7 @@ import "testing"
 
 func TestUIFeaturesConfigDefaults(t *testing.T) {
 	f := UIFeaturesConfig{}.Resolved()
-	for _, key := range []string{"graph", "kanban", "canvas", "whiteboard", "timeline", "bases", "data_sources"} {
+	for _, key := range []string{"graph", "kanban", "canvas", "whiteboard", "timeline", "calendar", "bases", "data_sources"} {
 		if !f[key] {
 			t.Fatalf("expected %s enabled by default", key)
 		}

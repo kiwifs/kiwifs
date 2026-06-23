@@ -73,6 +73,7 @@ export type KiwiDemoViewId =
   | "kanban"
   | "bases"
   | "timeline"
+  | "calendar"
   | "canvas"
   | "whiteboard"
   | "data";

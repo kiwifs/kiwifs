@@ -8,6 +8,7 @@ type UIFeaturesConfig struct {
 	Canvas      *bool `toml:"canvas"`
 	Whiteboard  *bool `toml:"whiteboard"`
 	Timeline    *bool `toml:"timeline"`
+	Calendar    *bool `toml:"calendar"`
 	Bases       *bool `toml:"bases"`
 	DataSources *bool `toml:"data_sources"`
 }
@@ -24,6 +25,7 @@ func (f UIFeaturesConfig) Resolved() map[string]bool {
 		"canvas":       featureEnabled(f.Canvas),
 		"whiteboard":   featureEnabled(f.Whiteboard),
 		"timeline":     featureEnabled(f.Timeline),
+		"calendar":     featureEnabled(f.Calendar),
 		"bases":        featureEnabled(f.Bases),
 		"data_sources": featureEnabled(f.DataSources),
 	}

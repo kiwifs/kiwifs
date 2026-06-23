@@ -4,6 +4,7 @@ export type UIFeatureKey =
   | "canvas"
   | "whiteboard"
   | "timeline"
+  | "calendar"
   | "bases"
   | "data_sources";
 
@@ -13,6 +14,7 @@ export const DEFAULT_UI_FEATURES: Record<UIFeatureKey, boolean> = {
   canvas: true,
   whiteboard: true,
   timeline: true,
+  calendar: true,
   bases: true,
   data_sources: true,
 };
@@ -24,6 +26,7 @@ export const VIEW_ROUTE_ALIASES: Record<string, UIFeatureKey> = {
   canvas: "canvas",
   whiteboard: "whiteboard",
   timeline: "timeline",
+  calendar: "calendar",
   bases: "bases",
   data: "data_sources",
   data_sources: "data_sources",

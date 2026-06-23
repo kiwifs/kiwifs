@@ -7,6 +7,7 @@ export const TOOLBAR_BUILTIN_VIEW_IDS = [
   "canvas",
   "whiteboard",
   "timeline",
+  "calendar",
   "kanban",
   "data",
 ] as const;
@@ -24,6 +25,7 @@ export const TOOLBAR_VIEW_FEATURE: Record<ToolbarBuiltinViewId, UIFeatureKey> = 
   canvas: "canvas",
   whiteboard: "whiteboard",
   timeline: "timeline",
+  calendar: "calendar",
   kanban: "kanban",
   data: "data_sources",
 };
