@@ -4,9 +4,11 @@ import {
   buildChordIndex,
   eventMatchesChord,
   formatChordDisplay,
+  isTypingTarget,
   matchBoundAction,
   mergeKeybindings,
   normalizeChord,
+  shortcutSearchValue,
 } from "./kiwiKeybindings";
 
 describe("normalizeChord", () => {
@@ -99,5 +101,27 @@ describe("buildChordIndex", () => {
 describe("formatChordDisplay", () => {
   it("formats mod shortcuts for display", () => {
     expect(formatChordDisplay("mod+k")).toMatch(/K/i);
+  });
+});
+
+describe("shortcutSearchValue", () => {
+  it("includes label, section, and chord for fuzzy filter", () => {
+    const value = shortcutSearchValue("Navigation", "Search", "mod+k");
+    expect(value.toLowerCase()).toContain("search");
+    expect(value.toLowerCase()).toContain("navigation");
+    expect(value.toLowerCase()).toContain("mod+k");
+  });
+});
+
+describe("isTypingTarget", () => {
+  it("detects editable and form controls", () => {
+    const input = { tagName: "INPUT", isContentEditable: false } as HTMLElement;
+    const textarea = { tagName: "TEXTAREA", isContentEditable: false } as HTMLElement;
+    const editable = { tagName: "DIV", isContentEditable: true } as HTMLElement;
+    const button = { tagName: "BUTTON", isContentEditable: false } as HTMLElement;
+    expect(isTypingTarget(input)).toBe(true);
+    expect(isTypingTarget(textarea)).toBe(true);
+    expect(isTypingTarget(editable)).toBe(true);
+    expect(isTypingTarget(button)).toBe(false);
   });
 });

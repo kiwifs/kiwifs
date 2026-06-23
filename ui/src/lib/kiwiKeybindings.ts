@@ -168,6 +168,18 @@ export type ShortcutSection = {
   items: { action: KeybindingAction; label: string }[];
 };
 
+export function isTypingTarget(target: EventTarget | null): boolean {
+  if (!target || typeof target !== "object") return false;
+  const el = target as HTMLElement;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName ?? "";
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+export function shortcutSearchValue(section: string, label: string, chord: string): string {
+  return `${label} ${section} ${formatChordDisplay(chord)} ${chord}`;
+}
+
 export const SHORTCUT_SECTIONS: ShortcutSection[] = [
   {
     section: "Navigation",
