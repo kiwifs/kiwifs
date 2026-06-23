@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDateRangeQuery,
   buildMonthQuery,
   dateKey,
   discoverDateFields,
@@ -10,7 +11,9 @@ import {
   normalizeDateValue,
   parseCalendarRows,
   weekDates,
+  weekRange,
   weekStartFromDate,
+  addDaysToDateKey,
 } from "./kiwiCalendar";
 
 describe("kiwiCalendar", () => {
@@ -25,6 +28,12 @@ describe("kiwiCalendar", () => {
     );
     expect(buildMonthQuery("last-reviewed", 2026, 12)).toContain(
       "`last-reviewed` >= DATE(\"2026-12-01\")",
+    );
+  });
+
+  it("builds arbitrary date-range DQL", () => {
+    expect(buildDateRangeQuery("due", "2026-06-29", "2026-07-06")).toContain(
+      'due >= DATE("2026-06-29") AND due < DATE("2026-07-06")',
     );
   });
 
@@ -87,10 +96,19 @@ describe("kiwiCalendar", () => {
   });
 
   it("lists seven days from week start", () => {
-    const start = weekStartFromDate(2026, 6, 18); // Wed -> Mon 16
+    const start = weekStartFromDate(2026, 6, 18); // Thu -> Mon 15
     const week = weekDates(start);
     expect(week).toHaveLength(7);
     expect(week[0]).toEqual({ year: 2026, month: 6, day: 15 });
     expect(week[6]).toEqual({ year: 2026, month: 6, day: 21 });
+  });
+
+  it("computes week range spanning month boundaries", () => {
+    const start = weekStartFromDate(2026, 7, 1); // Wed Jul 1 -> Mon Jun 29
+    expect(weekRange(start)).toEqual({
+      start: "2026-06-29",
+      endExclusive: "2026-07-06",
+    });
+    expect(addDaysToDateKey("2026-06-30", 1)).toBe("2026-07-01");
   });
 });

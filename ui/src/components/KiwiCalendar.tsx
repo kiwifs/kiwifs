@@ -16,6 +16,7 @@ import {
 import { api } from "@kw/lib/api";
 import { cn } from "@kw/lib/cn";
 import {
+  buildDateRangeQuery,
   buildMonthQuery,
   DEFAULT_DATE_FIELD,
   discoverDateFields,
@@ -28,6 +29,7 @@ import {
   type CalendarPageEntry,
   WEEKDAY_LABELS,
   weekDates,
+  weekRange,
   weekStartFromDate,
   parseCalendarRows,
 } from "@kw/lib/kiwiCalendar";
@@ -205,10 +207,15 @@ export function KiwiCalendar({ onClose, onNavigate, isMobile = false }: Props) {
       });
   }, []);
 
-  const loadMonth = useCallback(async () => {
+  const loadEntries = useCallback(async () => {
     setLoading(true);
     try {
-      const dql = buildMonthQuery(dateField, year, month);
+      const dql = isMobile
+        ? (() => {
+            const { start, endExclusive } = weekRange(weekAnchor);
+            return buildDateRangeQuery(dateField, start, endExclusive);
+          })()
+        : buildMonthQuery(dateField, year, month);
       const data = await api.query(dql, { limit: 200 });
       setEntries(parseCalendarRows(data, dateField));
     } catch {
@@ -216,11 +223,11 @@ export function KiwiCalendar({ onClose, onNavigate, isMobile = false }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [dateField, year, month]);
+  }, [dateField, isMobile, weekAnchor, year, month]);
 
   useEffect(() => {
-    loadMonth();
-  }, [loadMonth]);
+    loadEntries();
+  }, [loadEntries]);
 
   const goToday = () => {
     const now = new Date();
@@ -245,7 +252,8 @@ export function KiwiCalendar({ onClose, onNavigate, isMobile = false }: Props) {
           <div className="font-semibold text-sm">Calendar</div>
         </div>
         <div className="text-xs text-muted-foreground hidden sm:block">
-          {entries.length} page{entries.length === 1 ? "" : "s"} this month
+          {entries.length} page{entries.length === 1 ? "" : "s"}{" "}
+          {isMobile ? "this week" : "this month"}
         </div>
 
         <div className="ml-auto flex items-center gap-2 flex-wrap">

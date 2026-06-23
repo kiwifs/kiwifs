@@ -94,14 +94,41 @@ export function monthRange(year: number, month: number): {
   return { start, endExclusive };
 }
 
+export function buildDateRangeQuery(
+  dateField: string,
+  start: string,
+  endExclusive: string,
+): string {
+  const field = escapeDqlField(dateField);
+  return `TABLE _path, title, status, state, tags, ${field} WHERE ${field} >= DATE("${start}") AND ${field} < DATE("${endExclusive}") LIMIT 200`;
+}
+
 export function buildMonthQuery(
   dateField: string,
   year: number,
   month: number,
 ): string {
-  const field = escapeDqlField(dateField);
   const { start, endExclusive } = monthRange(year, month);
-  return `TABLE _path, title, status, state, tags, ${field} WHERE ${field} >= DATE("${start}") AND ${field} < DATE("${endExclusive}") LIMIT 200`;
+  return buildDateRangeQuery(dateField, start, endExclusive);
+}
+
+export function addDaysToDateKey(key: string, days: number): string {
+  const d = new Date(`${key}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return dateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+/** Inclusive Mon–Sun span for a week anchored at `start`. */
+export function weekRange(start: Date): { start: string; endExclusive: string } {
+  const days = weekDates(start);
+  const first = days[0];
+  const last = days[6];
+  const startKey = dateKey(first.year, first.month, first.day);
+  const endExclusive = addDaysToDateKey(
+    dateKey(last.year, last.month, last.day),
+    1,
+  );
+  return { start: startKey, endExclusive };
 }
 
 export function parseCalendarRows(
