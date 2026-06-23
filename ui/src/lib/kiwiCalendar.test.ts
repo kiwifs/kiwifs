@@ -21,10 +21,10 @@ describe("kiwiCalendar", () => {
 
   it("builds month range DQL with escaped field names", () => {
     expect(buildMonthQuery("date", 2026, 6)).toContain(
-      'date >= "2026-06-01" AND date < "2026-07-01"',
+      'date >= DATE("2026-06-01") AND date < DATE("2026-07-01")',
     );
     expect(buildMonthQuery("last-reviewed", 2026, 12)).toContain(
-      "`last-reviewed` >= \"2026-12-01\"",
+      "`last-reviewed` >= DATE(\"2026-12-01\")",
     );
   });
 

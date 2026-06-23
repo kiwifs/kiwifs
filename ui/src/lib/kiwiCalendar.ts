@@ -101,7 +101,7 @@ export function buildMonthQuery(
 ): string {
   const field = escapeDqlField(dateField);
   const { start, endExclusive } = monthRange(year, month);
-  return `TABLE _path, title, status, state, tags, ${field} WHERE ${field} >= "${start}" AND ${field} < "${endExclusive}" LIMIT 200`;
+  return `TABLE _path, title, status, state, tags, ${field} WHERE ${field} >= DATE("${start}") AND ${field} < DATE("${endExclusive}") LIMIT 200`;
 }
 
 export function parseCalendarRows(
