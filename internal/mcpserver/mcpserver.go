@@ -63,6 +63,7 @@ func New(opts Options) (*server.MCPServer, Backend, error) {
 		"1.0.0",
 		server.WithRecovery(),
 		server.WithToolHandlerMiddleware(tracingMiddleware(em)),
+		server.WithHooks(spec20260728Hooks()),
 	)
 
 	registerTools(s, backend, opts)
@@ -2877,7 +2878,7 @@ func StreamableHTTPHandler(s *server.MCPServer, authToken string) http.Handler {
 		server.WithEndpointPath("/mcp"),
 		server.WithStateLess(true),
 	)
-	return bearerAuth(authToken, mcpHandler)
+	return bearerAuth(authToken, newSpec20260728HTTPHandler(s, mcpHandler))
 }
 
 func newHTTPHandler(s *server.MCPServer, started time.Time, authToken string) http.Handler {
