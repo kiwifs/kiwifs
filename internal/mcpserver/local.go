@@ -414,6 +414,84 @@ func (b *LocalBackend) SearchSemanticScoped(ctx context.Context, query string, l
 	return out, nil
 }
 
+func (b *LocalBackend) Recall(ctx context.Context, params RecallParams) ([]RecallResult, error) {
+	if err := b.init(); err != nil {
+		return nil, err
+	}
+	recaller := &search.Recaller{Searcher: b.stack.Searcher}
+	if b.stack.Vectors != nil {
+		recaller.Vectors = localVectorAdapter{svc: b.stack.Vectors}
+	}
+	if b.stack.Linker != nil {
+		recaller.Linker = localLinkerAdapter{linker: b.stack.Linker}
+	}
+	if meta, ok := b.stack.Searcher.(search.MetaReader); ok {
+		recaller.Meta = meta
+	}
+	limit := params.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	results, err := recaller.Recall(ctx, search.RecallOptions{
+		Query:         params.Query,
+		Limit:         limit,
+		Sources:       params.Sources,
+		Scope:         params.Scope,
+		BoostVerified: params.BoostVerified,
+		K:             params.K,
+		PathPrefix:    params.PathPrefix,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RecallResult, len(results))
+	for i, res := range results {
+		out[i] = RecallResult{
+			Path:       res.Path,
+			Title:      res.Title,
+			Snippet:    res.Snippet,
+			Score:      res.Score,
+			Sources:    res.Sources,
+			FTSRank:    res.FTSRank,
+			VectorRank: res.VectorRank,
+			GraphRank:  res.GraphRank,
+		}
+	}
+	return out, nil
+}
+
+type localVectorAdapter struct {
+	svc *vectorstore.Service
+}
+
+func (a localVectorAdapter) Search(ctx context.Context, query string, topK int) ([]search.VectorHit, error) {
+	results, err := a.svc.Search(ctx, query, topK)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]search.VectorHit, len(results))
+	for i, res := range results {
+		out[i] = search.VectorHit{Path: res.Path, Snippet: res.Snippet, Score: res.Score}
+	}
+	return out, nil
+}
+
+type localLinkerAdapter struct {
+	linker links.Linker
+}
+
+func (a localLinkerAdapter) Backlinks(ctx context.Context, path string) ([]search.BacklinkHit, error) {
+	entries, err := a.linker.Backlinks(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]search.BacklinkHit, len(entries))
+	for i, entry := range entries {
+		out[i] = search.BacklinkHit{Path: entry.Path}
+	}
+	return out, nil
+}
+
 func filterVectorResultsByScope(ctx context.Context, sf search.ScopeFilterer, results []vectorstore.Result, scope string) ([]vectorstore.Result, error) {
 	if scope == "" || len(results) == 0 {
 		return results, nil

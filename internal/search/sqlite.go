@@ -1576,6 +1576,38 @@ func (s *SQLite) FilterByScope(ctx context.Context, paths []string, scope string
 	return out, nil
 }
 
+// FrontmatterForPaths loads parsed frontmatter for the given paths.
+func (s *SQLite) FrontmatterForPaths(ctx context.Context, paths []string) (map[string]map[string]any, error) {
+	out := map[string]map[string]any{}
+	if len(paths) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(paths))
+	for i, path := range paths {
+		args[i] = path
+	}
+	rows, err := s.readDB.QueryContext(ctx, fmt.Sprintf(
+		`SELECT path, frontmatter FROM file_meta WHERE path IN (%s)`,
+		placeholders(len(paths)),
+	), args...)
+	if err != nil {
+		return nil, fmt.Errorf("frontmatter for paths: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var path, raw string
+		if err := rows.Scan(&path, &raw); err != nil {
+			return nil, err
+		}
+		fm := map[string]any{}
+		if raw != "" {
+			_ = json.Unmarshal([]byte(raw), &fm)
+		}
+		out[path] = fm
+	}
+	return out, rows.Err()
+}
+
 // SearchBoosted runs a normal FTS5 search and then applies a *soft*
 // trust re-rank: verified / source-of-truth / high-confidence pages get
 // nudged up, deprecated pages nudged down, but every BM25 hit stays in

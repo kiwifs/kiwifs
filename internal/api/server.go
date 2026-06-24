@@ -521,6 +521,7 @@ func (s *Server) setupRoutes() {
 	api.GET("/search/verified", h.VerifiedSearch)
 	api.POST("/search/semantic", h.SemanticSearch)
 	api.GET("/search/semantic", h.SemanticSearch)
+	api.POST("/recall", h.Recall)
 	api.GET("/meta", h.Meta)
 	api.GET("/stale", h.StalePages)
 	api.GET("/contradictions", h.Contradictions)

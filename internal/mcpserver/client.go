@@ -322,6 +322,40 @@ func (r *RemoteBackend) SearchSemanticScoped(ctx context.Context, query string, 
 	return out, nil
 }
 
+func (r *RemoteBackend) Recall(ctx context.Context, params RecallParams) ([]RecallResult, error) {
+	var result struct {
+		Results []RecallResult `json:"results"`
+	}
+	body := map[string]any{
+		"query": params.Query,
+	}
+	if params.Limit > 0 {
+		body["limit"] = params.Limit
+	}
+	if len(params.Sources) > 0 {
+		body["sources"] = params.Sources
+	}
+	if params.Scope != "" {
+		body["scope"] = params.Scope
+	}
+	if params.BoostVerified {
+		body["boost_verified"] = true
+	}
+	if params.K > 0 {
+		body["k"] = params.K
+	}
+	if params.PathPrefix != "" {
+		body["path_prefix"] = params.PathPrefix
+	}
+	if err := r.postJSON(ctx, r.apiPrefix+"/recall", body, &result); err != nil {
+		return nil, err
+	}
+	for i := range result.Results {
+		result.Results[i].Snippet = stripMarkTags(result.Results[i].Snippet)
+	}
+	return result.Results, nil
+}
+
 func (r *RemoteBackend) QueryMeta(ctx context.Context, filters []string, sort, order string, limit, offset int) ([]MetaResult, error) {
 	return r.QueryMetaOr(ctx, filters, nil, sort, order, limit, offset)
 }

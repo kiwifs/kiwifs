@@ -355,6 +355,21 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 			Handler: handleSearchSemantic(b),
 		},
 		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_recall",
+				mcp.WithDescription("Fused memory recall combining keyword (FTS), semantic (vector), and graph (backlink) retrieval with Reciprocal Rank Fusion. Use for agent memory retrieval instead of calling kiwi_search, kiwi_search_semantic, and kiwi_backlinks separately."),
+				mcp.WithString("query", mcp.Required(), mcp.Description("Natural language recall query")),
+				mcp.WithNumber("limit", mcp.Description("Max results (default 10, max 50)")),
+				mcp.WithArray("sources", mcp.Description("Retrieval sources to fuse: fts, vector, graph (default: all three)"), mcp.WithStringItems()),
+				mcp.WithString("scope", mcp.Description("Filter to pages whose frontmatter scope exactly matches, e.g. semantic")),
+				mcp.WithBoolean("boost_verified", mcp.Description("Multiply score by frontmatter confidence (0.0–1.0) when present")),
+				mcp.WithNumber("k", mcp.Description("RRF rank constant (default 60)")),
+				mcp.WithString("path_prefix", mcp.Description("Optional path prefix to scope results")),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleRecall(b),
+		},
+		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_backlinks",
 				mcp.WithDescription("List all pages that link to a given page via [[wiki links]]. Useful for understanding page connections and impact of changes."),
 				mcp.WithString("path", pathOpts...),
@@ -1744,6 +1759,64 @@ func handleSearchSemantic(b Backend) server.ToolHandlerFunc {
 		}
 		if sb.Len() == 0 {
 			return mcp.NewToolResultText("No results above threshold."), nil
+		}
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+}
+
+func handleRecall(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		query, _ := args["query"].(string)
+		if query == "" {
+			return mcp.NewToolResultError("query is required"), nil
+		}
+		limit := intArg(args, "limit", 10)
+		if limit > 50 {
+			limit = 50
+		}
+		prefix, err := optionalReadOnlyPathArg(args, "path_prefix")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		scope, _ := args["scope"].(string)
+		boostVerified, _ := args["boost_verified"].(bool)
+		k := intArg(args, "k", 0)
+		var sources []string
+		if raw, ok := args["sources"].([]any); ok {
+			for _, item := range raw {
+				if s, ok := item.(string); ok {
+					sources = append(sources, s)
+				}
+			}
+		}
+		results, err := b.Recall(ctx, RecallParams{
+			Query:         query,
+			Limit:         limit,
+			Sources:       sources,
+			Scope:         scope,
+			BoostVerified: boostVerified,
+			K:             k,
+			PathPrefix:    prefix,
+		})
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Recall failed: %v", err)), nil
+		}
+		if len(results) == 0 {
+			return mcp.NewToolResultText("No results found."), nil
+		}
+		var sb strings.Builder
+		for i, r := range results {
+			title := r.Title
+			if title != "" {
+				fmt.Fprintf(&sb, "%d. %s — %s (score: %.3f, sources: %s)\n", i+1, r.Path, title, r.Score, strings.Join(r.Sources, "+"))
+			} else {
+				fmt.Fprintf(&sb, "%d. %s (score: %.3f, sources: %s)\n", i+1, r.Path, r.Score, strings.Join(r.Sources, "+"))
+			}
+			if r.Snippet != "" {
+				fmt.Fprintf(&sb, "   %s\n", r.Snippet)
+			}
+			sb.WriteString("\n")
 		}
 		return mcp.NewToolResultText(sb.String()), nil
 	}

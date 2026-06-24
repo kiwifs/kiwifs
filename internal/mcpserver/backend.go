@@ -22,6 +22,27 @@ type SearchResult struct {
 	Score   float64 `json:"score,omitempty"`
 }
 
+type RecallResult struct {
+	Path       string   `json:"path"`
+	Title      string   `json:"title,omitempty"`
+	Snippet    string   `json:"snippet,omitempty"`
+	Score      float64  `json:"score"`
+	Sources    []string `json:"sources"`
+	FTSRank    int      `json:"fts_rank,omitempty"`
+	VectorRank int      `json:"vector_rank,omitempty"`
+	GraphRank  int      `json:"graph_rank,omitempty"`
+}
+
+type RecallParams struct {
+	Query         string   `json:"query"`
+	Limit         int      `json:"limit"`
+	Sources       []string `json:"sources"`
+	Scope         string   `json:"scope"`
+	BoostVerified bool     `json:"boost_verified"`
+	K             int      `json:"k"`
+	PathPrefix    string   `json:"path_prefix"`
+}
+
 type MetaResult struct {
 	Path        string          `json:"path"`
 	Frontmatter json.RawMessage `json:"frontmatter"`
@@ -143,6 +164,7 @@ type Backend interface {
 	Tree(ctx context.Context, path string) (json.RawMessage, error)
 	Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]SearchResult, error)
 	SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error)
+	Recall(ctx context.Context, params RecallParams) ([]RecallResult, error)
 	QueryMeta(ctx context.Context, filters []string, sort, order string, limit, offset int) ([]MetaResult, error)
 	QueryMetaOr(ctx context.Context, andFilters, orFilters []string, sort, order string, limit, offset int, paths ...string) ([]MetaResult, error)
 	QueryDQL(ctx context.Context, dql string, limit, offset int) (*QueryResult, error)
