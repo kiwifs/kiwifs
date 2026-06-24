@@ -56,6 +56,17 @@ func TestFuseRRFSingleSource(t *testing.T) {
 	}
 }
 
+func TestRecallerEmptyQueryReturnsNil(t *testing.T) {
+	r := &Recaller{Searcher: &mockRecallSearcher{}}
+	out, err := r.Recall(context.Background(), RecallOptions{Query: "   "})
+	if err != nil {
+		t.Fatalf("Recall: %v", err)
+	}
+	if out != nil {
+		t.Fatalf("expected nil results for empty query, got %+v", out)
+	}
+}
+
 func TestRecallerFTSOnlyWhenVectorDisabled(t *testing.T) {
 	searcher := &mockRecallSearcher{results: []Result{
 		{Path: "auth.md", Snippet: "auth migration", Score: 1.0},

@@ -123,7 +123,7 @@ func (r *Recaller) Recall(ctx context.Context, opts RecallOptions) ([]RecallResu
 				results []Result
 				err     error
 			)
-			if opts.Scope != "" || searchOpts.Scope != "" {
+			if opts.Scope != "" {
 				if os, ok := r.Searcher.(OptionsSearcher); ok {
 					results, err = os.SearchWithOptions(ctx, opts.Query, fetchLimit, 0, opts.PathPrefix, searchOpts)
 				} else {
