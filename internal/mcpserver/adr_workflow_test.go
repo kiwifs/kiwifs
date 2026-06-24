@@ -12,12 +12,12 @@ import (
 )
 
 func TestADRWorkflowAdvanceSyncsStatus(t *testing.T) {
-	t.Parallel()
 	root := t.TempDir()
 	if err := workspace.Init(root, "adr"); err != nil {
 		t.Fatal(err)
 	}
 	b := NewLocalBackend(root)
+	t.Cleanup(func() { _ = b.Close() })
 	ctx := context.Background()
 
 	path := "decisions/ADR-002-test-sync.md"
@@ -67,12 +67,12 @@ Test workflow advance keeps status aligned with state.
 }
 
 func TestADRWorkflowAdvanceRejectsInvalidTransition(t *testing.T) {
-	t.Parallel()
 	root := t.TempDir()
 	if err := workspace.Init(root, "adr"); err != nil {
 		t.Fatal(err)
 	}
 	b := NewLocalBackend(root)
+	t.Cleanup(func() { _ = b.Close() })
 	ctx := context.Background()
 
 	path := "decisions/ADR-003-skip-test.md"

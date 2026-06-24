@@ -3,20 +3,30 @@ package webui
 import (
 	"bytes"
 	"strings"
+	"sync"
 
 	"github.com/kiwifs/kiwifs/internal/config"
 )
 
-var branding config.BrandingConfig
+var (
+	brandingMu sync.RWMutex
+	branding   config.BrandingConfig
+)
 
 // SetBranding wires workspace branding for index.html injection at serve time.
 func SetBranding(b config.BrandingConfig) {
+	brandingMu.Lock()
 	branding = b
+	brandingMu.Unlock()
 }
 
 func injectBranding(html []byte) []byte {
-	name := htmlEscape(branding.ResolvedName())
-	favicon := htmlEscape(branding.ResolvedFaviconURL())
+	brandingMu.RLock()
+	b := branding
+	brandingMu.RUnlock()
+
+	name := htmlEscape(b.ResolvedName())
+	favicon := htmlEscape(b.ResolvedFaviconURL())
 
 	out := bytes.Replace(html, []byte("<title>KiwiFS</title>"), []byte("<title>"+name+"</title>"), 1)
 
