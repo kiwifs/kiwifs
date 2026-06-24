@@ -128,7 +128,9 @@ func (r *Recaller) Recall(ctx context.Context, opts RecallOptions) ([]RecallResu
 					results, err = os.SearchWithOptions(ctx, opts.Query, fetchLimit, 0, opts.PathPrefix, searchOpts)
 				} else {
 					results, err = r.Searcher.Search(ctx, opts.Query, fetchLimit, 0, opts.PathPrefix)
-					results, err = filterResultsByScope(ctx, r.Searcher, results, opts.Scope), err
+					if err == nil {
+						results = filterResultsByScope(ctx, r.Searcher, results, opts.Scope)
+					}
 				}
 			} else {
 				results, err = r.Searcher.Search(ctx, opts.Query, fetchLimit, 0, opts.PathPrefix)
