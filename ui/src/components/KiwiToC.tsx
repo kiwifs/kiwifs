@@ -103,7 +103,7 @@ export function KiwiToC({ markdown, containerRef }: Props) {
           </Button>
         </div>
         {!collapsed && (
-          <nav className="border-l border-border">
+          <nav className="border-l border-border max-h-[calc(100vh-6rem)] overflow-y-auto overscroll-contain">
             {headings.map((h) => (
               <a
                 key={h.id}
