@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1053,4 +1054,59 @@ func (h *Handlers) ReadLocalNote(c echo.Context) error {
 	}
 
 	return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", data)
+}
+
+// GetLocalState reads a JSON state file from .local/<name>.json.
+func (h *Handlers) GetLocalState(c echo.Context) error {
+	name := c.QueryParam("name")
+	if name == "" || strings.ContainsAny(name, "/\\..") {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required and must be a simple identifier")
+	}
+
+	localPath := filepath.Join(h.root, ".local", name+".json")
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return c.JSON(http.StatusOK, map[string]any{})
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read local state")
+	}
+
+	c.Response().Header().Set("Content-Type", "application/json; charset=utf-8")
+	return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
+}
+
+// PutLocalState writes a JSON state file to .local/<name>.json.
+func (h *Handlers) PutLocalState(c echo.Context) error {
+	name := c.QueryParam("name")
+	if name == "" || strings.ContainsAny(name, "/\\..") {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required and must be a simple identifier")
+	}
+
+	const maxBody = 512 << 10 // 512 KB
+	body, err := io.ReadAll(io.LimitReader(c.Request().Body, maxBody+1))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "failed to read body")
+	}
+	if len(body) > maxBody {
+		return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "state exceeds 512 KB")
+	}
+
+	// Validate it's valid JSON
+	var check json.RawMessage
+	if err := json.Unmarshal(body, &check); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "body must be valid JSON")
+	}
+
+	localDir := filepath.Join(h.root, ".local")
+	if err := os.MkdirAll(localDir, 0o755); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create .local directory")
+	}
+
+	localPath := filepath.Join(localDir, name+".json")
+	if err := os.WriteFile(localPath, body, 0o644); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write local state")
+	}
+
+	return c.NoContent(http.StatusNoContent)
 }

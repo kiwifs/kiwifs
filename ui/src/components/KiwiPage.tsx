@@ -37,6 +37,7 @@ import { ExcalidrawMarkdownPreview, isExcalidrawMarkdown } from "./ExcalidrawMar
 import { ErrorBoundary } from "./ErrorBoundary";
 import { KiwiWidget } from "./KiwiWidget";
 import { CodeRunner } from "@kw/widgets/CodeRunner";
+import { PageTracker } from "@kw/widgets/PageTracker";
 
 import { PageSkeleton } from "./PageSkeleton";
 import { trackRecent } from "./KiwiFavorites";
@@ -819,6 +820,9 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                         const codeLangMatch = codeMeta.match(/lang=(\w+)/);
                         const codeLang = codeLangMatch ? codeLangMatch[1] : "python";
                         return <CodeRunner source={raw} lang={codeLang} />;
+                      }
+                      if (lang === "widget:tracker") {
+                        return <PageTracker onNavigate={onNavigate} stateName={raw.trim() || "progress"} />;
                       }
                       if (lang?.startsWith("widget:")) {
                         return <KiwiWidget name={lang.slice("widget:".length)} source={raw} />;

@@ -506,6 +506,8 @@ func (s *Server) setupRoutes() {
 	api.GET("/tree", h.Tree)
 	api.GET("/file", h.ReadFile)
 	api.GET("/local-note", h.ReadLocalNote)
+	api.GET("/local-state", h.GetLocalState)
+	api.PUT("/local-state", h.PutLocalState)
 	api.GET("/readlink", h.Readlink)
 	api.PUT("/file", h.WriteFile)
 	api.PATCH("/file", h.PatchFile)
