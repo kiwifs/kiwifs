@@ -373,8 +373,8 @@
 /* ─── Inline tags ─── */
 .kiwi-inline-tag {
   @apply inline-flex items-center gap-0.5 text-xs font-medium rounded-full px-2 py-0.5
-         bg-muted text-muted-foreground border border-border
-         cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors;
+         bg-primary/10 text-primary border border-primary/20
+         cursor-pointer hover:bg-primary/20 transition-colors;
 }
 
 /* ─── Search snippet highlights ─── */
@@ -431,6 +431,12 @@
 }
 .kiwi-shiki .kiwi-diff-del {
   @apply block -mx-4 px-4 bg-red-500/10;
+}
+
+/* ─── Local Notes (personal annotations overlay) ─── */
+.kiwi-local-notes-section {
+  border-color: hsl(var(--primary) / 0.2);
+  background: hsl(var(--primary) / 0.02);
 }
 
 /* ─── CodeRunner (editable code blocks with execution) ─── */

@@ -361,6 +361,16 @@ export const api = {
     return { content, etag, lastModified };
   },
 
+  async readLocalNote(path: string): Promise<string | null> {
+    const qs = new URLSearchParams({ path });
+    const res = await fetch(`${kiwiBase()}/local-note?${qs}`, {
+      headers: { "X-Actor": actor(), ..._extraHeaders },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    return res.text();
+  },
+
   async writeFile(
     path: string,
     content: string,

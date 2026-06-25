@@ -1031,3 +1031,26 @@ func (h *Handlers) DeleteFile(c echo.Context) error {
 	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindDelete, Path: path})
 	return c.JSON(http.StatusOK, map[string]string{"deleted": path})
 }
+
+// ReadLocalNote serves the companion .local/<filename> for a given page path.
+// This bypasses the hidden-dir filter intentionally — .local/ files are only
+// accessible via this explicit endpoint and never through the standard file API.
+func (h *Handlers) ReadLocalNote(c echo.Context) error {
+	pagePath := c.QueryParam("path")
+	if pagePath == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "path is required")
+	}
+
+	base := filepath.Base(pagePath)
+	localPath := filepath.Join(h.root, ".local", base)
+
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return c.NoContent(http.StatusNotFound)
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read local note")
+	}
+
+	return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", data)
+}
