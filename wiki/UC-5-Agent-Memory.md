@@ -2,6 +2,8 @@
 
 **Label:** [`uc:agent-memory`](https://github.com/kiwifs/kiwifs/labels/uc%3Aagent-memory)
 
+**Live demo:** [demo.kiwifs.com/memory](https://demo.kiwifs.com/memory/)
+
 ## Thesis
 
 AI agents need persistent memory across sessions. Every existing solution runs LLMs inside the storage layer to extract facts, resolve contradictions, and build entity graphs. KiwiFS takes a different approach: be the **library**, not the engine. Provide the data model, the query primitives, and the lifecycle infrastructure — then let the agent write markdown and the operator run consolidation. The agent is the pen. The LLM is the brain. KiwiFS is the paper.

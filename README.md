@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://docs.kiwifs.com">Docs</a> · <a href="docs/API.md">API</a> · <a href="https://demo.kiwifs.com/storybook/">Storybook</a> · <a href="docs/EXAMPLES.md">Examples</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="docs/ROADMAP.md">Roadmap</a> · <a href="docs/ARCHITECTURE.md">Architecture</a> · <a href="CONTRIBUTING.md">Contributing</a>
+  <a href="https://docs.kiwifs.com">Docs</a> · <a href="docs/API.md">API</a> · <a href="https://demo.kiwifs.com">Live Demos</a> · <a href="https://demo.kiwifs.com/storybook/">Storybook</a> · <a href="docs/EXAMPLES.md">Examples</a> · <a href="docs/FAQ.md">FAQ</a> · <a href="docs/ROADMAP.md">Roadmap</a> · <a href="docs/ARCHITECTURE.md">Architecture</a> · <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 ```bash
@@ -81,6 +81,26 @@ echo "# Report" > /kiwi/r.md      Cmd+K search, backlinks, TOC
 | **Embeddable** | Use as a Go library (`pkg/kiwi`) in your own app. [Docs](https://docs.kiwifs.com/deploy/go-embed) |
 
 [See all features and configuration](https://docs.kiwifs.com)
+
+---
+
+## Live demos
+
+Every template ships with a **live, interactive demo** at [demo.kiwifs.com](https://demo.kiwifs.com). Each one uses a different theme preset so you can see how customizable KiwiFS really is.
+
+| Template | Demo | Use case |
+|----------|------|----------|
+| Knowledge Base | [demo.kiwifs.com/kb](https://demo.kiwifs.com/kb/) | Internal & external knowledge base |
+| Team Wiki | [demo.kiwifs.com/wiki](https://demo.kiwifs.com/wiki/) | Confluence / Notion replacement |
+| Tasks | [demo.kiwifs.com/tasks](https://demo.kiwifs.com/tasks/) | Agent task orchestration |
+| Structured Data | [demo.kiwifs.com/data](https://demo.kiwifs.com/data/) | Records, queries, dashboards |
+| Headless CMS | [demo.kiwifs.com/cms](https://demo.kiwifs.com/cms/) | Git-based headless CMS |
+| Agent Memory | [demo.kiwifs.com/memory](https://demo.kiwifs.com/memory/) | Persistent agent memory |
+| Runbooks | [demo.kiwifs.com/runbook](https://demo.kiwifs.com/runbook/) | DevOps runbooks & incidents |
+| ADR | [demo.kiwifs.com/adr](https://demo.kiwifs.com/adr/) | Architecture decision records |
+| Prompt Library | [demo.kiwifs.com/prompt](https://demo.kiwifs.com/prompt/) | Prompt management & versioning |
+| Research Library | [demo.kiwifs.com/research](https://demo.kiwifs.com/research/) | Literature reviews & citations |
+| Event Log | [demo.kiwifs.com/log](https://demo.kiwifs.com/log/) | Compliance & audit logs |
 
 ---
 

@@ -30,6 +30,8 @@ KiwiFS is building toward multiple product surfaces that all share the same prim
 ## Resources
 
 - [README](https://github.com/kiwifs/kiwifs/blob/main/README.md)
+- [Live Demos](https://demo.kiwifs.com) — interactive template gallery
+- [Storybook](https://demo.kiwifs.com/storybook/) — UI component library
 - [Architecture](https://github.com/kiwifs/kiwifs/blob/main/docs/ARCHITECTURE.md)
 - [API Reference](https://github.com/kiwifs/kiwifs/blob/main/docs/API.md)
 - [Examples](https://github.com/kiwifs/kiwifs/blob/main/docs/EXAMPLES.md)

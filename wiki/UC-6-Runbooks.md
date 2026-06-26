@@ -2,6 +2,8 @@
 
 **Label:** [`uc:runbooks`](https://github.com/kiwifs/kiwifs/labels/uc%3Arunbooks)
 
+**Live demo:** [demo.kiwifs.com/runbook](https://demo.kiwifs.com/runbook/)
+
 ## Thesis
 
 Runbooks rot. They sit in Confluence, drift from reality, and nobody updates them after an incident. The 2026 industry consensus (incident.io, PagerDuty, DevHelm) is "progressive automation": start with documented manual procedures, then make them executable by agents, then close the feedback loop so runbooks evolve from their own execution history. KiwiFS is uniquely positioned because it's already the filesystem where agents read *and* write. A runbook that an agent executes, records outcomes in, and proposes improvements to — all as git-tracked markdown — doesn't exist anywhere else.

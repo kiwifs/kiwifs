@@ -2,6 +2,8 @@
 
 **Label:** [`uc:knowledge-base`](https://github.com/kiwifs/kiwifs/labels/uc%3Aknowledge-base)
 
+**Live demo:** [demo.kiwifs.com/kb](https://demo.kiwifs.com/kb/)
+
 ## Thesis
 
 Every team above 10 people hits the same wall: answers live in Slack threads, Google Docs, and tribal memory. A knowledge base is the cure — a curated, searchable, governed repository where answers are written once and consumed many times. The industry (Zendesk, Document360, Guru, Slite, HelpCenter.io) distinguishes knowledge bases from wikis by three properties: **editorial governance** (content is reviewed, verified, and owned), **structured article types** (how-to, troubleshooting, FAQ, reference), and **audience awareness** (internal vs. external, with different tone, access, and analytics).

@@ -2,6 +2,8 @@
 
 **Label:** [`uc:task-orchestration`](https://github.com/kiwifs/kiwifs/labels/uc%3Atask-orchestration)
 
+**Live demo:** [demo.kiwifs.com/tasks](https://demo.kiwifs.com/tasks/)
+
 ## Thesis
 
 OpenAI's [Symphony](https://openai.com/index/open-source-codex-orchestration-symphony/) turns Linear into a control plane for coding agents — every open issue gets an agent, agents run continuously, humans review results. KiwiFS already has the markdown-native primitives to be that control plane *without requiring an external issue tracker*. The goal: a workspace where humans file tasks as markdown, agents pick them up and work on them, and progress is tracked in the same filesystem.

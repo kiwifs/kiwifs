@@ -2,6 +2,8 @@
 
 **Label:** [`uc:data-query`](https://github.com/kiwifs/kiwifs/labels/uc%3Adata-query)
 
+**Live demo:** [demo.kiwifs.com/data](https://demo.kiwifs.com/data/)
+
 ## Thesis
 
 A user wants to import their Firebase database into markdown and query user behavior data using KiwiFS — potentially outperforming a RAG solution. This is compelling because KiwiFS has one of the most complete import + query stacks in the markdown ecosystem, and recent research shows structured markdown queries outperform RAG for bounded domains.

@@ -2,6 +2,8 @@
 
 **Label:** [`uc:adr`](https://github.com/kiwifs/kiwifs/labels/uc%3Aadr)
 
+**Live demo:** [demo.kiwifs.com/adr](https://demo.kiwifs.com/adr/)
+
 ## Thesis
 
 Architecture Decision Records capture the "why" that code cannot express. The industry standard (Nygard, MADR, AWS Prescriptive Guidance, Martin Fowler) is clear: ADRs are numbered markdown files with status lifecycles, stored in the repo next to the code. But existing tools (adr-tools, Log4brains) are CLI wrappers that create files — they don't index, query, or connect decisions. KiwiFS already has frontmatter indexing, DQL, wiki-link graphs, the contradictions system, and workflow state machines. An ADR system where agents can query "what architectural decisions constrain authentication?" before writing code is a natural fit.

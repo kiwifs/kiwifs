@@ -2,6 +2,8 @@
 
 **Label:** [`uc:prompt-library`](https://github.com/kiwifs/kiwifs/labels/uc%3Aprompt-library)
 
+**Live demo:** [demo.kiwifs.com/prompt](https://demo.kiwifs.com/prompt/)
+
 ## Thesis
 
 As teams scale AI usage, they accumulate hundreds of prompts across codebases, Slack threads, and individual notebooks. The industry response (PromptLayer, Langfuse, Humanloop) is a versioned prompt registry that decouples prompt updates from code deployment. But these are all SaaS products with opaque storage. KiwiFS turns each prompt into a git-versioned markdown file with structured frontmatter — the prompt text is `cat`-able, the version history is `git log`, the performance data is DQL-queryable, and agents retrieve the best prompt for a task via MCP. No separate prompt management SaaS needed.

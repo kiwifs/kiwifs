@@ -2,6 +2,8 @@
 
 **Label:** [`uc:event-log`](https://github.com/kiwifs/kiwifs/labels/uc%3Aevent-log)
 
+**Live demo:** [demo.kiwifs.com/log](https://demo.kiwifs.com/log/)
+
 ## Thesis
 
 Event sourcing — storing state as an append-only log of immutable events — is one of the most compliance-friendly architectural patterns. The event log *is* the audit trail. In 2026, tools like opslog, Chronicle, and audit-log provide append-only storage with hash chains for tamper evidence. KiwiFS already has the core primitive: `POST /api/kiwi/file/append` writes to a file, and git commits provide an immutable hash-chained history by default. The gap is enforcing append-only semantics at the API level and making log entries queryable via DQL. For audit logs, decision logs, agent action logs, or any append-only record where human readability matters, git-tracked markdown is surprisingly powerful.

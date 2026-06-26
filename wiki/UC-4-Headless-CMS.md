@@ -2,6 +2,8 @@
 
 **Label:** [`uc:headless-cms`](https://github.com/kiwifs/kiwifs/labels/uc%3Aheadless-cms)
 
+**Live demo:** [demo.kiwifs.com/cms](https://demo.kiwifs.com/cms/)
+
 ## Thesis
 
 KiwiFS stores content as markdown with YAML frontmatter, versions every write via git, and exposes 80+ REST endpoints. With targeted additions it becomes a git-based headless CMS — like Decap/TinaCMS for the content model, but with the programmability of Strapi and zero external database.

@@ -2,6 +2,8 @@
 
 **Label:** [`uc:team-wiki`](https://github.com/kiwifs/kiwifs/labels/uc%3Ateam-wiki)
 
+**Live demo:** [demo.kiwifs.com/wiki](https://demo.kiwifs.com/wiki/)
+
 ## Thesis
 
 KiwiFS already functions as a team wiki — wiki links, backlinks, graph view, comments, sharing, multi-space, git history. The gap vs. Outline/Confluence is around collaboration UX, discoverability, and plugging into agent workflows so that new team members (human or AI) can onboard by querying the wiki.

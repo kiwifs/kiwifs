@@ -2,6 +2,8 @@
 
 **Label:** [`uc:research`](https://github.com/kiwifs/kiwifs/labels/uc%3Aresearch)
 
+**Live demo:** [demo.kiwifs.com/research](https://demo.kiwifs.com/research/)
+
 ## Thesis
 
 The dominant research workflow in 2026 is Zotero (reference manager) + Obsidian (synthesis environment), connected by community plugins. Researchers capture papers in Zotero, annotate PDFs, export literature notes as markdown into Obsidian, then use Dataview to build synthesis tables. KiwiFS has a superset of Obsidian's query capabilities (DQL, FTS5, vector search, graph view) plus what Obsidian lacks: a REST/MCP API, multi-user spaces, git versioning, and agent-native access. A researcher's KiwiFS space where an agent can query "find papers that contradict this claim" across the entire literature collection — using vector search for semantic similarity and the link graph for citation chains — doesn't exist in any single tool today.
