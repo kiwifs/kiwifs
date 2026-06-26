@@ -384,7 +384,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
   const [lastAuthor, setLastAuthor] = useState<string | null>(null);
   const [versionError, setVersionError] = useState(false);
   const [commentError, setCommentError] = useState(false);
-  const [localNote, setLocalNote] = useState<string | null>(null);
+  const [myNote, setMyNote] = useState<string | null>(null);
   const proseRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -411,9 +411,9 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
   useEffect(() => {
     if (isDir) return;
     let cancelled = false;
-    setLocalNote(null);
-    api.readLocalNote(path).then((note) => {
-      if (!cancelled) setLocalNote(note);
+    setMyNote(null);
+    api.readMyNote(path).then((note) => {
+      if (!cancelled) setMyNote(note);
     });
     return () => { cancelled = true; };
   }, [path, refreshKey, isDir]);
@@ -1049,15 +1049,15 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
 
               {/* ── Footer zone: fixed order, collapsible ── */}
               <div className="mt-12 space-y-2">
-                {localNote && (
+                {myNote && (
                   <CollapsibleFooterSection
                     icon={<NotebookPen className="h-4 w-4" />}
                     title="My Notes"
-                    storageKey="footer-local-notes"
+                    storageKey="footer-my-notes"
                     defaultOpen
-                    className="kiwi-local-notes-section"
+                    className="kiwi-my-notes-section"
                   >
-                    <div className="kiwi-prose kiwi-local-notes">
+                    <div className="kiwi-prose kiwi-my-notes">
                       <ErrorBoundary>
                         <ReactMarkdown
                           remarkPlugins={[
@@ -1101,7 +1101,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                             pre: ({ children }) => <>{children}</>,
                           }}
                         >
-                          {stripObsidianComments(localNote.replace(/^---[\s\S]*?---\n*/, ""))}
+                          {stripObsidianComments(myNote.replace(/^---[\s\S]*?---\n*/, ""))}
                         </ReactMarkdown>
                       </ErrorBoundary>
                     </div>

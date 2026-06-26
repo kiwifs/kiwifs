@@ -361,9 +361,9 @@ export const api = {
     return { content, etag, lastModified };
   },
 
-  async readLocalNote(path: string): Promise<string | null> {
+  async readMyNote(path: string): Promise<string | null> {
     const qs = new URLSearchParams({ path });
-    const res = await fetch(`${kiwiBase()}/local-note?${qs}`, {
+    const res = await fetch(`${kiwiBase()}/me/note?${qs}`, {
       headers: { "X-Actor": actor(), ..._extraHeaders },
     });
     if (res.status === 404) return null;
@@ -371,18 +371,18 @@ export const api = {
     return res.text();
   },
 
-  async getLocalState<T = Record<string, unknown>>(name: string): Promise<T> {
+  async getMyState<T = Record<string, unknown>>(name: string): Promise<T> {
     const qs = new URLSearchParams({ name });
-    const res = await fetch(`${kiwiBase()}/local-state?${qs}`, {
+    const res = await fetch(`${kiwiBase()}/me/state?${qs}`, {
       headers: { "X-Actor": actor(), ..._extraHeaders },
     });
     if (!res.ok) return {} as T;
     return res.json();
   },
 
-  async putLocalState(name: string, state: unknown): Promise<void> {
+  async putMyState(name: string, state: unknown): Promise<void> {
     const qs = new URLSearchParams({ name });
-    await fetch(`${kiwiBase()}/local-state?${qs}`, {
+    await fetch(`${kiwiBase()}/me/state?${qs}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Actor": actor(), ..._extraHeaders },
       body: JSON.stringify(state),
