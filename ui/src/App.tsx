@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Bookmark,
   Clock4,
   Columns3,
   Database,
@@ -24,6 +25,7 @@ import { KiwiPage } from "./components/KiwiPage";
 import { KiwiEditor } from "./components/KiwiEditor";
 import { KiwiSearch } from "./components/KiwiSearch";
 import { KiwiGraph } from "./components/KiwiGraph";
+import { KiwiBookmarksPanel } from "./components/KiwiBookmarksPanel";
 import { KiwiHistory } from "./components/KiwiHistory";
 import { KiwiData } from "./components/KiwiData";
 import { KiwiBases } from "./components/KiwiBases";
@@ -88,6 +90,7 @@ export default function App() {
   const [newOpen, setNewOpen] = useState(false);
   const [newFolder, setNewFolder] = useState<string | undefined>();
   const [graphOpen, setGraphOpen] = useState(false);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -122,6 +125,7 @@ export default function App() {
     setKanbanOpen(false);
     setDataOpen(false);
     setGraphOpen(false);
+    setBookmarksOpen(false);
     setHistoryOpen(false);
   }, []);
 
@@ -195,6 +199,7 @@ export default function App() {
     newOpen,
     searchOpen,
     graphOpen,
+    bookmarksOpen,
     historyOpen,
     dataOpen,
     basesOpen,
@@ -210,6 +215,7 @@ export default function App() {
     newOpen,
     searchOpen,
     graphOpen,
+    bookmarksOpen,
     historyOpen,
     dataOpen,
     basesOpen,
@@ -699,6 +705,7 @@ const handleSpaceSwitch = useCallback(() => {
               onToggle={(id) => {
                 const wasOpen = {
                   graph: graphOpen,
+                  bookmarks: bookmarksOpen,
                   bases: basesOpen,
                   canvas: canvasOpen,
                   whiteboard: whiteboardOpen,
@@ -710,6 +717,9 @@ const handleSpaceSwitch = useCallback(() => {
                 switch (id) {
                   case "graph":
                     setGraphOpen(!wasOpen);
+                    break;
+                  case "bookmarks":
+                    setBookmarksOpen(!wasOpen);
                     break;
                   case "bases":
                     setBasesOpen(!wasOpen);
@@ -810,7 +820,7 @@ const handleSpaceSwitch = useCallback(() => {
           )}
 
           {/* Main content area */}
-          <main className={`flex-1 relative ${basesOpen || canvasOpen || whiteboardOpen || timelineOpen || kanbanOpen || dataOpen || graphOpen ? "overflow-hidden" : "overflow-auto kiwi-scroll"}`}>
+          <main className={`flex-1 relative ${basesOpen || canvasOpen || whiteboardOpen || timelineOpen || kanbanOpen || dataOpen || graphOpen || bookmarksOpen ? "overflow-hidden" : "overflow-auto kiwi-scroll"}`}>
             {basesOpen ? (
               <KiwiBases
                 onClose={() => setBasesOpen(false)}
@@ -851,6 +861,11 @@ const handleSpaceSwitch = useCallback(() => {
                   navigate(p);
                 }}
                 onClose={() => setGraphOpen(false)}
+              />
+            ) : bookmarksOpen ? (
+              <KiwiBookmarksPanel
+                onClose={() => setBookmarksOpen(false)}
+                onNavigate={(p) => { setBookmarksOpen(false); navigate(p); }}
               />
             ) : historyOpen && activePath ? (
               <KiwiHistory
@@ -1038,6 +1053,7 @@ const BUILTIN_TOOLBAR_BUTTONS: Record<
   { label: string; Icon: typeof Network }
 > = {
   graph: { label: "Knowledge graph", Icon: Network },
+  bookmarks: { label: "Highlights", Icon: Bookmark },
   bases: { label: "Bases", Icon: LayoutGrid },
   canvas: { label: "Canvas", Icon: Presentation },
   whiteboard: { label: "Whiteboard", Icon: PenTool },

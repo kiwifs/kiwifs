@@ -173,6 +173,41 @@
   @apply bg-primary/20;
 }
 
+/* ─── Bookmark highlights (colored) ─── */
+.kiwi-prose .kiwi-bookmark-mark {
+  @apply text-foreground rounded-sm cursor-pointer transition-colors;
+}
+.kiwi-prose .kiwi-highlight-yellow {
+  background-color: rgba(250, 204, 21, 0.3);
+}
+.kiwi-prose .kiwi-highlight-yellow:hover {
+  background-color: rgba(250, 204, 21, 0.5);
+}
+.kiwi-prose .kiwi-highlight-blue {
+  background-color: rgba(96, 165, 250, 0.3);
+}
+.kiwi-prose .kiwi-highlight-blue:hover {
+  background-color: rgba(96, 165, 250, 0.5);
+}
+.kiwi-prose .kiwi-highlight-pink {
+  background-color: rgba(244, 114, 182, 0.3);
+}
+.kiwi-prose .kiwi-highlight-pink:hover {
+  background-color: rgba(244, 114, 182, 0.5);
+}
+.kiwi-prose .kiwi-highlight-green {
+  background-color: rgba(74, 222, 128, 0.3);
+}
+.kiwi-prose .kiwi-highlight-green:hover {
+  background-color: rgba(74, 222, 128, 0.5);
+}
+.kiwi-prose .kiwi-highlight-purple {
+  background-color: rgba(167, 139, 250, 0.3);
+}
+.kiwi-prose .kiwi-highlight-purple:hover {
+  background-color: rgba(167, 139, 250, 0.5);
+}
+
 /* ─── Wide table horizontal scroll ─── */
 .kiwi-table-wrapper {
   @apply overflow-x-auto my-4 rounded-lg border border-border;

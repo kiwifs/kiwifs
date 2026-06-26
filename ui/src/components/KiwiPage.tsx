@@ -19,6 +19,7 @@ import { KiwiBreadcrumb } from "./KiwiBreadcrumb";
 import { KiwiToC } from "./KiwiToC";
 import { KiwiBacklinks } from "./KiwiBacklinks";
 import { KiwiComments } from "./KiwiComments";
+import { KiwiBookmarks } from "./KiwiBookmarks";
 import { KiwiQuery } from "./KiwiQuery";
 import { PageActions } from "./PageActions";
 import { PublishButton } from "./PublishButton";
@@ -1122,6 +1123,12 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                     refreshKey={refreshKey}
                   />
                 </CollapsibleFooterSection>
+
+                <KiwiBookmarks
+                  path={path}
+                  containerRef={proseRef}
+                  renderKey={content}
+                />
 
                 <CollapsibleFooterSection
                   icon={<Link2 className="h-4 w-4" />}

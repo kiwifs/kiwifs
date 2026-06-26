@@ -81,6 +81,16 @@ function positionFor(
 // multiple <span data-kiwi-comment="wrap"> wrappers for the same comment id.
 export type WrapResult = { id: string; spans: HTMLSpanElement[] } | null;
 
+export type HighlightColor = "yellow" | "blue" | "pink" | "green" | "purple";
+
+const COLOR_CLASSES: Record<HighlightColor, string> = {
+  yellow: "kiwi-highlight-yellow",
+  blue: "kiwi-highlight-blue",
+  pink: "kiwi-highlight-pink",
+  green: "kiwi-highlight-green",
+  purple: "kiwi-highlight-purple",
+};
+
 export function wrapAnchor(
   root: HTMLElement,
   anchor: CommentAnchor,
@@ -105,9 +115,6 @@ export function wrapAnchor(
 
   const spans: HTMLSpanElement[] = [];
 
-  // Split into per-text-node sub-ranges; Range.surroundContents throws when
-  // the boundary straddles element edges, so we do it manually by walking
-  // the involved text nodes between start and end.
   const startIdx = nodes.indexOf(start.node);
   const endIdx = nodes.indexOf(end.node);
   if (startIdx < 0 || endIdx < 0) return null;
@@ -126,6 +133,61 @@ export function wrapAnchor(
     span.dataset.kiwiComment = "wrap";
     span.dataset.commentId = id;
     span.className = "kiwi-comment-mark";
+    slice.parentNode?.insertBefore(span, slice);
+    span.appendChild(slice);
+    span.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onClick(id, span.getBoundingClientRect());
+    });
+    spans.push(span);
+  }
+
+  return spans.length ? { id, spans } : null;
+}
+
+export function wrapBookmark(
+  root: HTMLElement,
+  anchor: CommentAnchor,
+  id: string,
+  color: HighlightColor,
+  onClick: (id: string, rect: DOMRect) => void
+): WrapResult {
+  const { text, nodes, offsets } = collectText(root);
+  const loc = locateAnchor(text, anchor);
+  if (!loc) return null;
+
+  const start = positionFor(loc.index, nodes, offsets);
+  const end = positionFor(loc.index + loc.length, nodes, offsets);
+  if (!start || !end) return null;
+
+  const range = document.createRange();
+  try {
+    range.setStart(start.node, start.local);
+    range.setEnd(end.node, end.local);
+  } catch {
+    return null;
+  }
+
+  const spans: HTMLSpanElement[] = [];
+
+  const startIdx = nodes.indexOf(start.node);
+  const endIdx = nodes.indexOf(end.node);
+  if (startIdx < 0 || endIdx < 0) return null;
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const node = nodes[i];
+    const from = i === startIdx ? start.local : 0;
+    const to = i === endIdx ? end.local : node.data.length;
+    if (to <= from) continue;
+
+    const slice = node.splitText(from);
+    if (to - from < slice.data.length) {
+      slice.splitText(to - from);
+    }
+    const span = document.createElement("span");
+    span.dataset.kiwiComment = "wrap";
+    span.dataset.bookmarkId = id;
+    span.className = `kiwi-bookmark-mark ${COLOR_CLASSES[color]}`;
     slice.parentNode?.insertBefore(span, slice);
     span.appendChild(slice);
     span.addEventListener("click", (e) => {
