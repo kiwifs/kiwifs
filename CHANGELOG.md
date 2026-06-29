@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.19.41](https://github.com/kiwifs/kiwifs/compare/v0.19.40...v0.19.41) (2026-06-29)
+
+
+### Features
+
+* bookmarks/highlights — colored text highlighting with toolbar panel ([#444](https://github.com/kiwifs/kiwifs/issues/444)) ([7706269](https://github.com/kiwifs/kiwifs/commit/7706269e76420a521e93bb2f9e5d9c6521dfa338))
+* **tree:** replace order metadata with natural sort ([#448](https://github.com/kiwifs/kiwifs/issues/448)) ([3b469fa](https://github.com/kiwifs/kiwifs/commit/3b469fae7259aa644cfca8c36e4d08dab3eb20bb))
+* **ui:** enhance widget components — AnnotationBar markdown, ArrayView sublabels, MatrixView triangular, GraphEdge labels ([#452](https://github.com/kiwifs/kiwifs/issues/452)) ([a8ac5da](https://github.com/kiwifs/kiwifs/commit/a8ac5da90e82b95d316400babe5c07b79824c59e))
+
+
+### Bug Fixes
+
+* always-mounted comments + kiwi-colored text selection ([4f50a8e](https://github.com/kiwifs/kiwifs/commit/4f50a8e2f556f599d17baaeaa5346c3c2a5de30f))
+* **ci:** auto-merge Cursor agent fix ([#453](https://github.com/kiwifs/kiwifs/issues/453)) ([2c3f5ab](https://github.com/kiwifs/kiwifs/commit/2c3f5ab5ee714de6ba7e13a2388e495b4186e819))
+* **tracker:** include problems in nested subfolders ([#449](https://github.com/kiwifs/kiwifs/issues/449)) ([abb8daa](https://github.com/kiwifs/kiwifs/commit/abb8daa52ab0ed65d0493f38bc24e4d8a2f04cda))
+* **ui:** MatrixView centerRows supports "start" alignment for staircase grids ([#454](https://github.com/kiwifs/kiwifs/issues/454)) ([9bcbb03](https://github.com/kiwifs/kiwifs/commit/9bcbb03eb11209b193a6dfc18ffebd2b8aa7e5b2))
+* **ui:** normalize relative paths in markdown anchor links ([#447](https://github.com/kiwifs/kiwifs/issues/447)) ([f344f2b](https://github.com/kiwifs/kiwifs/commit/f344f2bd0e750fec2b00f5287597dc9d1d781587))
+* **ui:** support SPA navigation for standard markdown .md#anchor links ([#446](https://github.com/kiwifs/kiwifs/issues/446)) ([11cfed9](https://github.com/kiwifs/kiwifs/commit/11cfed9b1ca4ca68a5628a7683f28cf5eebc8084))
+* **ui:** use correct /me/state route for local state persistence ([#450](https://github.com/kiwifs/kiwifs/issues/450)) ([40b0b30](https://github.com/kiwifs/kiwifs/commit/40b0b308cac9574aa3d479b731aaae9f078dafd6))
+
+
+### Reverts
+
+* undo post-0.19.40 changes (bookmarks, .me rename, docs) ([a2e6cab](https://github.com/kiwifs/kiwifs/commit/a2e6cab0634694e0ca2563f87dae089b8f4ae994))
+
 ## [0.19.40](https://github.com/kiwifs/kiwifs/compare/v0.19.39...v0.19.40) (2026-06-25)
 
 
