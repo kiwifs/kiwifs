@@ -14,6 +14,8 @@ export interface ArrayPointer {
 export interface ArrayViewProps {
   /** The array values to display. */
   values: (string | number)[];
+  /** Optional sublabel per cell (shown below the value, inside the cell). */
+  sublabels?: (string | number | null | undefined)[];
   /** Index of the currently active cell (highlighted). */
   activeIndex?: number;
   /** Set of indices that should be highlighted as "secondary" (e.g. part of a streak). */
@@ -76,6 +78,7 @@ function getCellStyle(
 
 export function ArrayView({
   values,
+  sublabels,
   activeIndex,
   highlightIndices,
   dimIndices,
@@ -97,6 +100,12 @@ export function ArrayView({
         const style = getCellStyle(i, activeIndex, highlightIndices, dimIndices, activeColor, highlightColor);
         const ptrs = pointersByIndex.get(i);
 
+        const sub = sublabels?.[i];
+        const hasSub = sub != null && sub !== "";
+        const mainFontSize = hasSub
+          ? (cellSize > 40 ? "0.85rem" : "0.75rem")
+          : (cellSize > 40 ? "1rem" : "0.85rem");
+
         return (
           <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
             {/* Pointer labels above */}
@@ -117,15 +126,27 @@ export function ArrayView({
                 color: style.color,
                 opacity: style.opacity ?? 1,
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
                 fontWeight: 700,
-                fontSize: cellSize > 40 ? "1rem" : "0.85rem",
+                fontSize: mainFontSize,
                 transition: "all 0.2s ease",
                 fontVariantNumeric: "tabular-nums",
+                gap: 0,
               }}
             >
-              {val}
+              <span>{val}</span>
+              {hasSub && (
+                <span style={{
+                  fontSize: "0.55rem",
+                  fontWeight: 500,
+                  opacity: 0.6,
+                  lineHeight: 1,
+                }}>
+                  {sub}
+                </span>
+              )}
             </div>
 
             {/* Index label below */}

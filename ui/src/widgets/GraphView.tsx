@@ -147,7 +147,7 @@ export function GraphView({
                 markerEnd={marker}
                 style={{ transition: "all 0.25s ease" }}
               />
-              {e.weight !== undefined && (
+              {(e.weight !== undefined || e.label) && (
                 <text
                   x={mx} y={my - 6}
                   textAnchor="middle"
@@ -156,7 +156,7 @@ export function GraphView({
                   fontWeight={600}
                   fontFamily="ui-monospace, monospace"
                 >
-                  {e.weight}
+                  {e.weight !== undefined ? e.weight : e.label}
                 </text>
               )}
             </g>

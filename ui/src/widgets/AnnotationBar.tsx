@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
+
 export interface AnnotationBarProps {
-  /** The current step's text explanation. Supports simple text only. */
+  /** Step explanation. Supports inline markdown: **bold**, *italic*, `code`. */
   text: string;
   /** Optional label prefix (e.g. step number). */
   label?: string;
@@ -21,6 +23,45 @@ const VARIANT_STYLES = {
     bg: "#f59e0b",
   },
 };
+
+/** Parse inline markdown (**bold**, *italic*, `code`) into React elements. */
+function parseInlineMarkdown(text: string): (string | ReactNode)[] {
+  const parts: (string | ReactNode)[] = [];
+  const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    if (match[2]) {
+      parts.push(<strong key={key++}>{match[2]}</strong>);
+    } else if (match[3]) {
+      parts.push(<em key={key++}>{match[3]}</em>);
+    } else if (match[4]) {
+      parts.push(
+        <code key={key++} style={{
+          background: "rgba(255,255,255,0.08)",
+          padding: "1px 5px",
+          borderRadius: 4,
+          fontSize: "0.8em",
+          fontFamily: "ui-monospace, SFMono-Regular, monospace",
+        }}>
+          {match[4]}
+        </code>
+      );
+    }
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : [text];
+}
 
 export function AnnotationBar({ text, label, variant = "info" }: AnnotationBarProps) {
   const style = VARIANT_STYLES[variant];
@@ -48,7 +89,7 @@ export function AnnotationBar({ text, label, variant = "info" }: AnnotationBarPr
           {label}
         </span>
       )}
-      {text}
+      {parseInlineMarkdown(text)}
     </div>
   );
 }
