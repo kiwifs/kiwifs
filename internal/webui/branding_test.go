@@ -8,7 +8,7 @@ import (
 )
 
 func TestInjectBranding_Defaults(t *testing.T) {
-	branding = config.BrandingConfig{}
+	SetBranding(config.BrandingConfig{})
 	html := []byte(`<!doctype html><head><title>KiwiFS</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" /></head>`)
 
@@ -22,10 +22,10 @@ func TestInjectBranding_Defaults(t *testing.T) {
 }
 
 func TestInjectBranding_Custom(t *testing.T) {
-	branding = config.BrandingConfig{
+	SetBranding(config.BrandingConfig{
 		Name:       "Acme KB",
 		FaviconURL: ".kiwi/assets/favicon.svg",
-	}
+	})
 	html := []byte(`<!doctype html><head><title>KiwiFS</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" /></head>`)
 
