@@ -20,6 +20,7 @@ type PageItem = {
   path: string;
   name: string;
   title: string;
+  subsection?: string;
   meta?: PageMeta;
 };
 
@@ -29,23 +30,57 @@ type FolderGroup = {
   pages: PageItem[];
 };
 
+function naturalCompare(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function isProblemFile(entry: TreeEntry): boolean {
+  return !entry.isDir && entry.name.endsWith(".md") && !entry.name.startsWith("_");
+}
+
+/** Recursively collect problem pages under a chapter folder (includes subfolders). */
+function collectChapterPages(chapter: TreeEntry): PageItem[] {
+  const chapterPrefix = chapter.path.replace(/\/$/, "");
+  const pages: PageItem[] = [];
+
+  function walk(node: TreeEntry) {
+    for (const child of node.children ?? []) {
+      if (child.isDir) {
+        walk(child);
+        continue;
+      }
+      if (!isProblemFile(child)) continue;
+
+      const rel = child.path.startsWith(chapterPrefix + "/")
+        ? child.path.slice(chapterPrefix.length + 1)
+        : child.path;
+      const segments = rel.split("/");
+      const subsection = segments.length > 1 ? titleize(segments[segments.length - 2]) : undefined;
+
+      pages.push({
+        path: child.path,
+        name: child.name,
+        title: titleize(child.name.replace(/\.md$/, "")),
+        subsection,
+      });
+    }
+  }
+
+  walk(chapter);
+  pages.sort((a, b) => naturalCompare(a.path, b.path));
+  return pages;
+}
+
 function deriveGroups(tree: TreeEntry | null): FolderGroup[] {
   if (!tree?.children) return [];
   const groups: FolderGroup[] = [];
 
   const sorted = [...tree.children]
     .filter((c) => c.isDir && /^\d+-/.test(c.name))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    .sort((a, b) => naturalCompare(a.name, b.name));
 
   for (const dir of sorted) {
-    const pages: PageItem[] = (dir.children ?? [])
-      .filter((f) => !f.isDir && f.name.endsWith(".md") && !f.name.startsWith("_"))
-      .map((f) => ({
-        path: f.path,
-        name: f.name,
-        title: titleize(f.name.replace(/\.md$/, "")),
-      }));
-
+    const pages = collectChapterPages(dir);
     if (pages.length > 0) {
       groups.push({
         folder: dir.path,
@@ -224,13 +259,20 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
 
               {!isCollapsed && (
                 <div className="border-t border-border">
-                  {group.pages.map((page) => {
+                  {group.pages.map((page, index) => {
                     const entry = progress[page.path];
                     const isDone = entry?.done ?? false;
+                    const prev = index > 0 ? group.pages[index - 1] : null;
+                    const showSubsection = page.subsection && page.subsection !== prev?.subsection;
 
                     return (
+                      <div key={page.path}>
+                        {showSubsection && (
+                          <div className="px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground bg-muted/20 border-b border-border/50">
+                            {page.subsection}
+                          </div>
+                        )}
                       <div
-                        key={page.path}
                         className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted/30 transition-colors group"
                       >
                         <button
@@ -262,6 +304,7 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
                             {entry.doneAt}
                           </span>
                         )}
+                      </div>
                       </div>
                     );
                   })}
