@@ -800,6 +800,53 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                           </a>
                         );
                       }
+                      if (h.startsWith("#")) {
+                        return (
+                          <a
+                            href={h}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              const el = document.getElementById(h.slice(1));
+                              if (el) {
+                                el.scrollIntoView({ behavior: "smooth", block: "start" });
+                                history.replaceState(null, "", h);
+                              }
+                            }}
+                            {...(rest as any)}
+                          >
+                            {children}
+                          </a>
+                        );
+                      }
+
+                      const mdMatch = /^([^#]*\.md)(?:#(.+))?$/.exec(h);
+                      if (mdMatch && !h.startsWith("http")) {
+                        const relPage = mdMatch[1];
+                        const anchor = mdMatch[2] ?? "";
+                        const dir = dirOf(path);
+                        const resolved = dir ? `${dir}/${relPage}` : relPage;
+                        return (
+                          <a
+                            href={`/page/${resolved}${anchor ? `#${anchor}` : ""}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              onNavigate(resolved);
+                              if (anchor) {
+                                requestAnimationFrame(() => {
+                                  setTimeout(() => {
+                                    const el = document.getElementById(anchor);
+                                    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                  }, 150);
+                                });
+                              }
+                            }}
+                            {...(rest as any)}
+                          >
+                            {children}
+                          </a>
+                        );
+                      }
+
                       return (
                         <a
                           href={h}
