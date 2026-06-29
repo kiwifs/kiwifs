@@ -2,26 +2,18 @@ import { describe, expect, it } from "vitest";
 import { persistSiblingOrder } from "./treeOrderPersistence";
 import type { FlatNode } from "./treeTransform";
 
-const sibling = (id: string, order?: number): FlatNode => ({
+const sibling = (id: string): FlatNode => ({
   id,
   name: id.split("/").pop() ?? id,
   isDir: false,
-  order,
 });
 
 describe("tree order persistence", () => {
-  it("includes the failing markdown path when order frontmatter patch fails", async () => {
-    const entries = [sibling("00 Inbox/a.md", 2), sibling("00 Inbox/broken.md", 1)];
+  it("is a no-op since natural sort handles ordering", async () => {
+    const entries = [sibling("00 Inbox/a.md"), sibling("00 Inbox/b.md")];
     const api = {
-      patchFrontmatter: async (path: string) => {
-        if (path === "00 Inbox/broken.md") throw new Error("frontmatter-yaml-invalid");
-        return { path, etag: "ok" };
-      },
-      patchTreeOrder: async () => ({ updated: 0 }),
+      patchFrontmatter: async () => ({ path: "", etag: "ok" }),
     };
-
-    await expect(persistSiblingOrder(entries, api)).rejects.toThrow(
-      "00 Inbox/broken.md",
-    );
+    await expect(persistSiblingOrder(entries, api)).resolves.toBeUndefined();
   });
 });

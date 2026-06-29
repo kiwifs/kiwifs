@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,92 +19,7 @@ import (
 // should map this to HTTP 400 rather than 500.
 var ErrPathDenied = errors.New("path denied")
 
-const treeOrderMetadataPath = ".kiwi/tree-order.json"
 
-func (l *Local) treeOrderMetadataAbsPath() string {
-	return filepath.Join(l.root, filepath.FromSlash(treeOrderMetadataPath))
-}
-
-func (l *Local) readTreeOrderMap() (map[string]int, error) {
-	content, err := os.ReadFile(l.treeOrderMetadataAbsPath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return map[string]int{}, nil
-		}
-		return nil, err
-	}
-	var orders map[string]int
-	if err := json.Unmarshal(content, &orders); err != nil {
-		return nil, err
-	}
-	if orders == nil {
-		orders = map[string]int{}
-	}
-	return orders, nil
-}
-
-func (l *Local) ReadTreeOrder(_ context.Context, path string) (*int, error) {
-	clean := normalizeUserPath(strings.TrimSuffix(path, "/"))
-	if clean == "" {
-		return nil, nil
-	}
-	orders, err := l.readTreeOrderMap()
-	if err != nil {
-		return nil, err
-	}
-	if order, ok := orders[clean]; ok {
-		return &order, nil
-	}
-	return nil, nil
-}
-
-func (l *Local) WriteTreeOrder(_ context.Context, updates map[string]int) error {
-	orders, err := l.readTreeOrderMap()
-	if err != nil {
-		return err
-	}
-	for rawPath, order := range updates {
-		clean := normalizeUserPath(strings.TrimSuffix(rawPath, "/"))
-		if clean == "" {
-			continue
-		}
-		if _, err := l.guardPath(clean); err != nil {
-			return err
-		}
-		orders[clean] = order
-	}
-	content, err := json.MarshalIndent(orders, "", "  ")
-	if err != nil {
-		return err
-	}
-	content = append(content, '\n')
-	abs := l.treeOrderMetadataAbsPath()
-	if err := os.MkdirAll(filepath.Dir(abs), 0755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(abs), ".tree-order-*.json")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer func() {
-		if tmpName != "" {
-			os.Remove(tmpName)
-		}
-	}()
-	if _, err := tmp.Write(content); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpName, abs); err != nil {
-		return err
-	}
-	tmpName = ""
-	return nil
-}
 
 // Local implements Storage over a local directory.
 //

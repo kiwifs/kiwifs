@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type TreeEntry } from "@kw/lib/api";
 import { titleize } from "@kw/lib/paths";
+import { Badge } from "@kw/components/ui/badge";
 import { CheckCircle2, Circle, ChevronDown, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 
 type ProgressEntry = {
@@ -10,10 +11,16 @@ type ProgressEntry = {
 
 type ProgressState = Record<string, ProgressEntry>;
 
+type PageMeta = {
+  title?: string;
+  difficulty?: string;
+};
+
 type PageItem = {
   path: string;
   name: string;
   title: string;
+  meta?: PageMeta;
 };
 
 type FolderGroup = {
@@ -28,7 +35,7 @@ function deriveGroups(tree: TreeEntry | null): FolderGroup[] {
 
   const sorted = [...tree.children]
     .filter((c) => c.isDir && /^\d+-/.test(c.name))
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
 
   for (const dir of sorted) {
     const pages: PageItem[] = (dir.children ?? [])
@@ -51,6 +58,33 @@ function deriveGroups(tree: TreeEntry | null): FolderGroup[] {
   return groups;
 }
 
+function parsePageMeta(fm: Record<string, unknown>): PageMeta {
+  const meta: PageMeta = {};
+  if (typeof fm.title === "string") meta.title = fm.title;
+  if (typeof fm.difficulty === "string") meta.difficulty = fm.difficulty;
+  return meta;
+}
+
+function difficultyClass(d: string): string {
+  const v = d.toLowerCase();
+  if (v === "easy") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+  if (v === "medium") return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400";
+  if (v === "hard") return "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400";
+  return "";
+}
+
+function PageTags({ meta }: { meta?: PageMeta }) {
+  if (!meta?.difficulty) return null;
+
+  return (
+    <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+      <Badge variant="outline" className={"text-[10px] px-1.5 py-0 h-5 " + difficultyClass(meta.difficulty)}>
+        {meta.difficulty}
+      </Badge>
+    </div>
+  );
+}
+
 type Props = {
   onNavigate?: (path: string) => void;
   stateName?: string;
@@ -59,6 +93,7 @@ type Props = {
 export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
   const [tree, setTree] = useState<TreeEntry | null>(null);
   const [progress, setProgress] = useState<ProgressState>({});
+  const [metaByPath, setMetaByPath] = useState<Record<string, PageMeta>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
@@ -67,16 +102,32 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
     Promise.all([
       api.tree(),
       api.getLocalState<ProgressState>(stateName),
-    ]).then(([t, p]) => {
+      api.meta({ where: [{ field: "$.difficulty", op: "!=", value: "" }], limit: 5000 }),
+    ]).then(([t, p, metaRes]) => {
       if (cancelled) return;
       setTree(t);
       setProgress(p ?? {});
+      const map: Record<string, PageMeta> = {};
+      for (const row of metaRes.results) {
+        map[row.path] = parsePageMeta(row.frontmatter);
+      }
+      setMetaByPath(map);
       setLoading(false);
     });
     return () => { cancelled = true; };
   }, [stateName]);
 
-  const groups = useMemo(() => deriveGroups(tree), [tree]);
+  const groups = useMemo(() => {
+    const base = deriveGroups(tree);
+    return base.map((g) => ({
+      ...g,
+      pages: g.pages.map((p) => ({
+        ...p,
+        title: metaByPath[p.path]?.title ?? p.title,
+        meta: metaByPath[p.path],
+      })),
+    }));
+  }, [tree, metaByPath]);
 
   const toggleDone = useCallback((pagePath: string) => {
     setProgress((prev) => {
@@ -198,12 +249,13 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
                           type="button"
                           onClick={() => onNavigate?.(page.path)}
                           className={
-                            "flex-1 text-left truncate transition-colors hover:text-primary " +
+                            "flex-1 min-w-0 text-left truncate transition-colors hover:text-primary " +
                             (isDone ? "line-through text-muted-foreground" : "text-foreground")
                           }
                         >
                           {page.title}
                         </button>
+                        <PageTags meta={page.meta} />
                         {entry?.doneAt && (
                           <span className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5">
                             <CalendarIcon className="h-2.5 w-2.5" />

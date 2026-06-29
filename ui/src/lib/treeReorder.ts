@@ -1,5 +1,5 @@
 import type { TreeEntry } from "./api";
-import { isMarkdown, stripTrailingSlash } from "./paths";
+import { stripTrailingSlash } from "./paths";
 
 export type OptimisticTreeMoveArgs = {
   dragIds: string[];
@@ -128,32 +128,8 @@ const removeEntry = (children: TreeEntry[], id: string): RemoveResult => {
   }, { children: [], removed: null });
 };
 
-/**
- * Reports whether a row should receive a visual sibling order number.
- *
- * @param child - Tree row in the destination sibling list.
- * @returns True for directories and markdown files.
- */
-const isOrderableSibling = (child: TreeEntry): boolean => {
-  if (child.isDir) {
-    return true;
-  }
-  return isMarkdown(child.path);
-};
-
-/**
- * Reassigns one-based order values to directories and markdown files only.
- *
- * @param children - Destination sibling list after insertion.
- * @returns A copied sibling list with updated order fields where applicable.
- */
 const renumberOrderableSiblings = (children: TreeEntry[]): TreeEntry[] => {
-  return children.reduce<{ rows: TreeEntry[]; order: number }>((state, child) => {
-    if (!isOrderableSibling(child)) {
-      return { rows: [...state.rows, child], order: state.order };
-    }
-    return { rows: [...state.rows, { ...child, order: state.order }], order: state.order + 1 };
-  }, { rows: [], order: 1 }).rows;
+  return children;
 };
 
 /**

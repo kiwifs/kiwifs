@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +17,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
+	"github.com/kiwifs/kiwifs/internal/preferences"
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/kiwifs/kiwifs/internal/tracing"
@@ -80,7 +80,6 @@ func toTreeEntry(st *storage.TreeEntry) *treeEntry {
 		Name:  st.Name,
 		IsDir: st.IsDir,
 		Size:  st.Size,
-		Order: st.Order,
 	}
 	for _, c := range st.Children {
 		e.Children = append(e.Children, toTreeEntry(c))
@@ -211,50 +210,6 @@ func pageViewSource(c echo.Context) string {
 	return source
 }
 
-type treeOrderWriter interface {
-	WriteTreeOrder(ctx context.Context, updates map[string]int) error
-}
-
-type patchTreeOrderRequest struct {
-	Orders map[string]int `json:"orders"`
-}
-
-func (h *Handlers) PatchTreeOrder(c echo.Context) error {
-	writer, ok := h.store.(treeOrderWriter)
-	if !ok {
-		return echo.NewHTTPError(http.StatusNotImplemented, "tree order metadata is not supported by this storage backend")
-	}
-	var req patchTreeOrderRequest
-	if err := bindJSON(c, &req); err != nil {
-		return err
-	}
-	if len(req.Orders) == 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "orders is required")
-	}
-	cleaned := make(map[string]int, len(req.Orders))
-	for path, order := range req.Orders {
-		clean := strings.Trim(strings.TrimSpace(path), "/")
-		if clean == "" {
-			return echo.NewHTTPError(http.StatusBadRequest, "directory path is required")
-		}
-		st, err := h.store.Stat(c.Request().Context(), clean)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusNotFound, err.Error())
-		}
-		if !st.IsDir {
-			return echo.NewHTTPError(http.StatusBadRequest, "tree order path must be a directory")
-		}
-		cleaned[clean] = order
-	}
-	if err := writer.WriteTreeOrder(c.Request().Context(), cleaned); err != nil {
-		if errors.Is(err, storage.ErrPathDenied) {
-			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindWrite, Detail: "tree order patch"})
-	return c.JSON(http.StatusOK, map[string]int{"updated": len(cleaned)})
-}
 
 type patchFrontmatterRequest struct {
 	Fields map[string]any `json:"fields"`
@@ -1033,51 +988,65 @@ func (h *Handlers) DeleteFile(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"deleted": path})
 }
 
-// ReadLocalNote serves the companion .local/<filename> for a given page path.
-// This bypasses the hidden-dir filter intentionally — .local/ files are only
-// accessible via this explicit endpoint and never through the standard file API.
-func (h *Handlers) ReadLocalNote(c echo.Context) error {
+// meDir resolves the personal state directory for the current user.
+// If auth is configured and the request has a real actor identity,
+// state is stored under .kiwi/users/{actor}/state/ (portable, per-user).
+// Otherwise (no auth, single-user mode), it falls back to .me/ (device-only).
+func (h *Handlers) meDir(c echo.Context) string {
+	actor := sanitizeActor(c.Request().Header.Get("X-Actor"))
+	if preferences.IsPersistableUser(actor) {
+		userID := preferences.UserID(actor)
+		if userID != "" {
+			return filepath.Join(h.root, ".kiwi", "users", userID, "state")
+		}
+	}
+	return filepath.Join(h.root, ".me")
+}
+
+// ReadMyNote serves the companion personal note for a given page path.
+// Resolves storage via meDir (auth-aware).
+func (h *Handlers) ReadMyNote(c echo.Context) error {
 	pagePath := c.QueryParam("path")
 	if pagePath == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "path is required")
 	}
 
 	base := filepath.Base(pagePath)
-	localPath := filepath.Join(h.root, ".local", base)
+	notePath := filepath.Join(h.meDir(c), base)
 
-	data, err := os.ReadFile(localPath)
+	data, err := os.ReadFile(notePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return c.NoContent(http.StatusNotFound)
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read local note")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read note")
 	}
 
 	return c.Blob(http.StatusOK, "text/markdown; charset=utf-8", data)
 }
 
-// GetLocalState reads a JSON state file from .local/<name>.json.
-func (h *Handlers) GetLocalState(c echo.Context) error {
+// GetMyState reads a JSON state file for the current user.
+func (h *Handlers) GetMyState(c echo.Context) error {
 	name := c.QueryParam("name")
 	if name == "" || strings.ContainsAny(name, "/\\..") {
 		return echo.NewHTTPError(http.StatusBadRequest, "name is required and must be a simple identifier")
 	}
 
-	localPath := filepath.Join(h.root, ".local", name+".json")
-	data, err := os.ReadFile(localPath)
+	statePath := filepath.Join(h.meDir(c), name+".json")
+	data, err := os.ReadFile(statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return c.JSON(http.StatusOK, map[string]any{})
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read local state")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read state")
 	}
 
 	c.Response().Header().Set("Content-Type", "application/json; charset=utf-8")
 	return c.Blob(http.StatusOK, "application/json; charset=utf-8", data)
 }
 
-// PutLocalState writes a JSON state file to .local/<name>.json.
-func (h *Handlers) PutLocalState(c echo.Context) error {
+// PutMyState writes a JSON state file for the current user.
+func (h *Handlers) PutMyState(c echo.Context) error {
 	name := c.QueryParam("name")
 	if name == "" || strings.ContainsAny(name, "/\\..") {
 		return echo.NewHTTPError(http.StatusBadRequest, "name is required and must be a simple identifier")
@@ -1092,20 +1061,19 @@ func (h *Handlers) PutLocalState(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "state exceeds 512 KB")
 	}
 
-	// Validate it's valid JSON
 	var check json.RawMessage
 	if err := json.Unmarshal(body, &check); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "body must be valid JSON")
 	}
 
-	localDir := filepath.Join(h.root, ".local")
-	if err := os.MkdirAll(localDir, 0o755); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create .local directory")
+	dir := h.meDir(c)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create state directory")
 	}
 
-	localPath := filepath.Join(localDir, name+".json")
-	if err := os.WriteFile(localPath, body, 0o644); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write local state")
+	statePath := filepath.Join(dir, name+".json")
+	if err := os.WriteFile(statePath, body, 0o644); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write state")
 	}
 
 	return c.NoContent(http.StatusNoContent)

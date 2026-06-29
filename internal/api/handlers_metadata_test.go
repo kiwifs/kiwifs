@@ -367,21 +367,14 @@ func TestPatchFrontmatterRejectsNonMarkdown(t *testing.T) {
 	}
 }
 
-func TestPatchTreeOrderUpdatesDirectoryOrder(t *testing.T) {
+func TestTreeNaturalSortOrder(t *testing.T) {
 	s := buildTestServer(t)
-	mustPutFile(t, s, "zeta/page.md", "# Zeta\n")
-	mustPutFile(t, s, "alpha/page.md", "# Alpha\n")
+	mustPutFile(t, s, "10-graphs/page.md", "# Graphs\n")
+	mustPutFile(t, s, "2-arrays/page.md", "# Arrays\n")
+	mustPutFile(t, s, "1-math/page.md", "# Math\n")
 
-	req := httptest.NewRequest(http.MethodPatch, "/api/kiwi/tree/order", strings.NewReader(`{"orders":{"zeta":1,"alpha":2}}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodGet, "/api/kiwi/tree?path=/", nil)
 	rec := httptest.NewRecorder()
-	s.echo.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("PATCH tree order: %d %s", rec.Code, rec.Body.String())
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/api/kiwi/tree?path=/", nil)
-	rec = httptest.NewRecorder()
 	s.echo.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET tree: %d %s", rec.Code, rec.Body.String())
@@ -390,7 +383,11 @@ func TestPatchTreeOrderUpdatesDirectoryOrder(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &tree); err != nil {
 		t.Fatal(err)
 	}
-	if len(tree.Children) < 2 || tree.Children[0].Name != "zeta" || tree.Children[1].Name != "alpha" {
-		t.Fatalf("directory order not reflected in tree: %#v", tree.Children)
+	if len(tree.Children) < 3 {
+		t.Fatalf("expected 3 children, got %d", len(tree.Children))
+	}
+	if tree.Children[0].Name != "1-math" || tree.Children[1].Name != "2-arrays" || tree.Children[2].Name != "10-graphs" {
+		t.Fatalf("natural sort order wrong: got %s, %s, %s",
+			tree.Children[0].Name, tree.Children[1].Name, tree.Children[2].Name)
 	}
 }

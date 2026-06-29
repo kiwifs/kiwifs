@@ -32,54 +32,40 @@ func (s *frontmatterOnlyStore) List(context.Context, string) ([]Entry, error) {
 	}, nil
 }
 
-func (s *frontmatterOnlyStore) ReadFrontmatter(_ context.Context, path string) (map[string]any, error) {
-	s.readFrontmatterCalls++
-	if path == "b.md" {
-		return map[string]any{"order": 2}, nil
-	}
-	return map[string]any{"order": 1}, nil
-}
-
-func TestBuildTreeReadsOrderFromFrontmatterOnlyWhenAvailable(t *testing.T) {
+func TestBuildTreeSortsAlphabetically(t *testing.T) {
 	store := &frontmatterOnlyStore{}
 	tree, err := BuildTree(context.Background(), store, "/", 0)
 	if err != nil {
 		t.Fatalf("build tree: %v", err)
 	}
-	if store.readCalls != 0 {
-		t.Fatalf("BuildTree used full Read %d time(s); expected frontmatter-only reads", store.readCalls)
-	}
-	if store.readFrontmatterCalls != 2 {
-		t.Fatalf("ReadFrontmatter calls = %d, want 2", store.readFrontmatterCalls)
-	}
 	if got, want := tree.Children[0].Name, "a.md"; got != want {
-		t.Fatalf("first child = %s, want %s", got, want)
+		t.Fatalf("first child = %s, want %s (natural sort)", got, want)
 	}
 }
 
-func TestBuildTreeSortsDirectoriesByStoredOrder(t *testing.T) {
+func TestBuildTreeNaturalSortDirectories(t *testing.T) {
 	root := t.TempDir()
 	store, err := NewLocal(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, dir := range []string{"zeta", "alpha"} {
+	for _, dir := range []string{"10-graphs", "2-arrays", "1-math"} {
 		if err := os.Mkdir(filepath.Join(root, dir), 0755); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if err := store.WriteTreeOrder(context.Background(), map[string]int{"zeta": 1, "alpha": 2}); err != nil {
-		t.Fatal(err)
 	}
 	tree, err := BuildTree(context.Background(), store, "", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tree.Children) < 2 {
-		t.Fatalf("expected directories, got %#v", tree.Children)
+	if len(tree.Children) < 3 {
+		t.Fatalf("expected 3 directories, got %d", len(tree.Children))
 	}
-	if tree.Children[0].Name != "zeta" || tree.Children[1].Name != "alpha" {
-		t.Fatalf("directory order = %s, %s; want zeta, alpha", tree.Children[0].Name, tree.Children[1].Name)
+	want := []string{"1-math", "2-arrays", "10-graphs"}
+	for i, w := range want {
+		if tree.Children[i].Name != w {
+			t.Fatalf("child[%d] = %s, want %s", i, tree.Children[i].Name, w)
+		}
 	}
 }
 

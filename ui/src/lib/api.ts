@@ -6,7 +6,6 @@ export type TreeEntry = {
   name: string;
   isDir: boolean;
   size?: number;
-  order?: number;
   frontmatterError?: string;
   children?: TreeEntry[];
 };
@@ -423,14 +422,6 @@ export const api = {
       method: "PATCH",
       headers,
       body: JSON.stringify(fields),
-    });
-  },
-
-  async patchTreeOrder(orders: Record<string, number>): Promise<{ updated: number }> {
-    return request(`${kiwiBase()}/tree/order`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", "X-Actor": actor(), ..._extraHeaders },
-      body: JSON.stringify({ orders }),
     });
   },
 

@@ -15,8 +15,6 @@ export type FlatNode = {
   isNested?: boolean;
   /** Matched by exclude pattern — dimmed in UI */
   excluded?: boolean;
-  /** Persisted sibling order from frontmatter or tree sidecar metadata. */
-  order?: number;
   /** Safe lint summary shown when markdown frontmatter blocks ordering writes. */
   frontmatterError?: string;
   children?: FlatNode[];
@@ -150,21 +148,11 @@ const compareEntries = (a: TreeEntry, b: TreeEntry, mode: TreeSortMode): number 
     return kiwiDelta;
   }
 
-  if (a.order != null && b.order != null && a.order !== b.order) {
-    return a.order - b.order;
-  }
-  if (a.order != null && b.order == null) {
-    return -1;
-  }
-  if (a.order == null && b.order != null) {
-    return 1;
-  }
-
   const typeDelta = compareEntryType(a, b, mode);
   if (typeDelta !== 0) {
     return typeDelta;
   }
-  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
 };
 
 /**
@@ -182,7 +170,6 @@ const fileToFlat = (entry: TreeEntry, opts: TransformOpts, extra: Partial<FlatNo
     name: entry.name,
     isDir: false,
     excluded: isTreePathExcluded(path, opts.excludePatterns),
-    order: entry.order,
     frontmatterError: entry.frontmatterError,
     ...extra,
   };
@@ -213,22 +200,13 @@ const compareFlatRows = (a: FlatNode, b: FlatNode): number => {
     }
     return -1;
   }
-  if (a.order != null && b.order != null && a.order !== b.order) {
-    return a.order - b.order;
-  }
-  if (a.order != null && b.order == null) {
-    return -1;
-  }
-  if (a.order == null && b.order != null) {
-    return 1;
-  }
   if (a.isDir !== b.isDir) {
     if (a.isDir) {
       return -1;
     }
     return 1;
   }
-  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
 };
 
 /**
@@ -284,7 +262,6 @@ const markdownToNestedFlat = (markdown: TreeEntry, files: TreeEntry[], opts: Tra
     isDir: true,
     virtualDir: true,
     excluded: isTreePathExcluded(markdown.path, opts.excludePatterns),
-    order: markdown.order,
     frontmatterError: markdown.frontmatterError,
     children: nestedFiles.map((file) => fileToFlat(file, opts, { isNested: true })),
   };
@@ -379,7 +356,6 @@ const dirToFlat = (entry: TreeEntry, opts: TransformOpts): FlatNode => {
       name: entry.name,
       isDir: true,
       excluded: isTreePathExcluded(path, opts.excludePatterns),
-      order: entry.order,
     };
   }
 
@@ -388,7 +364,6 @@ const dirToFlat = (entry: TreeEntry, opts: TransformOpts): FlatNode => {
     name: entry.name,
     isDir: true,
     excluded: isTreePathExcluded(path, opts.excludePatterns),
-    order: entry.order,
     children: transformChildren(entry.children, opts),
   };
 };
