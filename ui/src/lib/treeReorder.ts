@@ -128,10 +128,6 @@ const removeEntry = (children: TreeEntry[], id: string): RemoveResult => {
   }, { children: [], removed: null });
 };
 
-const renumberOrderableSiblings = (children: TreeEntry[]): TreeEntry[] => {
-  return children;
-};
-
 /**
  * Inserts a row into an immutable sibling list at a clamped index.
  *
@@ -139,16 +135,16 @@ const renumberOrderableSiblings = (children: TreeEntry[]): TreeEntry[] => {
  * @param parentId - Destination folder id, or null for the root.
  * @param index - Requested insertion index from the tree widget.
  * @param entry - Removed row to insert.
- * @returns New sibling list with recalculated order values.
+ * @returns New sibling list with the moved row at the requested position.
  */
 const insertAtIndex = (children: TreeEntry[], parentId: string | null, index: number, entry: TreeEntry): TreeEntry[] => {
   const safeIndex = Math.max(0, Math.min(index, children.length));
   const moved = retargetMovedEntry(entry, parentId);
-  return renumberOrderableSiblings([
+  return [
     ...children.slice(0, safeIndex),
     moved,
     ...children.slice(safeIndex),
-  ]);
+  ];
 };
 
 /**

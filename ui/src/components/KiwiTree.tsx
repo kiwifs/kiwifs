@@ -61,7 +61,6 @@ import { type TreeRevealRequest } from "@kw/lib/treeReveal";
 import { createTreePageDragData } from "@kw/lib/kanbanDnd";
 import { shouldApplyTreeLoad } from "@kw/lib/treeRefresh";
 import { applyOptimisticTreeMove } from "@kw/lib/treeReorder";
-import { persistSiblingOrder } from "@kw/lib/treeOrderPersistence";
 import {
   filterTreeForExclude,
   filterTreeForInclude,
@@ -197,24 +196,6 @@ type MoveArgs = {
   index: number;
 };
 
-function destinationChildrenAfterMove(args: MoveArgs, rootNodes: FlatNode[], replacements?: Map<string, FlatNode>): FlatNode[] {
-  const children = (args.parentNode?.children?.map((child) => child.data) || rootNodes).slice();
-  let insertAt = Math.max(0, Math.min(args.index, children.length));
-
-  for (const dragNode of args.dragNodes) {
-    const replacement = replacements?.get(dragNode.id);
-    const moving = replacement || dragNode.data;
-    children.splice(insertAt, 0, moving);
-    const originalIndex = children.findIndex((child, i) => i !== insertAt && child.id === dragNode.id);
-    if (originalIndex >= 0) {
-      children.splice(originalIndex, 1);
-      if (originalIndex < insertAt) insertAt -= 1;
-    }
-    insertAt += 1;
-  }
-
-  return children;
-}
 
 export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
   {
@@ -433,15 +414,12 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
 
       try {
         if (cleanSrc === dest) {
-          await persistSiblingOrder(destinationChildrenAfterMove(args, data), api);
           onMoved?.("", { refresh: false });
           return;
         }
 
         if (sourceNode.isDir) {
           await api.renameDir(cleanSrc, dest);
-          const movedNode: FlatNode = { ...sourceNode, id: dest, name: fileName };
-          await persistSiblingOrder(destinationChildrenAfterMove(args, data, new Map([[src, movedNode]])), api);
           onMoved?.(dest);
           return;
         }
@@ -450,9 +428,6 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
         await api.writeFile(dest, content);
         await api.deleteFile(cleanSrc);
         pushOp({ type: "move", from: cleanSrc, to: dest, content });
-
-        const movedNode: FlatNode = { ...sourceNode, id: dest, name: fileName };
-        await persistSiblingOrder(destinationChildrenAfterMove(args, data, new Map([[src, movedNode]])), api);
         onMoved?.(dest);
       } catch (e) {
         setRootPreservingScroll(previousRoot);
