@@ -17,6 +17,17 @@ export function isExcalidrawFile(p: string): boolean {
   return p.toLowerCase().endsWith(".excalidraw.md");
 }
 
+export function normalizePath(p: string): string {
+  const parts = p.split("/");
+  const out: string[] = [];
+  for (const seg of parts) {
+    if (seg === "." || seg === "") continue;
+    if (seg === ".." && out.length > 0) out.pop();
+    else if (seg !== "..") out.push(seg);
+  }
+  return out.join("/");
+}
+
 export function dirOf(p: string): string {
   const clean = stripTrailingSlash(p);
   const idx = clean.lastIndexOf("/");

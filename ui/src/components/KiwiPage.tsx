@@ -12,7 +12,7 @@ import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
 import { AlertTriangle, BookOpen, Bug, Calendar, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Crosshair, Edit, Eye, File, FileAxis3D, FileQuestion, Flame, Folder, HelpCircle, History as HistoryIcon, Info, Lightbulb, Link2, List, ListChecks, MessageSquareQuote, NotebookPen, Pin, Plus, Quote, ScrollText, ShieldAlert, Star, Tag, TriangleAlert, Type, User, XCircle, Zap } from "lucide-react";
 import { api, type TreeEntry } from "@kw/lib/api";
-import { dirOf, titleize } from "@kw/lib/paths";
+import { dirOf, normalizePath, titleize } from "@kw/lib/paths";
 import { readingTime } from "@kw/lib/readingTime";
 import { HostPageActions } from "./HostPageActions";
 import { KiwiBreadcrumb } from "./KiwiBreadcrumb";
@@ -824,7 +824,8 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                         const relPage = mdMatch[1];
                         const anchor = mdMatch[2] ?? "";
                         const dir = dirOf(path);
-                        const resolved = dir ? `${dir}/${relPage}` : relPage;
+                        const joined = dir ? `${dir}/${relPage}` : relPage;
+                        const resolved = normalizePath(joined);
                         return (
                           <a
                             href={`/page/${resolved}${anchor ? `#${anchor}` : ""}`}
