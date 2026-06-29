@@ -52,6 +52,10 @@ func rewriteLinksInLine(line string, oldForms map[string]bool, newTarget string)
 				return match
 			}
 			target := strings.TrimSpace(sub[1])
+			// Skip escaped-pipe links (e.g. [[target\|label]] in tables).
+			if strings.HasSuffix(target, "\\") {
+				return match
+			}
 			if !matchesTarget(target, oldForms) {
 				return match
 			}
