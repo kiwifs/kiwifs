@@ -1124,43 +1124,113 @@ func (p *Pipeline) RenameWithLinks(ctx context.Context, oldPath, newPath, actor 
 	return Result{Path: newPath, ETag: etag}, updatedPaths, nil
 }
 
+// RenameDirResult holds the outcome of a directory rename with link updates.
+type RenameDirResult struct {
+	Renamed      int      `json:"renamed"`
+	UpdatedLinks []string `json:"updated_links,omitempty"`
+}
+
 // RenameDir atomically renames a directory on disk and commits all affected
 // paths via git. Re-indexes all files under the new directory.
 func (p *Pipeline) RenameDir(ctx context.Context, from, to, actor string) (int, error) {
+	res, err := p.RenameDirWithLinks(ctx, from, to, actor, false)
+	if err != nil {
+		return 0, err
+	}
+	return res.Renamed, nil
+}
+
+// RenameDirWithLinks renames a directory and optionally rewrites wiki-links
+// in all pages that reference any file under the old directory. Each moved
+// file's backlinks are looked up and [[old-path]] references are rewritten
+// to the new path stem (matching RenameWithLinks behavior for single files).
+func (p *Pipeline) RenameDirWithLinks(ctx context.Context, from, to, actor string, updateLinks bool) (RenameDirResult, error) {
 	if from == "" || to == "" {
-		return 0, fmt.Errorf("both from and to are required")
+		return RenameDirResult{}, fmt.Errorf("both from and to are required")
 	}
 	if err := ctx.Err(); err != nil {
-		return 0, err
+		return RenameDirResult{}, err
 	}
 	actor = coalesce(actor)
 
 	root := p.Store.AbsPath("")
 	absFrom, err := storage.GuardPath(root, from)
 	if err != nil {
-		return 0, err
+		return RenameDirResult{}, err
 	}
 	absTo, err := storage.GuardPath(root, to)
 	if err != nil {
-		return 0, err
+		return RenameDirResult{}, err
 	}
 
 	info, err := os.Stat(absFrom)
 	if err != nil {
-		return 0, fmt.Errorf("stat source: %w", err)
+		return RenameDirResult{}, fmt.Errorf("stat source: %w", err)
 	}
 	if !info.IsDir() {
-		return 0, fmt.Errorf("source is not a directory: %s", from)
+		return RenameDirResult{}, fmt.Errorf("source is not a directory: %s", from)
+	}
+
+	// Collect backlinks for all files in the source dir BEFORE rename
+	// (the link index still knows the old paths).
+	type pathMapping struct{ Old, New string }
+	var mappingsPreCompute []pathMapping
+	if updateLinks && p.Linker != nil {
+		_ = filepath.Walk(absFrom, func(path string, fi os.FileInfo, werr error) error {
+			if werr != nil || fi.IsDir() {
+				return nil
+			}
+			rel, _ := filepath.Rel(root, path)
+			rel = filepath.ToSlash(rel)
+			fromNorm := strings.TrimSuffix(from, "/") + "/"
+			toNorm := strings.TrimSuffix(to, "/") + "/"
+			newRel := toNorm + strings.TrimPrefix(rel, fromNorm)
+			mappingsPreCompute = append(mappingsPreCompute, pathMapping{Old: rel, New: newRel})
+			return nil
+		})
+	}
+
+	// Gather backlinks for each old path before we move anything.
+	type backlinkSet struct {
+		OldPath  string
+		NewStem  string
+		Entries  []links.Entry
+	}
+	var blSets []backlinkSet
+	if updateLinks && p.Linker != nil {
+		movedSet := make(map[string]bool, len(mappingsPreCompute))
+		for _, m := range mappingsPreCompute {
+			movedSet[m.Old] = true
+		}
+		for _, m := range mappingsPreCompute {
+			entries, berr := p.Linker.Backlinks(ctx, m.Old)
+			if berr != nil || len(entries) == 0 {
+				continue
+			}
+			newStem := strings.TrimSuffix(m.New, ".md")
+			if idx := strings.LastIndex(newStem, "/"); idx >= 0 {
+				newStem = newStem[idx+1:]
+			}
+			var external []links.Entry
+			for _, e := range entries {
+				if !movedSet[e.Path] {
+					external = append(external, e)
+				}
+			}
+			if len(external) > 0 {
+				blSets = append(blSets, backlinkSet{OldPath: m.Old, NewStem: newStem, Entries: external})
+			}
+		}
 	}
 
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 
 	if err := os.MkdirAll(filepath.Dir(absTo), 0755); err != nil {
-		return 0, fmt.Errorf("mkdir parent: %w", err)
+		return RenameDirResult{}, fmt.Errorf("mkdir parent: %w", err)
 	}
 	if err := os.Rename(absFrom, absTo); err != nil {
-		return 0, fmt.Errorf("rename dir: %w", err)
+		return RenameDirResult{}, fmt.Errorf("rename dir: %w", err)
 	}
 
 	var newPaths []string
@@ -1189,10 +1259,60 @@ func (p *Pipeline) RenameDir(ctx context.Context, from, to, actor string) (int, 
 		p.markInflight(op)
 	}
 
-	allPaths := append(newPaths, oldPaths...)
+	// Rewrite backlinks in external pages (outside the moved dir).
+	type fileUpdate struct {
+		Path    string
+		Content []byte
+	}
+	var linkUpdates []fileUpdate
+	updatedSet := make(map[string]bool)
+	if updateLinks && len(blSets) > 0 {
+		for _, bl := range blSets {
+			for _, entry := range bl.Entries {
+				src, rerr := p.Store.Read(ctx, entry.Path)
+				if rerr != nil {
+					continue
+				}
+				content := string(src)
+				rewritten, changed := links.RewriteLinks(content, bl.OldPath, bl.NewStem)
+				if changed {
+					if updatedSet[entry.Path] {
+						// Already queued — apply on top of the queued version.
+						for i, u := range linkUpdates {
+							if u.Path == entry.Path {
+								r2, _ := links.RewriteLinks(string(u.Content), bl.OldPath, bl.NewStem)
+								linkUpdates[i].Content = []byte(r2)
+								break
+							}
+						}
+					} else {
+						linkUpdates = append(linkUpdates, fileUpdate{Path: entry.Path, Content: []byte(rewritten)})
+						updatedSet[entry.Path] = true
+					}
+				}
+			}
+		}
+	}
+
+	for _, u := range linkUpdates {
+		p.markInflightEtag(u.Path, ETag(u.Content))
+		if werr := p.Store.Write(ctx, u.Path, u.Content); werr != nil {
+			log.Printf("pipeline: RenameDirWithLinks write(%s): %v", u.Path, werr)
+		}
+	}
+
+	var updatedPaths []string
+	for path := range updatedSet {
+		updatedPaths = append(updatedPaths, path)
+	}
+
+	allPaths := append(append(newPaths, oldPaths...), updatedPaths...)
 	msg := fmt.Sprintf("%s: rename dir %s → %s", actor, from, to)
+	if len(updatedPaths) > 0 {
+		msg += fmt.Sprintf(" (updated %d links)", len(updatedPaths))
+	}
 	if err := p.Versioner.BulkCommit(ctx, allPaths, actor, msg); err != nil {
-		log.Printf("pipeline: RenameDir BulkCommit: %v", err)
+		log.Printf("pipeline: RenameDirWithLinks BulkCommit: %v", err)
 		for _, p2 := range allPaths {
 			p.trackUncommitted(p2)
 		}
@@ -1207,6 +1327,9 @@ func (p *Pipeline) RenameDir(ctx context.Context, from, to, actor string) (int, 
 	for _, op := range oldPaths {
 		p.deindexFile(ctx, op)
 	}
+	for _, u := range linkUpdates {
+		p.indexFile(ctx, u.Path, u.Content)
+	}
 
 	for _, np := range newPaths {
 		p.broadcast(events.Event{Op: "write", Path: np, Actor: actor})
@@ -1215,7 +1338,7 @@ func (p *Pipeline) RenameDir(ctx context.Context, from, to, actor string) (int, 
 		p.broadcast(events.Event{Op: "delete", Path: op, Actor: actor})
 	}
 
-	return len(newPaths), nil
+	return RenameDirResult{Renamed: len(newPaths), UpdatedLinks: updatedPaths}, nil
 }
 
 // DeferredDelete records a deletion in git and removes from indexes, without

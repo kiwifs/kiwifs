@@ -874,8 +874,10 @@ func (h *Handlers) RenameDir(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "from and to are required")
 	}
 
+	updateLinks := c.QueryParam("update_links") != "false"
 	actor := sanitizeActor(c.Request().Header.Get("X-Actor"))
-	count, err := h.pipe.RenameDir(c.Request().Context(), req.From, req.To, actor)
+
+	res, err := h.pipe.RenameDirWithLinks(c.Request().Context(), req.From, req.To, actor, updateLinks)
 	if err != nil {
 		if errors.Is(err, storage.ErrPathDenied) {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -886,11 +888,15 @@ func (h *Handlers) RenameDir(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"from":    req.From,
 		"to":      req.To,
-		"renamed": count,
-	})
+		"renamed": res.Renamed,
+	}
+	if len(res.UpdatedLinks) > 0 {
+		resp["updated_links"] = res.UpdatedLinks
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 // AppendFile godoc
