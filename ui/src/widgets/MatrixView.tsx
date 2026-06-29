@@ -13,8 +13,9 @@ export interface MatrixViewProps {
   colPointers?: { col: number; label: string; color?: string }[];
   /** Whether to show row/col indices. Default true. */
   showIndices?: boolean;
-  /** Center each row (for triangular/staircase grids). Default false. */
-  centerRows?: boolean;
+  /** Ragged row mode — only render actual cells per row (no padding to max width).
+   *  "start" = left-aligned (staircase), "center" = centered (pyramid). Default false. */
+  centerRows?: boolean | "start" | "center";
   /** Use circular cells instead of squares (for coin/token grids). Default false. */
   roundCells?: boolean;
   activeColor?: string;
@@ -54,6 +55,12 @@ export function MatrixView({
   }
 
   const cols = Math.max(...values.map((r) => r.length));
+  const raggedAlign = centerRows === true || centerRows === "center"
+    ? "center"
+    : centerRows === "start"
+      ? "flex-start"
+      : undefined;
+  const isRagged = !!centerRows;
 
   const rowPtrMap = new Map<number, typeof rowPointers>();
   for (const p of rowPointers) {
@@ -71,8 +78,8 @@ export function MatrixView({
   return (
     <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
       <div style={{ display: "inline-flex", flexDirection: "column", gap: 0 }}>
-        {/* Column pointer row (hidden for centered/triangular layouts) */}
-        {colPointers.length > 0 && !centerRows && (
+        {/* Column pointer row (hidden for ragged layouts) */}
+        {colPointers.length > 0 && !isRagged && (
           <div style={{ display: "flex", marginLeft: showIndices ? 28 : 0 }}>
             {Array.from({ length: cols }, (_, c) => {
               const ptrs = colPtrMap.get(c);
@@ -87,8 +94,8 @@ export function MatrixView({
           </div>
         )}
 
-        {/* Column index row (hidden for centered/triangular layouts) */}
-        {showIndices && !centerRows && (
+        {/* Column index row (hidden for ragged layouts) */}
+        {showIndices && !isRagged && (
           <div style={{ display: "flex", marginLeft: 28 }}>
             {Array.from({ length: cols }, (_, c) => (
               <div key={c} style={{
@@ -108,11 +115,11 @@ export function MatrixView({
         {/* Rows */}
         {values.map((row, r) => {
           const rptrs = rowPtrMap.get(r);
-          const rowLen = centerRows ? row.length : cols;
+          const rowLen = isRagged ? row.length : cols;
           return (
-            <div key={r} style={{ display: "flex", alignItems: "center", justifyContent: centerRows ? "center" : undefined }}>
+            <div key={r} style={{ display: "flex", alignItems: "center", justifyContent: raggedAlign }}>
               {/* Row index */}
-              {showIndices && !centerRows && (
+              {showIndices && !isRagged && (
                 <div style={{
                   width: 24,
                   textAlign: "right",
