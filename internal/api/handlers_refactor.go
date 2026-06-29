@@ -214,19 +214,54 @@ func fuzzyMatch(ctx context.Context, store storage.Storage, target string) strin
 	targetClean = strings.TrimSuffix(targetClean, "\\")
 	targetLower := strings.ToLower(targetClean)
 
+	if targetLower == "" {
+		return ""
+	}
+
 	base := targetClean
 	if i := strings.LastIndex(base, "/"); i >= 0 {
 		base = base[i+1:]
 	}
 	baseLower := strings.ToLower(base)
 
-	if baseLower == "" || baseLower == "_index" {
+	// Bare "_index" with no directory component is ambiguous (every dir has one).
+	if baseLower == "_index" && !strings.Contains(targetClean, "/") {
+		return ""
+	}
+	if baseLower == "" {
 		return ""
 	}
 
+	// Strip numeric prefix for fuzzy directory matching (e.g. "06-prefix-sum" → "prefix-sum").
+	stripNumPrefix := func(s string) string {
+		parts := strings.SplitN(s, "-", 2)
+		if len(parts) == 2 && len(parts[0]) > 0 {
+			allDigit := true
+			for _, c := range parts[0] {
+				if c < '0' || c > '9' {
+					allDigit = false
+					break
+				}
+			}
+			if allDigit {
+				return parts[1]
+			}
+		}
+		return s
+	}
+
+	// Build a "stripped" version of the target for fuzzy dir matching.
+	// e.g. "06-prefix-sum/_index" → "prefix-sum/_index"
+	targetParts := strings.Split(targetLower, "/")
+	var strippedTarget []string
+	for _, p := range targetParts {
+		strippedTarget = append(strippedTarget, stripNumPrefix(p))
+	}
+	strippedTargetLower := strings.Join(strippedTarget, "/")
+
 	type candidate struct {
 		path  string
-		score int // higher is better: 3=exact, 2=suffix, 1=basename
+		score int // higher is better: 4=exact, 3=suffix, 2=stripped-suffix, 1=basename
 	}
 	var best candidate
 
@@ -239,16 +274,27 @@ func fuzzyMatch(ctx context.Context, store storage.Storage, target string) strin
 
 		score := 0
 		if entryStemLower == targetLower {
-			score = 3
+			score = 4
 		} else if strings.HasSuffix(entryStemLower, "/"+targetLower) {
-			score = 2
+			score = 3
 		} else {
-			entryBase := entryStem
-			if i := strings.LastIndex(entryBase, "/"); i >= 0 {
-				entryBase = entryBase[i+1:]
+			// Try stripped (numberless) suffix match.
+			entryParts := strings.Split(entryStemLower, "/")
+			var strippedEntry []string
+			for _, p := range entryParts {
+				strippedEntry = append(strippedEntry, stripNumPrefix(p))
 			}
-			if strings.ToLower(entryBase) == baseLower {
-				score = 1
+			strippedEntryLower := strings.Join(strippedEntry, "/")
+			if strings.HasSuffix(strippedEntryLower, "/"+strippedTargetLower) || strippedEntryLower == strippedTargetLower {
+				score = 2
+			} else {
+				entryBase := entryStem
+				if i := strings.LastIndex(entryBase, "/"); i >= 0 {
+					entryBase = entryBase[i+1:]
+				}
+				if strings.ToLower(entryBase) == baseLower && baseLower != "_index" {
+					score = 1
+				}
 			}
 		}
 
