@@ -205,7 +205,9 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          pattern: kiwifs-*
           path: artifacts
+          merge-multiple: true
 
       - name: Attach binaries to release
         run: |
