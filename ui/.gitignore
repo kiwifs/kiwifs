@@ -11,3 +11,4 @@ demo-static
 # helpful "UI not built" page instead.
 dist/*
 !dist/.gitkeep
+dist-lib

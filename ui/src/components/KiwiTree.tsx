@@ -69,6 +69,14 @@ import { useFileOpsStore } from "@kw/stores/fileOpsStore";
 import { useKiwiTreeUiStore, type ConfirmDialog, type PromptDialog } from "@kw/stores/kiwiTreeUiStore";
 import { KiwiTreeDialogs } from "@kw/components/tree/KiwiTreeDialogs";
 
+/** Simplified tree node for data-driven mode (no server). */
+export type KiwiTreeDataNode = {
+  path: string;
+  name: string;
+  isDir: boolean;
+  children?: KiwiTreeDataNode[];
+};
+
 type Props = {
   activePath: string | null;
   revealRequest?: TreeRevealRequest | null;
@@ -91,11 +99,39 @@ type Props = {
   autoReveal?: boolean;
   publishedPaths?: Set<string>;
   onPublishedChanged?: () => void;
+
+  /**
+   * Data-driven mode: pass an array of tree nodes directly.
+   * When provided, the component skips API fetching entirely.
+   * This is converted to a TreeEntry internally (equivalent to treeRoot).
+   */
+  data?: KiwiTreeDataNode[];
+
+  /** Called when a tree node is renamed (data-driven mode). */
+  onRename?: (oldPath: string, newPath: string) => void;
+
+  /** Called when a tree node is deleted (data-driven mode). */
+  onDelete?: (path: string) => void;
 };
 
 export type KiwiTreeHandle = {
   collapseAll: () => void;
 };
+
+function dataToTreeEntry(nodes: KiwiTreeDataNode[]): TreeEntry {
+  const convert = (n: KiwiTreeDataNode): TreeEntry => ({
+    path: n.path,
+    name: n.name,
+    isDir: n.isDir,
+    children: n.children?.map(convert),
+  });
+  return {
+    path: "",
+    name: "",
+    isDir: true,
+    children: nodes.map(convert),
+  };
+}
 
 function nodeLabel(data: FlatNode): string {
   if (data.displayName) return data.displayName;
@@ -216,13 +252,18 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
     includePrefixes,
     excludePrefixes,
     excludePaths,
-    treeRoot,
+    treeRoot: treeRootProp,
     autoReveal = true,
     publishedPaths,
     onPublishedChanged,
+    data: dataProp,
+    onRename: _onRename,
+    onDelete: _onDelete,
   },
   ref,
 ) {
+  // data prop takes precedence: convert to TreeEntry format
+  const treeRoot = dataProp ? dataToTreeEntry(dataProp) : treeRootProp;
   const [root, setRoot] = useState<TreeEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
