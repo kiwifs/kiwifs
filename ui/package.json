@@ -1,11 +1,36 @@
 {
-  "name": "kiwifs-ui",
-  "private": true,
+  "name": "@kiwifs/ui",
   "version": "0.1.0",
   "type": "module",
+  "description": "Embeddable React components for KiwiFS — markdown renderer, file tree, search, and more",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kiwifs/kiwifs",
+    "directory": "ui"
+  },
+  "keywords": ["kiwifs", "markdown", "react", "components", "wiki", "knowledge-base"],
+  "sideEffects": ["*.css"],
+  "main": "./dist-lib/index.js",
+  "module": "./dist-lib/index.js",
+  "types": "./dist-lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-lib/index.d.ts",
+      "import": "./dist-lib/index.js"
+    },
+    "./styles.css": "./src/index.css"
+  },
+  "files": [
+    "dist-lib",
+    "src/index.css",
+    "src/styles"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts",
+    "prepublishOnly": "npm run build:lib",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
@@ -13,6 +38,15 @@
     "build-storybook": "storybook build",
     "dev-demo": "vite --config vite.demo.config.ts",
     "build-demo": "vite build --config vite.demo.config.ts && node scripts/copy-demo-routes.mjs"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react-dom": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@blocknote/core": "^0.50.0",
@@ -69,11 +103,9 @@
     "markdown2typst": "^0.1.4",
     "mermaid": "^11.14.0",
     "prosemirror-state": "^1.4.4",
-    "react": "^19.2.6",
     "react-arborist": "^3.7.0",
     "react-colorful": "^5.6.1",
     "react-diff-viewer-continued": "^4.2.0",
-    "react-dom": "^19.2.6",
     "react-force-graph-2d": "^1.29.1",
     "react-force-graph-3d": "^1.29.1",
     "react-is": "^19.2.6",

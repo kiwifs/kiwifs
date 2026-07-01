@@ -53,10 +53,18 @@ import remarkDirective from "remark-directive";
 import { remarkKiwiDirectives } from "@kw/lib/remarkDirectives";
 
 type Props = {
-  path: string;
-  tree: TreeEntry | null;
-  onNavigate: (path: string) => void;
-  onEdit: () => void;
+  /** Page path in the KiwiFS tree. Used for API fetching in connected mode. */
+  path?: string;
+
+  /**
+   * Pass markdown content directly — no server needed.
+   * When provided, the component skips API fetching entirely.
+   */
+  content?: string;
+
+  tree?: TreeEntry | null;
+  onNavigate?: (path: string) => void;
+  onEdit?: () => void;
   onHistory?: () => void;
   onRevealInTree?: () => void;
   onToggleStar?: () => void;
@@ -69,6 +77,15 @@ type Props = {
   onTagClick?: (tag: string) => void;
   refreshKey?: number;
   onPublishedChanged?: () => void;
+
+  /** Called when a [[wiki link]] is clicked. Receives the resolved target path. */
+  onWikiLinkClick?: (target: string) => void;
+
+  /** Called when a heading scrolls into view. Receives the heading slug. */
+  onHeadingVisible?: (slug: string) => void;
+
+  /** Custom className for the outermost wrapper. */
+  className?: string;
 };
 
 type FrontmatterProperty = {
@@ -371,11 +388,14 @@ function classifyMedia(src: string): "image" | "video" | "audio" | "pdf" | "unkn
   return "unknown";
 }
 
-export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealInTree, onToggleStar, isStarred, onTogglePin, isPinned, onDeleted, onDuplicated, onMoved, onTagClick, refreshKey, onPublishedChanged }: Props) {
-  const treeEntry = useMemo(() => findEntry(tree, path), [tree, path]);
-  const isDir = treeEntry?.isDir ?? false;
+export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, onEdit, onHistory, onRevealInTree, onToggleStar, isStarred, onTogglePin, isPinned, onDeleted, onDuplicated, onMoved, onTagClick, refreshKey, onPublishedChanged, onWikiLinkClick, onHeadingVisible: _onHeadingVisible, className }: Props) {
+  const isHeadless = contentProp != null;
+  const nav = onNavigate ?? (() => {});
 
-  const [content, setContent] = useState<string | null>(null);
+  const treeEntry = useMemo(() => findEntry(tree ?? null, path), [tree, path]);
+  const isDir = !isHeadless && (treeEntry?.isDir ?? false);
+
+  const [content, setContent] = useState<string | null>(isHeadless ? contentProp! : null);
   const [lastModified, setLastModified] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [commentCount, setCommentCount] = useState(0);
@@ -387,8 +407,14 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
   const [localNote, setLocalNote] = useState<string | null>(null);
   const proseRef = useRef<HTMLDivElement>(null);
 
+  // In headless mode, sync content from prop
   useEffect(() => {
-    if (isDir) return;
+    if (isHeadless) setContent(contentProp!);
+  }, [isHeadless, contentProp]);
+
+  useEffect(() => {
+    if (isHeadless || isDir) return;
+    if (!path) return;
     let cancelled = false;
     setContent(null);
     setError(null);
@@ -406,20 +432,20 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
         if (!cancelled) setError(String(e));
       });
     return () => { cancelled = true; };
-  }, [path, refreshKey, isDir]);
+  }, [path, refreshKey, isDir, isHeadless]);
 
   useEffect(() => {
-    if (isDir) return;
+    if (isHeadless || isDir || !path) return;
     let cancelled = false;
     setLocalNote(null);
     api.readLocalNote(path).then((note) => {
       if (!cancelled) setLocalNote(note);
     });
     return () => { cancelled = true; };
-  }, [path, refreshKey, isDir]);
+  }, [path, refreshKey, isDir, isHeadless]);
 
   useEffect(() => {
-    if (isDir) return;
+    if (isHeadless || isDir || !path) return;
     let cancelled = false;
     setVersionError(false);
     api.versions(path).then((r) => {
@@ -427,25 +453,24 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
       setLastAuthor(r.versions[0].author);
     }).catch(() => { if (!cancelled) setVersionError(true); });
     return () => { cancelled = true; };
-  }, [path, isDir]);
+  }, [path, isDir, isHeadless]);
 
   useEffect(() => {
-    if (isDir) return;
+    if (isHeadless || isDir || !path) return;
     let cancelled = false;
     setCommentError(false);
     api.listComments(path).then((r) => {
       if (!cancelled) setCommentCount(r.comments.length);
     }).catch(() => { if (!cancelled) setCommentError(true); });
     return () => { cancelled = true; };
-  }, [path, refreshKey, isDir]);
+  }, [path, refreshKey, isDir, isHeadless]);
 
   useEffect(() => {
-    if (isDir) return;
+    if (isHeadless || isDir || !path) return;
     let cancelled = false;
     setViewCount(null);
     setViewDelta(null);
 
-    // Fetch view count from legacy endpoint, plus v2 trend data.
     const legacyP = api.pageViews({ path, top: 1 }).catch(() => null);
     const trendP = api.analyticsViews("7d", path).catch(() => null);
 
@@ -456,7 +481,6 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
       } else {
         setViewCount(0);
       }
-      // Compute weekly delta if time series available.
       if (trend?.time_series && trend.time_series.length > 0) {
         const weekTotal = trend.time_series.reduce((s, p) => s + p.count, 0);
         if (weekTotal > 0 && viewCount !== weekTotal) {
@@ -469,9 +493,9 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
     });
 
     return () => { cancelled = true; };
-  }, [path, refreshKey, isDir]);
+  }, [path, refreshKey, isDir, isHeadless]);
 
-  const resolver = useMemo(() => buildResolver(tree), [tree]);
+  const resolver = useMemo(() => buildResolver(tree ?? null), [tree]);
 
   const parsed = useMemo(() => {
     if (content == null) return { body: "", meta: {} as Record<string, unknown> };
@@ -489,7 +513,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
     const children = treeEntry.children ?? [];
     return (
       <div className="flex flex-col h-full">
-        <StickyBreadcrumb path={path} onNavigate={onNavigate} />
+        <StickyBreadcrumb path={path} onNavigate={nav} />
         <div className="flex-1 overflow-auto px-4 md:px-10 py-8 max-w-3xl mx-auto w-full">
           <div className="flex items-center gap-3 mb-6">
             <Folder className="h-6 w-6 text-primary" />
@@ -503,7 +527,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                 <li key={child.path}>
                   <button
                     type="button"
-                    onClick={() => onNavigate(child.path.replace(/\/+$/, ""))}
+                    onClick={() => nav(child.path.replace(/\/+$/, ""))}
                     className="flex items-center gap-2 w-full text-left rounded-md px-3 py-2 transition-colors hover:bg-accent hover:text-accent-foreground text-sm"
                   >
                     {child.isDir ? (
@@ -526,7 +550,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
     const is404 = error.startsWith("Error: 404") || error.includes("404");
     return (
       <div className="flex flex-col h-full">
-        <StickyBreadcrumb path={path} onNavigate={onNavigate} />
+        <StickyBreadcrumb path={path} onNavigate={nav} />
         {is404 ? (
           <div className="flex-1 grid place-items-center">
             <div className="text-center max-w-md px-8">
@@ -539,10 +563,10 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                 This page may have been moved, renamed, or deleted.
               </p>
               <div className="flex flex-col gap-2 items-center">
-                <Button size="sm" onClick={() => onNavigate("")} className="gap-2">
+                <Button size="sm" onClick={() => nav("")} className="gap-2">
                   Go to index
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => onNavigate(path)} className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => nav(path)} className="gap-2">
                   <Plus className="h-3.5 w-3.5" /> Create this page
                 </Button>
               </div>
@@ -557,22 +581,22 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
   if (content === null) {
     return (
       <div className="flex flex-col h-full">
-        <StickyBreadcrumb path={path} onNavigate={onNavigate} />
+        <StickyBreadcrumb path={path} onNavigate={nav} />
         <PageSkeleton />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* ── Sticky breadcrumb bar ── */}
-      <StickyBreadcrumb path={path} onNavigate={onNavigate} />
+    <div className={"flex flex-col h-full" + (className ? " " + className : "")}>
+      {/* ── Sticky breadcrumb bar (hidden in headless mode without a path) ── */}
+      {!isHeadless && <StickyBreadcrumb path={path} onNavigate={nav} />}
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-auto kiwi-scroll">
         <div className="max-w-6xl mx-auto px-4 md:px-8 py-6">
-          {/* ── Page header zone ── */}
-          <div className="mb-6">
+          {/* ── Page header zone (hidden in headless/static mode) ── */}
+          {!isHeadless && <div className="mb-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground leading-tight">
@@ -624,9 +648,11 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                     <HistoryIcon className="h-3.5 w-3.5" /> <span className="hidden sm:inline">History</span>
                   </Button>
                 )}
+                {onEdit && (
                 <Button variant="outline" size="sm" onClick={onEdit}>
                   <Edit className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Edit</span>
                 </Button>
+                )}
                 <PublishButton path={path} onPublishedChanged={onPublishedChanged} />
                 <PageActions
                   path={path}
@@ -708,7 +734,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                 onTagClick={onTagClick}
               />
             )}
-          </div>
+          </div>}
 
           {/* ── Content zone + ToC ── */}
           <div className="flex gap-6">
@@ -766,7 +792,8 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                             href={`#${raw}`}
                             onClick={(e) => {
                               e.preventDefault();
-                              onNavigate(pagePath);
+                              if (onWikiLinkClick) onWikiLinkClick(pagePath);
+                              else nav(pagePath);
                               if (anchor) {
                                 requestAnimationFrame(() => {
                                   setTimeout(() => {
@@ -790,7 +817,8 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                             href="#"
                             onClick={(e) => {
                               e.preventDefault();
-                              onNavigate(`${target}.md`);
+                              if (onWikiLinkClick) onWikiLinkClick(target);
+                              else nav(`${target}.md`);
                             }}
                             title={`Missing: ${target} — click to create`}
                             className="wiki-link-missing"
@@ -831,7 +859,7 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                             href={`/page/${resolved}${anchor ? `#${anchor}` : ""}`}
                             onClick={(e) => {
                               e.preventDefault();
-                              onNavigate(resolved);
+                              nav(resolved);
                               if (anchor) {
                                 requestAnimationFrame(() => {
                                   setTimeout(() => {
@@ -870,13 +898,13 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                         return <CodeRunner source={raw} lang={codeLang} />;
                       }
                       if (lang === "widget:tracker") {
-                        return <PageTracker onNavigate={onNavigate} stateName={raw.trim() || "progress"} />;
+                        return <PageTracker onNavigate={nav} stateName={raw.trim() || "progress"} />;
                       }
                       if (lang?.startsWith("widget:")) {
                         return <KiwiWidget name={lang.slice("widget:".length)} source={raw} />;
                       }
                       if (lang === "kiwi-query") {
-                        return <KiwiQuery source={raw} onNavigate={onNavigate} isComputedView={parsed.meta?.["kiwi-view"] === true} />;
+                        return <KiwiQuery source={raw} onNavigate={nav} isComputedView={parsed.meta?.["kiwi-view"] === true} />;
                       }
                       if (lang === "mermaid") {
                         return <MermaidDiagram chart={raw} />;
@@ -1095,7 +1123,8 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
               </div>
               )}
 
-              {/* ── Footer zone: fixed order, collapsible ── */}
+              {/* ── Footer zone: fixed order, collapsible (hidden in headless mode) ── */}
+              {!isHeadless && (
               <div className="mt-12 space-y-2">
                 {localNote && (
                   <CollapsibleFooterSection
@@ -1169,17 +1198,20 @@ export function KiwiPage({ path, tree, onNavigate, onEdit, onHistory, onRevealIn
                   storageKey="footer-backlinks"
                   className="kiwi-backlinks-section"
                 >
-                  <KiwiBacklinks path={path} onNavigate={onNavigate} refreshKey={refreshKey} />
+                  <KiwiBacklinks path={path} onNavigate={nav} refreshKey={refreshKey} />
                 </CollapsibleFooterSection>
               </div>
+              )}
 
-              {/* ── File info ── */}
+              {/* ── File info (hidden in headless mode) ── */}
+              {!isHeadless && (
               <div className="border-t border-border mt-8 pt-4 pb-2">
                 <div className="text-xs text-muted-foreground flex items-center gap-3 min-w-0">
                   <FileAxis3D className="h-3.5 w-3.5 shrink-0" />
                   <code className="font-mono break-all min-w-0">{path}</code>
                 </div>
               </div>
+              )}
             </article>
             {!isExcalidrawMarkdown(content, parsed.meta) && <KiwiToC markdown={parsed.body} containerRef={proseRef} />}
           </div>
