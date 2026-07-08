@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type TreeEntry } from "@kw/lib/api";
 import { titleize } from "@kw/lib/paths";
 import { Badge } from "@kw/components/ui/badge";
-import { CheckCircle2, Circle, ChevronDown, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { CheckCircle2, Circle, ChevronDown, ChevronRight, Calendar as CalendarIcon, Bookmark } from "lucide-react";
 
 type ProgressEntry = {
   done: boolean;
   doneAt?: string;
+  bookmarked?: boolean;
 };
 
 type ProgressState = Record<string, ProgressEntry>;
@@ -178,6 +179,17 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
     });
   }, [stateName]);
 
+  const toggleBookmark = useCallback((pagePath: string) => {
+    setProgress((prev) => {
+      const entry = prev[pagePath];
+      if (!entry?.done) return prev;
+      const next = { ...prev };
+      next[pagePath] = { ...entry, bookmarked: !entry.bookmarked };
+      api.putLocalState(stateName, next);
+      return next;
+    });
+  }, [stateName]);
+
   const toggleGroup = useCallback((folder: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
@@ -303,6 +315,27 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
                             <CalendarIcon className="h-2.5 w-2.5" />
                             {entry.doneAt}
                           </span>
+                        )}
+                        {isDone && (
+                          <button
+                            type="button"
+                            onClick={() => toggleBookmark(page.path)}
+                            className={
+                              "shrink-0 transition-opacity " +
+                              (entry?.bookmarked ? "opacity-100" : "opacity-0 group-hover:opacity-100")
+                            }
+                            aria-label={entry?.bookmarked ? "Remove bookmark" : "Bookmark for review"}
+                            title={entry?.bookmarked ? "Remove bookmark" : "Bookmark for review"}
+                          >
+                            <Bookmark
+                              className={
+                                "h-3.5 w-3.5 transition-colors " +
+                                (entry?.bookmarked
+                                  ? "text-amber-500 fill-amber-500"
+                                  : "text-muted-foreground/40 hover:text-amber-500")
+                              }
+                            />
+                          </button>
                         )}
                       </div>
                       </div>
