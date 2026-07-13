@@ -13,6 +13,13 @@ export { PropertyBar, type PropertyBarProps, type PropertyEntry } from "./Proper
 export { CodeHighlight, type CodeHighlightProps } from "./CodeHighlight";
 export { TreeView, type TreeViewProps, type TreeNode } from "./TreeView";
 export { MatrixView, type MatrixViewProps } from "./MatrixView";
+export {
+  BarView,
+  type BarViewProps,
+  type BarPointer,
+  type BarOverlay,
+  type BarGuide,
+} from "./BarView";
 export { GraphView, type GraphViewProps, type GraphNode, type GraphEdge } from "./GraphView";
 export { LinkedListView, type LinkedListViewProps, type LLNode, type LinkedListPointer } from "./LinkedListView";
 export { AnnotationBar, type AnnotationBarProps } from "./AnnotationBar";

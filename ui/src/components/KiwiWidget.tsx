@@ -9,6 +9,7 @@ import { PropertyBar } from "@kw/widgets/PropertyBar";
 import { CodeHighlight } from "@kw/widgets/CodeHighlight";
 import { TreeView } from "@kw/widgets/TreeView";
 import { MatrixView } from "@kw/widgets/MatrixView";
+import { BarView } from "@kw/widgets/BarView";
 import { GraphView } from "@kw/widgets/GraphView";
 import { LinkedListView } from "@kw/widgets/LinkedListView";
 import { AnnotationBar } from "@kw/widgets/AnnotationBar";
@@ -30,6 +31,7 @@ const liveScope = {
   CodeHighlight,
   TreeView,
   MatrixView,
+  BarView,
   GraphView,
   LinkedListView,
   AnnotationBar,
