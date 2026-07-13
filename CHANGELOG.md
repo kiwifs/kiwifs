@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.19.42](https://github.com/kiwifs/kiwifs/compare/v0.19.41...v0.19.42) (2026-07-13)
+
+
+### Features
+
+* **ui:** add BarView widget for bar/chart visualizations ([#462](https://github.com/kiwifs/kiwifs/issues/462)) ([c72c9ac](https://github.com/kiwifs/kiwifs/commit/c72c9ac4130a991131a5ee2f0ac963cea3d4f31e))
+* **ui:** add bookmark toggle to PageTracker ([#461](https://github.com/kiwifs/kiwifs/issues/461)) ([9330f34](https://github.com/kiwifs/kiwifs/commit/9330f344c999473bc541d695b9bbce219975b18e))
+* **ui:** embeddable npm package @kiwifs/ui with headless components ([#460](https://github.com/kiwifs/kiwifs/issues/460)) ([a328732](https://github.com/kiwifs/kiwifs/commit/a328732767cd898c30d0eb2eea7dbbca5295cf38))
+
+
+### Bug Fixes
+
+* **api:** improve fuzzy matcher for numbered directories and _index targets ([#457](https://github.com/kiwifs/kiwifs/issues/457)) ([e2be6fe](https://github.com/kiwifs/kiwifs/commit/e2be6fe2f93eb1e42ca2c7f7683c579b29a659f3))
+* **links:** skip escaped-pipe wiki-links in RewriteLinks ([#459](https://github.com/kiwifs/kiwifs/issues/459)) ([51d68eb](https://github.com/kiwifs/kiwifs/commit/51d68ebe3706209a071cb6e111151ba0e4d7f255))
+
 ## [0.19.41](https://github.com/kiwifs/kiwifs/compare/v0.19.40...v0.19.41) (2026-06-29)
 
 
