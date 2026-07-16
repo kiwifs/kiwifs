@@ -769,7 +769,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                     remarkDefinitionList,
                     remarkDirective,
                     remarkKiwiDirectives,
-                    [remarkWikiLinks, { resolver }],
+                    [remarkWikiLinks, { resolver, fromPath: path }],
                   ]}
                   rehypePlugins={[
                     rehypeCodeMeta,
@@ -1147,7 +1147,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                             remarkDefinitionList,
                             remarkDirective,
                             remarkKiwiDirectives,
-                            [remarkWikiLinks, { resolver }],
+                            [remarkWikiLinks, { resolver, fromPath: path }],
                           ]}
                           rehypePlugins={[
                             rehypeCodeMeta,

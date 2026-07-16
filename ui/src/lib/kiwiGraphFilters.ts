@@ -69,14 +69,14 @@ export function nodeMatchesRelationFilter(
 /** Resolve API edges to canonical source/target/relation tuples for filtering. */
 export function resolveGraphLinks(
   edges: GraphEdge[],
-  resolver: (target: string) => string | null,
+  resolver: (target: string, fromPath?: string) => string | null,
   nodeIds: ReadonlySet<string>,
 ): ResolvedGraphLink[] {
   const out: ResolvedGraphLink[] = [];
   const seen = new Set<string>();
   for (const e of edges) {
     if (!nodeIds.has(e.source)) continue;
-    const resolved = resolver(e.target);
+    const resolved = resolver(e.target, e.source);
     if (!resolved || !nodeIds.has(resolved) || resolved === e.source) continue;
     const relation = sanitizeRelation(e.relation);
     const key = `${e.source}||${resolved}||${relation}`;

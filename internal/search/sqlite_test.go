@@ -425,6 +425,50 @@ func TestResyncReconcilesOutOfBandChanges(t *testing.T) {
 	}
 }
 
+// TestBacklinksDirectoryRelative verifies that a chapter-relative partial-path
+// wiki link (which is not one of the target's exact TargetForms) is recognized
+// as a backlink via the directory-aware resolver.
+func TestBacklinksDirectoryRelative(t *testing.T) {
+	s := newTestSQLite(t)
+
+	const idx = "02-arrays-and-strings/_index.md"
+	const target = "02-arrays-and-strings/02-two-pointers/reverse-string.md"
+
+	// [[02-two-pointers/reverse-string]] is relative to the _index.md dir; it
+	// does not appear verbatim in TargetForms(target).
+	idxBody := []byte("# Arrays\nSee [[02-two-pointers/reverse-string]] and [[../foundations/intro]].\n")
+	if err := s.Index(ctxBG, idx, idxBody); err != nil {
+		t.Fatalf("Index idx: %v", err)
+	}
+	if err := s.Index(ctxBG, target, []byte("# Reverse String\n")); err != nil {
+		t.Fatalf("Index target: %v", err)
+	}
+	if err := s.IndexLinks(ctxBG, idx, links.Extract(idxBody)); err != nil {
+		t.Fatalf("IndexLinks: %v", err)
+	}
+
+	backlinks, err := s.Backlinks(ctxBG, target)
+	if err != nil {
+		t.Fatalf("Backlinks: %v", err)
+	}
+	if len(backlinks) != 1 || backlinks[0].Path != idx {
+		t.Fatalf("expected 1 backlink from %q, got %+v", idx, backlinks)
+	}
+
+	// A partial link that resolves elsewhere must NOT be a backlink of target.
+	other := "02-arrays-and-strings/02-two-pointers/valid-palindrome.md"
+	if err := s.Index(ctxBG, other, []byte("# Valid Palindrome\n")); err != nil {
+		t.Fatalf("Index other: %v", err)
+	}
+	bl2, err := s.Backlinks(ctxBG, other)
+	if err != nil {
+		t.Fatalf("Backlinks other: %v", err)
+	}
+	if len(bl2) != 0 {
+		t.Fatalf("expected no backlinks for %q, got %+v", other, bl2)
+	}
+}
+
 // TestRemoveAllClearsEveryTable verifies docs/links/file_meta all drop in a
 // single tx so the three indices never diverge after a delete.
 func TestRemoveAllClearsEveryTable(t *testing.T) {

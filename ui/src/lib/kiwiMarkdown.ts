@@ -111,7 +111,7 @@ export const kiwiSanitizeSchema = {
  * Pass a `resolver` to enable wiki-link resolution (`[[page]]` → real path).
  * Without a resolver, wiki links render as plain text.
  */
-export function kiwiRemarkPlugins(resolver?: LinkResolver): any[] {
+export function kiwiRemarkPlugins(resolver?: LinkResolver, fromPath?: string): any[] {
   const plugins: any[] = [
     remarkGfm,
     remarkMath,
@@ -124,7 +124,7 @@ export function kiwiRemarkPlugins(resolver?: LinkResolver): any[] {
     remarkKiwiDirectives,
   ];
   if (resolver) {
-    plugins.push([remarkWikiLinks, { resolver }]);
+    plugins.push([remarkWikiLinks, { resolver, fromPath }]);
   }
   return plugins;
 }

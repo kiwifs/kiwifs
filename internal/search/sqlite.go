@@ -1468,19 +1468,49 @@ func (s *SQLite) AllEdges(ctx context.Context) ([]links.Edge, error) {
 	return out, rows.Err()
 }
 
-// Backlinks returns every source that refers to `target` via any of the
-// common [[…]] forms (full path, stem, basename, stem-of-basename).
+// Backlinks returns every source that refers to `target`. It matches two
+// ways, unioned:
+//
+//   - Exact TargetForms (full path, stem, basename, stem-of-basename) — the
+//     original behavior, needs no path index and is always applied.
+//   - Directory-relative / partial-path links (e.g. [[chapter/note]] written
+//     from a sibling chapter, or [[../note]]) that don't appear verbatim in
+//     TargetForms. These are prefiltered by path suffix and confirmed with the
+//     directory-aware resolver (links.PathIndex) so a link only counts as a
+//     backlink of the file it actually resolves to.
+//
+// The resolver here uses the same algorithm as the UI (see
+// internal/links/resolve_link.go), so rendering, backlinks, and the graph
+// agree on where a [[link]] points.
+//
+// Note: the path-suffix prefilter uses a leading-wildcard LIKE, which cannot
+// use the target_lc index; for very large link tables this is a full scan.
+// Backlinks is not a hot path, so we accept that for now.
 func (s *SQLite) Backlinks(ctx context.Context, target string) ([]links.Entry, error) {
 	forms := links.TargetForms(target)
 	if len(forms) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(forms))
-	for i, f := range forms {
-		args[i] = strings.ToLower(f)
+	formSet := make(map[string]struct{}, len(forms))
+	args := make([]any, 0, len(forms)+2)
+	for _, f := range forms {
+		lf := strings.ToLower(f)
+		formSet[lf] = struct{}{}
+		args = append(args, lf)
 	}
+
+	// Path-suffix prefilter for partial / relative links whose raw target is
+	// not one of the exact forms. Confirmed below via the resolver.
+	p := strings.TrimPrefix(target, "/")
+	base := p
+	if i := strings.LastIndex(p, "/"); i >= 0 {
+		base = p[i+1:]
+	}
+	baseStem := strings.ToLower(strings.TrimSuffix(base, ".md"))
+	args = append(args, "%/"+baseStem, "%/"+baseStem+".md")
+
 	q := fmt.Sprintf(
-		`SELECT source, relation, COUNT(*) FROM links WHERE target_lc IN (%s) GROUP BY source, relation ORDER BY source`,
+		`SELECT source, target, relation FROM links WHERE target_lc IN (%s) OR target_lc LIKE ? OR target_lc LIKE ?`,
 		placeholders(len(forms)),
 	)
 	rows, err := s.readDB.QueryContext(ctx, q, args...)
@@ -1488,16 +1518,85 @@ func (s *SQLite) Backlinks(ctx context.Context, target string) ([]links.Entry, e
 		return nil, err
 	}
 	defer rows.Close()
-	var out []links.Entry
+
+	type candidate struct{ source, rawTarget, relation string }
+	var candidates []candidate
+	needIndex := false
 	for rows.Next() {
-		var src, rel string
-		var count int
-		if err := rows.Scan(&src, &rel, &count); err != nil {
+		var src, tgt, rel string
+		if err := rows.Scan(&src, &tgt, &rel); err != nil {
 			return nil, err
 		}
-		out = append(out, links.Entry{Path: src, Count: count, Relation: rel})
+		candidates = append(candidates, candidate{src, tgt, rel})
+		if _, exact := formSet[strings.ToLower(tgt)]; !exact {
+			needIndex = true
+		}
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Build the path index only when a partial/relative candidate needs
+	// confirmation, so the common exact-match path stays index-free.
+	var idx *links.PathIndex
+	if needIndex {
+		paths, perr := s.allDocPaths(ctx)
+		if perr != nil {
+			return nil, perr
+		}
+		idx = links.BuildPathIndex(paths)
+	}
+
+	type key struct{ source, relation string }
+	counts := make(map[key]int)
+	var order []key
+	for _, c := range candidates {
+		matched := false
+		if _, exact := formSet[strings.ToLower(c.rawTarget)]; exact {
+			matched = true
+		} else if idx != nil && strings.EqualFold(idx.ResolveLink(c.rawTarget, c.source), target) {
+			matched = true
+		}
+		if !matched {
+			continue
+		}
+		k := key{c.source, c.relation}
+		if _, seen := counts[k]; !seen {
+			order = append(order, k)
+		}
+		counts[k]++
+	}
+
+	sort.Slice(order, func(i, j int) bool {
+		if order[i].source != order[j].source {
+			return order[i].source < order[j].source
+		}
+		return order[i].relation < order[j].relation
+	})
+	out := make([]links.Entry, 0, len(order))
+	for _, k := range order {
+		out = append(out, links.Entry{Path: k.source, Count: counts[k], Relation: k.relation})
+	}
+	return out, nil
+}
+
+// allDocPaths returns every indexed file path (from doc_paths). Used to build
+// a links.PathIndex for directory-aware backlink resolution.
+func (s *SQLite) allDocPaths(ctx context.Context) ([]string, error) {
+	rows, err := s.readDB.QueryContext(ctx, `SELECT path FROM doc_paths`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, rows.Err()
 }
 
 // FilterByDate returns the subset of paths whose file_meta.updated_at is after

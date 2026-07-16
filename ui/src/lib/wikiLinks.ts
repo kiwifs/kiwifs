@@ -10,20 +10,42 @@
 // instead of a link, so the media-aware img override renders it as
 // <img>, <video>, <audio>, or <iframe> based on file extension.
 //
-// Resolution is fuzzy:
-//   [[authentication]]         → pages/authentication.md
-//   [[pages/auth]]             → pages/auth.md  (exact first, then fuzzy)
-//   [[Authentication]]         → case-insensitive match on the stem
+// ── Resolution model (Obsidian-compatible, directory-aware) ─────────────────
+// Resolution takes the *source* page's path (`fromPath`) so links resolve
+// relative to where they were written, matching Obsidian's
+// `getFirstLinkpathDest(linkpath, sourcePath)`:
 //
-// The resolver is built once from the file tree and re-built whenever the
-// tree changes, so lookups are O(1) per link.
+//   [[./sibling]] / [[../up/note]]  → explicit-relative to the source dir
+//   [[/folder/note]]                → vault-absolute (leading slash)
+//   [[folder/note]]                 → absolute-from-root, then relative to the
+//                                     source dir, then a unique path suffix
+//   [[note]]                        → unique basename; on collision, prefer a
+//                                     file in the source dir, then the shortest
+//                                     path, then lexicographically first
+//
+// A bare name matches only an exact (normalized) basename — there is no
+// stem-*prefix* fuzzing, which previously mis-resolved [[reverse]] to whichever
+// of reverse-string / reverse-vowels happened to be indexed first.
+//
+// The Go backend (internal/links) implements the same order and tie-breaks so
+// rendering, backlinks, and the graph never disagree; the shared cases are
+// exercised by wikiLinks.test.ts and links resolver tests.
+//
+// The index is built once from the file tree and rebuilt whenever the tree
+// changes, so per-link lookups are O(1) except the rare path-suffix fallback.
 
 import { visit } from "unist-util-visit";
 import GithubSlugger from "github-slugger";
 import type { Root } from "mdast";
 import type { TreeEntry } from "@kw/lib/api";
+import { dirOf, normalizePath } from "@kw/lib/paths";
 
-export type LinkResolver = (target: string) => string | null;
+/**
+ * Resolve a raw wiki-link target to a canonical file path (or null).
+ * `fromPath` is the page the link was written on; omit it (or pass "") to
+ * resolve from the vault root only (no relative resolution).
+ */
+export type LinkResolver = (target: string, fromPath?: string) => string | null;
 
 function flatten(tree: TreeEntry): string[] {
   const out: string[] = [];
@@ -35,25 +57,98 @@ function flatten(tree: TreeEntry): string[] {
   return out;
 }
 
+// Normalize a path or target for case/separator-insensitive matching:
+// lowercase, drop a trailing `.md`, and collapse runs of -, _, and whitespace
+// to a single hyphen. Slashes are preserved so path structure survives.
 function normalize(s: string): string {
-  return s.toLowerCase().replace(/\.[^.]+$/, "").replace(/[-_\s]+/g, "-");
+  return s.toLowerCase().replace(/\.md$/i, "").replace(/[-_\s]+/g, "-");
+}
+
+function basenameOf(p: string): string {
+  const i = p.lastIndexOf("/");
+  return i < 0 ? p : p.slice(i + 1);
+}
+
+function segmentCount(p: string): number {
+  return p.split("/").length;
+}
+
+// Deterministic tie-break shared with the Go backend: a candidate in the
+// source directory wins; otherwise the shortest path; otherwise the
+// lexicographically smallest path.
+function tieBreak(candidates: string[], fromDir: string): string {
+  const inDir = candidates.filter((p) => dirOf(p) === fromDir);
+  const pool = inDir.length > 0 ? inDir : candidates;
+  return [...pool].sort((a, b) => {
+    const sa = segmentCount(a);
+    const sb = segmentCount(b);
+    if (sa !== sb) return sa - sb;
+    return a < b ? -1 : a > b ? 1 : 0;
+  })[0];
 }
 
 export function buildResolver(tree: TreeEntry | null): LinkResolver {
   if (!tree) return () => null;
-  const paths = flatten(tree);
+  // Sort for deterministic tie-breaking regardless of tree walk order.
+  const paths = flatten(tree).sort();
 
-  const byPath = new Map<string, string>();
+  // normalize(fullPath) → canonical path (handles absolute + relative exacts).
   const byNormPath = new Map<string, string>();
-  const byStem = new Map<string, string>();
+  // normalize(basename) → all canonical paths with that basename (ambiguity).
+  const byStem = new Map<string, string[]>();
   for (const p of paths) {
-    byPath.set(p, p);
-    byNormPath.set(normalize(p), p);
-    const stem = p.substring(p.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
-    byStem.set(normalize(stem), p);
+    const np = normalize(p);
+    if (!byNormPath.has(np)) byNormPath.set(np, p);
+    const stem = normalize(basenameOf(p));
+    const bucket = byStem.get(stem);
+    if (bucket) bucket.push(p);
+    else byStem.set(stem, [p]);
   }
 
-  return (target) => {
+  const lookupExact = (p: string): string | null => byNormPath.get(normalize(p)) ?? null;
+
+  const resolveSuffix = (page: string, fromDir: string): string | null => {
+    const key = "/" + normalize(page);
+    const matches = paths.filter((p) => normalize(p).endsWith(key));
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0];
+    return tieBreak(matches, fromDir);
+  };
+
+  const resolvePage = (page: string, fromPath?: string): string | null => {
+    if (!page) return null;
+    const fromDir = fromPath ? dirOf(fromPath) : "";
+
+    // 1. Explicit-relative: resolve against the source directory only.
+    if (page.startsWith("./") || page.startsWith("../")) {
+      const joined = normalizePath(fromDir ? `${fromDir}/${page}` : page);
+      return lookupExact(joined);
+    }
+
+    // 2. Vault-absolute (leading slash).
+    if (page.startsWith("/")) {
+      return lookupExact(page.replace(/^\/+/, ""));
+    }
+
+    // 3. Contains a slash: absolute-from-root, then relative, then suffix.
+    if (page.includes("/")) {
+      const abs = lookupExact(page);
+      if (abs) return abs;
+      if (fromDir) {
+        const rel = lookupExact(normalizePath(`${fromDir}/${page}`));
+        if (rel) return rel;
+      }
+      return resolveSuffix(page, fromDir);
+    }
+
+    // 4. Bare name: unique basename, else deterministic tie-break.
+    const cands = byStem.get(normalize(page));
+    if (!cands || cands.length === 0) return null;
+    if (cands.length === 1) return cands[0];
+    return tieBreak(cands, fromDir);
+  };
+
+  return (target, fromPath) => {
     if (!target) return null;
     const t = target.trim();
 
@@ -68,21 +163,7 @@ export function buildResolver(tree: TreeEntry | null): LinkResolver {
       return `#${slugger.slug(headingPart)}`;
     }
 
-    // Resolve the page part
-    let resolved: string | null = null;
-    if (byPath.has(pagePart)) resolved = byPath.get(pagePart)!;
-    else if (byPath.has(pagePart + ".md")) resolved = byPath.get(pagePart + ".md")!;
-    else {
-      const n = normalize(pagePart);
-      if (byNormPath.has(n)) resolved = byNormPath.get(n)!;
-      else if (byStem.has(n)) resolved = byStem.get(n)!;
-      else {
-        for (const [stem, p] of byStem.entries()) {
-          if (stem.startsWith(n)) { resolved = p; break; }
-        }
-      }
-    }
-
+    const resolved = resolvePage(pagePart, fromPath);
     if (!resolved) return null;
 
     // Append heading slug if present
@@ -105,7 +186,7 @@ export function extractWikiTargets(md: string): string[] {
 
 // Remark plugin: rewrite [[x]] and ![[x]] occurrences in text nodes.
 // [[x]] → link node (wiki link), ![[x]] → image node (embed).
-export function remarkWikiLinks(opts: { resolver: LinkResolver }) {
+export function remarkWikiLinks(opts: { resolver: LinkResolver; fromPath?: string }) {
   const re = /(!?)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
   return (tree: Root) => {
@@ -124,7 +205,7 @@ export function remarkWikiLinks(opts: { resolver: LinkResolver }) {
         const isEmbed = m[1] === "!";
         const target = m[2].trim();
         const label = (m[3] || target).trim();
-        const resolved = opts.resolver(target);
+        const resolved = opts.resolver(target, opts.fromPath);
 
         if (isEmbed) {
           const src = resolved ? `/raw/${resolved}` : `/raw/${target}`;
