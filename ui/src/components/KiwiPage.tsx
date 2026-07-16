@@ -789,8 +789,9 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                         const anchor = hashIdx >= 0 ? raw.slice(hashIdx) : "";
                         return (
                           <a
-                            href={`#${raw}`}
+                            href={`/page/${pagePath}${anchor}`}
                             onClick={(e) => {
+                              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
                               e.preventDefault();
                               if (onWikiLinkClick) onWikiLinkClick(pagePath);
                               else nav(pagePath);
@@ -814,8 +815,9 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                         const target = h.slice("#kiwi-missing:".length);
                         return (
                           <a
-                            href="#"
+                            href={`/page/${target}.md`}
                             onClick={(e) => {
+                              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
                               e.preventDefault();
                               if (onWikiLinkClick) onWikiLinkClick(target);
                               else nav(`${target}.md`);
@@ -858,6 +860,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                           <a
                             href={`/page/${resolved}${anchor ? `#${anchor}` : ""}`}
                             onClick={(e) => {
+                              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
                               e.preventDefault();
                               nav(resolved);
                               if (anchor) {
