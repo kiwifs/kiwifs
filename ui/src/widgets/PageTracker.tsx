@@ -101,6 +101,22 @@ function parsePageMeta(fm: Record<string, unknown>): PageMeta {
   return meta;
 }
 
+/** Meta API caps each request at 200 rows — paginate to load every page. */
+async function fetchAllMeta() {
+  const pageSize = 200;
+  const map: Record<string, PageMeta> = {};
+  let offset = 0;
+  while (true) {
+    const res = await api.meta({ limit: pageSize, offset });
+    for (const row of res.results) {
+      map[row.path] = parsePageMeta(row.frontmatter);
+    }
+    if (res.results.length < pageSize) break;
+    offset += pageSize;
+  }
+  return map;
+}
+
 function difficultyClass(d: string): string {
   const v = d.toLowerCase();
   if (v === "easy") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
@@ -138,15 +154,11 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
     Promise.all([
       api.tree(),
       api.getLocalState<ProgressState>(stateName),
-      api.meta({ where: [{ field: "$.difficulty", op: "!=", value: "" }], limit: 5000 }),
-    ]).then(([t, p, metaRes]) => {
+      fetchAllMeta(),
+    ]).then(([t, p, map]) => {
       if (cancelled) return;
       setTree(t);
       setProgress(p ?? {});
-      const map: Record<string, PageMeta> = {};
-      for (const row of metaRes.results) {
-        map[row.path] = parsePageMeta(row.frontmatter);
-      }
       setMetaByPath(map);
       setLoading(false);
     });
