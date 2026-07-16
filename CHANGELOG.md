@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.44](https://github.com/kiwifs/kiwifs/compare/v0.19.43...v0.19.44) (2026-07-16)
+
+
+### Bug Fixes
+
+* **ui:** make internal links open correctly in new tabs ([#466](https://github.com/kiwifs/kiwifs/issues/466)) ([0d879a2](https://github.com/kiwifs/kiwifs/commit/0d879a2fa2fb8a6cbda4c9474cb846c5c36f9bad))
+
 ## [0.19.43](https://github.com/kiwifs/kiwifs/compare/v0.19.42...v0.19.43) (2026-07-16)
 
 
