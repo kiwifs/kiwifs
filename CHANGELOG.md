@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.19.43](https://github.com/kiwifs/kiwifs/compare/v0.19.42...v0.19.43) (2026-07-16)
+
+
+### Features
+
+* **api:** wiki-link refactoring — rename-dir with backlink updates, broken links & orphans APIs ([#455](https://github.com/kiwifs/kiwifs/issues/455)) ([4b42552](https://github.com/kiwifs/kiwifs/commit/4b4255279e828f524794c2c5f5e0828f788b773d))
+* **links:** directory-aware wiki-link resolution across UI and backend ([#464](https://github.com/kiwifs/kiwifs/issues/464)) ([20867e8](https://github.com/kiwifs/kiwifs/commit/20867e8b594b3a20e69637ebfb01f7c3a48ac41e))
+* **tree:** replace order metadata with natural sort ([#448](https://github.com/kiwifs/kiwifs/issues/448)) ([3b469fa](https://github.com/kiwifs/kiwifs/commit/3b469fae7259aa644cfca8c36e4d08dab3eb20bb))
+* **ui:** add BarView widget for bar/chart visualizations ([#462](https://github.com/kiwifs/kiwifs/issues/462)) ([c72c9ac](https://github.com/kiwifs/kiwifs/commit/c72c9ac4130a991131a5ee2f0ac963cea3d4f31e))
+* **ui:** add bookmark toggle to PageTracker ([#461](https://github.com/kiwifs/kiwifs/issues/461)) ([9330f34](https://github.com/kiwifs/kiwifs/commit/9330f344c999473bc541d695b9bbce219975b18e))
+* **ui:** embeddable npm package @kiwifs/ui with headless components ([#460](https://github.com/kiwifs/kiwifs/issues/460)) ([a328732](https://github.com/kiwifs/kiwifs/commit/a328732767cd898c30d0eb2eea7dbbca5295cf38))
+* **ui:** enhance widget components — AnnotationBar markdown, ArrayView sublabels, MatrixView triangular, GraphEdge labels ([#452](https://github.com/kiwifs/kiwifs/issues/452)) ([a8ac5da](https://github.com/kiwifs/kiwifs/commit/a8ac5da90e82b95d316400babe5c07b79824c59e))
+
+
+### Bug Fixes
+
+* **api:** improve fuzzy matcher for numbered directories and _index targets ([#457](https://github.com/kiwifs/kiwifs/issues/457)) ([e2be6fe](https://github.com/kiwifs/kiwifs/commit/e2be6fe2f93eb1e42ca2c7f7683c579b29a659f3))
+* **ci:** auto-merge Cursor agent fix ([#453](https://github.com/kiwifs/kiwifs/issues/453)) ([2c3f5ab](https://github.com/kiwifs/kiwifs/commit/2c3f5ab5ee714de6ba7e13a2388e495b4186e819))
+* **links:** skip escaped-pipe wiki-links in RewriteLinks ([#459](https://github.com/kiwifs/kiwifs/issues/459)) ([51d68eb](https://github.com/kiwifs/kiwifs/commit/51d68ebe3706209a071cb6e111151ba0e4d7f255))
+* **tracker:** include problems in nested subfolders ([#449](https://github.com/kiwifs/kiwifs/issues/449)) ([abb8daa](https://github.com/kiwifs/kiwifs/commit/abb8daa52ab0ed65d0493f38bc24e4d8a2f04cda))
+* **ui:** MatrixView centerRows supports "start" alignment for staircase grids ([#454](https://github.com/kiwifs/kiwifs/issues/454)) ([9bcbb03](https://github.com/kiwifs/kiwifs/commit/9bcbb03eb11209b193a6dfc18ffebd2b8aa7e5b2))
+* **ui:** normalize relative paths in markdown anchor links ([#447](https://github.com/kiwifs/kiwifs/issues/447)) ([f344f2b](https://github.com/kiwifs/kiwifs/commit/f344f2bd0e750fec2b00f5287597dc9d1d781587))
+* **ui:** paginate PageTracker meta so all pages load ([#465](https://github.com/kiwifs/kiwifs/issues/465)) ([932ab35](https://github.com/kiwifs/kiwifs/commit/932ab35c707545184bd6180879e3f0b82de2a57e))
+* **ui:** support SPA navigation for standard markdown .md#anchor links ([#446](https://github.com/kiwifs/kiwifs/issues/446)) ([11cfed9](https://github.com/kiwifs/kiwifs/commit/11cfed9b1ca4ca68a5628a7683f28cf5eebc8084))
+* **ui:** use correct /me/state route for local state persistence ([#450](https://github.com/kiwifs/kiwifs/issues/450)) ([40b0b30](https://github.com/kiwifs/kiwifs/commit/40b0b308cac9574aa3d479b731aaae9f078dafd6))
+
 ## [0.19.42](https://github.com/kiwifs/kiwifs/compare/v0.19.41...v0.19.42) (2026-07-13)
 
 
