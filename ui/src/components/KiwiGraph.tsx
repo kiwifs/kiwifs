@@ -194,7 +194,7 @@ function buildGraphData(
 
   for (const e of resp.edges) {
     if (!g.hasNode(e.source)) continue;
-    const resolved = resolver(e.target);
+    const resolved = resolver(e.target, e.source);
     if (!resolved || !g.hasNode(resolved) || resolved === e.source) continue;
     if (!g.hasEdge(e.source, resolved)) g.addEdge(e.source, resolved);
   }
