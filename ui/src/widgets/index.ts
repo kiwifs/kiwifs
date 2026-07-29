@@ -7,12 +7,14 @@ export {
 } from "./registry";
 export type { WidgetComponent, WidgetProps } from "./registry";
 export { usePlayback, type Step, type PlaybackReturn } from "./usePlayback";
+export { useLocalState, type LocalStateResult } from "./useLocalState";
 export { PlaybackControls } from "./PlaybackControls";
 export { ArrayView, type ArrayViewProps, type ArrayPointer } from "./ArrayView";
 export { PropertyBar, type PropertyBarProps, type PropertyEntry } from "./PropertyBar";
 export { CodeHighlight, type CodeHighlightProps } from "./CodeHighlight";
 export { TreeView, type TreeViewProps, type TreeNode } from "./TreeView";
 export { MatrixView, type MatrixViewProps } from "./MatrixView";
+export { ActivityGrid, type ActivityGridProps } from "./ActivityGrid";
 export {
   BarView,
   type BarViewProps,
