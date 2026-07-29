@@ -3,12 +3,14 @@ import { LiveProvider, LivePreview, LiveError } from "react-live";
 import yaml from "js-yaml";
 import { getWidget } from "@kw/widgets/registry";
 import { usePlayback } from "@kw/widgets/usePlayback";
+import { useLocalState } from "@kw/widgets/useLocalState";
 import { PlaybackControls } from "@kw/widgets/PlaybackControls";
 import { ArrayView } from "@kw/widgets/ArrayView";
 import { PropertyBar } from "@kw/widgets/PropertyBar";
 import { CodeHighlight } from "@kw/widgets/CodeHighlight";
 import { TreeView } from "@kw/widgets/TreeView";
 import { MatrixView } from "@kw/widgets/MatrixView";
+import { ActivityGrid } from "@kw/widgets/ActivityGrid";
 import { BarView } from "@kw/widgets/BarView";
 import { GraphView } from "@kw/widgets/GraphView";
 import { LinkedListView } from "@kw/widgets/LinkedListView";
@@ -25,12 +27,14 @@ const liveScope = {
   useEffect,
   useMemo,
   usePlayback,
+  useLocalState,
   PlaybackControls,
   ArrayView,
   PropertyBar,
   CodeHighlight,
   TreeView,
   MatrixView,
+  ActivityGrid,
   BarView,
   GraphView,
   LinkedListView,
