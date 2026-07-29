@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.45](https://github.com/kiwifs/kiwifs/compare/v0.19.44...v0.19.45) (2026-07-29)
+
+
+### Features
+
+* **ui:** add ActivityGrid widget and read-only useLocalState hook ([#468](https://github.com/kiwifs/kiwifs/issues/468)) ([9400127](https://github.com/kiwifs/kiwifs/commit/9400127d95f81cca961c8a904b62730e547b1df1))
+
 ## [0.19.44](https://github.com/kiwifs/kiwifs/compare/v0.19.43...v0.19.44) (2026-07-16)
 
 
