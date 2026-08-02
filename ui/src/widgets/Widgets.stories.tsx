@@ -5,6 +5,7 @@ import { ActivityGrid } from "./ActivityGrid";
 import { AnnotationBar } from "./AnnotationBar";
 import { ArrayView } from "./ArrayView";
 import { BarView } from "./BarView";
+import { CallStackView } from "./CallStackView";
 import { CodeHighlight } from "./CodeHighlight";
 import { GraphView } from "./GraphView";
 import { InputPanel } from "./InputPanel";
@@ -12,7 +13,9 @@ import { LinkedListView } from "./LinkedListView";
 import { MatrixView } from "./MatrixView";
 import { PlaybackControls } from "./PlaybackControls";
 import { PropertyBar } from "./PropertyBar";
+import { StackView } from "./StackView";
 import { StateInspector } from "./StateInspector";
+import { TimelineView } from "./TimelineView";
 import { TreeView } from "./TreeView";
 import { WidgetLayout, WidgetPanel } from "./WidgetLayout";
 
@@ -61,6 +64,42 @@ const GRAPH_EDGES = [
   { from: "a", to: "c", weight: 2 },
   { from: "b", to: "d", weight: 5 },
   { from: "c", to: "d", weight: 8 },
+];
+
+/** A trie: repeated letters, so every node needs its own id. */
+const TRIE = {
+  value: "•",
+  id: "root",
+  children: [
+    {
+      value: "c",
+      id: "c",
+      edgeLabel: "c",
+      children: [
+        {
+          value: "a",
+          id: "ca",
+          edgeLabel: "a",
+          children: [
+            { value: "t", id: "cat", edgeLabel: "t", badge: "✓", children: [] },
+            { value: "r", id: "car", edgeLabel: "r", badge: "✓", children: [] },
+          ],
+        },
+      ],
+    },
+    {
+      value: "a",
+      id: "a",
+      edgeLabel: "a",
+      children: [{ value: "t", id: "at", edgeLabel: "t", badge: "✓", children: [] }],
+    },
+  ],
+};
+
+/** Two disjoint-set trees, drawn side by side. */
+const FOREST = [
+  { value: 0, children: [{ value: 2, children: [] }, { value: 5, children: [] }] },
+  { value: 1, children: [{ value: 3, children: [{ value: 4, children: [] }] }] },
 ];
 
 const CODE = [
@@ -135,6 +174,21 @@ function Gallery() {
         />
       </Section>
 
+      <Section name="ArrayView — aligned rows (offset)">
+        <div>
+          <ArrayView values={["a", "b", "a", "b", "a", "b", "c", "a"]} activeIndex={6} cellSize={36} />
+          <ArrayView
+            values={["a", "b", "a", "b", "c"]}
+            sublabels={[0, 0, 1, 2, 0]}
+            offset={2}
+            showIndices={false}
+            highlightIndices={new Set([0, 1, 2, 3])}
+            activeIndex={4}
+            cellSize={36}
+          />
+        </div>
+      </Section>
+
       <Section name="MatrixView">
         <MatrixView
           values={[
@@ -151,6 +205,22 @@ function Gallery() {
         />
       </Section>
 
+      <Section name="MatrixView — axis headers">
+        <MatrixView
+          values={[
+            [0, 1, 2, 3],
+            [1, 1, 2, 3],
+            [2, 2, 1, 2],
+            [3, 3, 2, 2],
+          ]}
+          colHeaders={["ε", "h", "o", "s"]}
+          rowHeaders={["ε", "r", "o", "s"]}
+          showIndices={false}
+          activeCell={[2, 2]}
+          highlightCells={new Set(["1,1", "1,2", "2,1"])}
+        />
+      </Section>
+
       <Section name="TreeView">
         <TreeView
           root={TREE}
@@ -161,7 +231,22 @@ function Gallery() {
         />
       </Section>
 
-      <Section name="GraphView">
+      <Section name="TreeView — ids, edge labels, badges, pruning">
+        <TreeView
+          root={TRIE}
+          activeNodes={new Set(["ca"])}
+          highlightNodes={new Set(["c", "cat"])}
+          prunedNodes={new Set(["a", "at"])}
+          pointers={[{ id: "ca", label: "node" }]}
+          nodeSize={34}
+        />
+      </Section>
+
+      <Section name="TreeView — forest">
+        <TreeView roots={FOREST} activeNodes={new Set([0, 1])} nodeSize={32} />
+      </Section>
+
+      <Section name="GraphView — explicit positions">
         <GraphView
           nodes={GRAPH_NODES}
           edges={GRAPH_EDGES}
@@ -174,6 +259,38 @@ function Gallery() {
         />
       </Section>
 
+      <Section name="GraphView — automatic layout">
+        <WidgetLayout>
+          <WidgetPanel title="force" minWidth={260}>
+            <GraphView
+              nodes={[1, 2, 3, 4, 5, 6].map((id) => ({ id }))}
+              edges={[
+                { from: 1, to: 2 }, { from: 1, to: 3 }, { from: 2, to: 4 },
+                { from: 3, to: 4 }, { from: 4, to: 5 }, { from: 5, to: 6 }, { from: 6, to: 1 },
+              ]}
+              width={280}
+              height={220}
+              activeNodes={new Set([4])}
+            />
+          </WidgetPanel>
+          <WidgetPanel title="layered + self-loops" minWidth={260}>
+            <GraphView
+              nodes={["a", "b", "c", "d", "e"].map((id) => ({ id }))}
+              edges={[
+                { from: "a", to: "b" }, { from: "a", to: "c" },
+                { from: "b", to: "d" }, { from: "c", to: "d" }, { from: "d", to: "e" },
+                { from: "a", to: "a" },
+              ]}
+              layout="layered"
+              directed
+              width={280}
+              height={220}
+              highlightNodes={new Set(["a"])}
+            />
+          </WidgetPanel>
+        </WidgetLayout>
+      </Section>
+
       <Section name="LinkedListView">
         <LinkedListView
           nodes={[{ value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }]}
@@ -182,6 +299,67 @@ function Gallery() {
           dimIndices={new Set([0])}
           pointers={[{ index: 1, label: "slow" }, { index: 3, label: "fast" }]}
           showNull
+        />
+      </Section>
+
+      <Section name="LinkedListView — cycle">
+        <LinkedListView
+          nodes={[{ value: 3 }, { value: 2 }, { value: 0 }, { value: -4, next: 1 }]}
+          activeIndex={2}
+          pointers={[{ index: 2, label: "slow" }, { index: 1, label: "fast" }]}
+        />
+      </Section>
+
+      <Section name="LinkedListView — doubly linked with a random pointer">
+        <LinkedListView
+          nodes={[{ value: 7 }, { value: 13 }, { value: 11 }, { value: 10 }]}
+          doubly
+          edges={[{ from: 1, to: 0, label: "random", side: "above" }]}
+          activeIndex={1}
+          showNull={false}
+        />
+      </Section>
+
+      <Section name="StackView">
+        <WidgetLayout>
+          <WidgetPanel title="monotonic stack" minWidth={200}>
+            <StackView
+              values={[9, 7, 4]}
+              pointers={[{ index: 2, label: "← pop" }]}
+              title="stack"
+            />
+          </WidgetPanel>
+          <WidgetPanel title="empty" minWidth={200}>
+            <StackView values={[]} title="stack" />
+          </WidgetPanel>
+        </WidgetLayout>
+      </Section>
+
+      <Section name="CallStackView">
+        <CallStackView
+          frames={[
+            { label: "fib(5)", state: { n: 5 }, line: 2 },
+            { label: "fib(4)", state: { n: 4 }, line: 2 },
+            { label: "fib(3)", state: { n: 3 }, line: 3, returns: 2 },
+          ]}
+          returned={[{ label: "fib(2)", returns: 1 }]}
+        />
+      </Section>
+
+      <Section name="TimelineView">
+        <TimelineView
+          intervals={[
+            { start: 0, end: 30, label: "A" },
+            { start: 5, end: 10, label: "B" },
+            { start: 15, end: 20, label: "C" },
+            { start: 25, end: 40, label: "D" },
+          ]}
+          sweep={17}
+          sweepLabel="rooms = 2"
+          activeIds={new Set([2])}
+          highlightIds={new Set([0])}
+          marks={[{ at: 40, label: "end" }]}
+          width={520}
         />
       </Section>
 

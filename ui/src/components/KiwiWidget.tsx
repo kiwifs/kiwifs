@@ -15,6 +15,9 @@ import { ActivityGrid } from "@kw/widgets/ActivityGrid";
 import { BarView } from "@kw/widgets/BarView";
 import { GraphView } from "@kw/widgets/GraphView";
 import { LinkedListView } from "@kw/widgets/LinkedListView";
+import { CallStackView } from "@kw/widgets/CallStackView";
+import { TimelineView } from "@kw/widgets/TimelineView";
+import { StackView } from "@kw/widgets/StackView";
 import { AnnotationBar } from "@kw/widgets/AnnotationBar";
 import { WidgetLayout, WidgetPanel } from "@kw/widgets/WidgetLayout";
 import { StateInspector } from "@kw/widgets/StateInspector";
@@ -40,6 +43,9 @@ const liveScope = {
   BarView,
   GraphView,
   LinkedListView,
+  CallStackView,
+  TimelineView,
+  StackView,
   AnnotationBar,
   WidgetLayout,
   WidgetPanel,

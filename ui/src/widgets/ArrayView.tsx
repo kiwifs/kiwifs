@@ -32,6 +32,14 @@ export interface ArrayViewProps {
   highlightColor?: string;
   /** Cell size in px. Defaults to 48. */
   cellSize?: number;
+  /**
+   * Blank cells to insert before the first value, so this row lines up under
+   * another one. Stack two ArrayViews with an offset to show a pattern sitting
+   * beneath the text it is being matched against.
+   */
+  offset?: number;
+  /** Whether to show the index row beneath the cells. Default true. */
+  showIndices?: boolean;
 }
 
 const DEFAULTS = {
@@ -88,6 +96,8 @@ export function ArrayView({
   activeColor = DEFAULTS.activeColor,
   highlightColor = DEFAULTS.highlightColor,
   cellSize = DEFAULTS.cellSize,
+  offset = 0,
+  showIndices = true,
 }: ArrayViewProps) {
   const pointersByIndex = new Map<number, ArrayPointer[]>();
   for (const p of pointers) {
@@ -98,6 +108,9 @@ export function ArrayView({
 
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: 6, padding: "0.75rem 0", flexWrap: "wrap" }}>
+      {Array.from({ length: Math.max(0, offset) }, (_, i) => (
+        <div key={`pad-${i}`} style={{ width: cellSize, flexShrink: 0 }} aria-hidden />
+      ))}
       {values.map((val, i) => {
         const style = getCellStyle(i, activeIndex, highlightIndices, dimIndices, activeColor, highlightColor);
         const ptrs = pointersByIndex.get(i);
@@ -152,9 +165,11 @@ export function ArrayView({
             </div>
 
             {/* Index label below */}
-            <div style={{ fontSize: "0.65rem", color: DEFAULTS.dimColor, fontVariantNumeric: "tabular-nums" }}>
-              {i}
-            </div>
+            {showIndices && (
+              <div style={{ fontSize: "0.65rem", color: DEFAULTS.dimColor, fontVariantNumeric: "tabular-nums" }}>
+                {i}
+              </div>
+            )}
           </div>
         );
       })}

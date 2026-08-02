@@ -29,7 +29,22 @@ export {
   type BarGuide,
 } from "./BarView";
 export { GraphView, type GraphViewProps, type GraphNode, type GraphEdge } from "./GraphView";
-export { LinkedListView, type LinkedListViewProps, type LLNode, type LinkedListPointer } from "./LinkedListView";
+export { type GraphLayout } from "./graphLayout";
+export {
+  LinkedListView,
+  type LinkedListViewProps,
+  type LLNode,
+  type LinkedListPointer,
+  type LinkedListEdge,
+} from "./LinkedListView";
+export { CallStackView, type CallStackViewProps, type CallFrame } from "./CallStackView";
+export {
+  TimelineView,
+  type TimelineViewProps,
+  type TimelineInterval,
+  type TimelineMark,
+} from "./TimelineView";
+export { StackView, type StackViewProps, type StackPointer } from "./StackView";
 export { AnnotationBar, type AnnotationBarProps } from "./AnnotationBar";
 export { WidgetLayout, WidgetPanel, type WidgetLayoutProps, type WidgetPanelProps } from "./WidgetLayout";
 export { StateInspector, type StateInspectorProps } from "./StateInspector";
