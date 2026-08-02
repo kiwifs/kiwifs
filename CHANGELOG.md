@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.49](https://github.com/kiwifs/kiwifs/compare/v0.19.48...v0.19.49) (2026-08-02)
+
+
+### Features
+
+* **ui:** widgets for recursion, intervals, stacks, and non-linear structures ([#476](https://github.com/kiwifs/kiwifs/issues/476)) ([5bfbd99](https://github.com/kiwifs/kiwifs/commit/5bfbd9905c8beb62f795b63f68fa2426d941e57b))
+
 ## [0.19.48](https://github.com/kiwifs/kiwifs/compare/v0.19.47...v0.19.48) (2026-08-02)
 
 
