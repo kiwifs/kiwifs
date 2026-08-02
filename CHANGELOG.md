@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.48](https://github.com/kiwifs/kiwifs/compare/v0.19.47...v0.19.48) (2026-08-02)
+
+
+### Bug Fixes
+
+* **ui:** make widgets legible on light surfaces ([#474](https://github.com/kiwifs/kiwifs/issues/474)) ([c4cd8b6](https://github.com/kiwifs/kiwifs/commit/c4cd8b6e5a99dc01d7cc6d1a0b0c475cb30af558))
+
 ## [0.19.47](https://github.com/kiwifs/kiwifs/compare/v0.19.46...v0.19.47) (2026-08-02)
 
 
