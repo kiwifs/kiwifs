@@ -4,6 +4,7 @@ import yaml from "js-yaml";
 import { getWidget } from "@kw/widgets/registry";
 import { usePlayback } from "@kw/widgets/usePlayback";
 import { useLocalState } from "@kw/widgets/useLocalState";
+import { usePageIndex } from "@kw/widgets/usePageIndex";
 import { PlaybackControls } from "@kw/widgets/PlaybackControls";
 import { ArrayView } from "@kw/widgets/ArrayView";
 import { PropertyBar } from "@kw/widgets/PropertyBar";
@@ -28,6 +29,7 @@ const liveScope = {
   useMemo,
   usePlayback,
   useLocalState,
+  usePageIndex,
   PlaybackControls,
   ArrayView,
   PropertyBar,
