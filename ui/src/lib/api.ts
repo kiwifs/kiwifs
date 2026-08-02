@@ -381,11 +381,15 @@ export const api = {
 
   async putLocalState(name: string, state: unknown): Promise<void> {
     const qs = new URLSearchParams({ name });
-    await fetch(`${kiwiBase()}/me/state?${qs}`, {
+    const res = await fetch(`${kiwiBase()}/me/state?${qs}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Actor": actor(), ..._extraHeaders },
       body: JSON.stringify(state),
     });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    }
   },
 
   async writeFile(

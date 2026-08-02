@@ -8,6 +8,12 @@ export {
 export type { WidgetComponent, WidgetProps } from "./registry";
 export { usePlayback, type Step, type PlaybackReturn } from "./usePlayback";
 export { useLocalState, type LocalStateResult } from "./useLocalState";
+export {
+  usePageIndex,
+  type PageIndexResult,
+  type PageIndexEntry,
+  type PageIndexOptions,
+} from "./usePageIndex";
 export { PlaybackControls } from "./PlaybackControls";
 export { ArrayView, type ArrayViewProps, type ArrayPointer } from "./ArrayView";
 export { PropertyBar, type PropertyBarProps, type PropertyEntry } from "./PropertyBar";

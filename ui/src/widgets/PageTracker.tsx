@@ -137,6 +137,12 @@ function PageTags({ meta }: { meta?: PageMeta }) {
   );
 }
 
+function persist(stateName: string, state: ProgressState) {
+  api.putLocalState(stateName, state).catch((err: unknown) => {
+    console.error(`Failed to save ${stateName}:`, err);
+  });
+}
+
 type Props = {
   onNavigate?: (path: string) => void;
   stateName?: string;
@@ -186,7 +192,7 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
       } else {
         next[pagePath] = { done: true, doneAt: new Date().toISOString().slice(0, 10) };
       }
-      api.putLocalState(stateName, next);
+      persist(stateName, next);
       return next;
     });
   }, [stateName]);
@@ -197,7 +203,7 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
       if (!entry?.done) return prev;
       const next = { ...prev };
       next[pagePath] = { ...entry, bookmarked: !entry.bookmarked };
-      api.putLocalState(stateName, next);
+      persist(stateName, next);
       return next;
     });
   }, [stateName]);
