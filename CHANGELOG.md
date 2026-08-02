@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.47](https://github.com/kiwifs/kiwifs/compare/v0.19.46...v0.19.47) (2026-08-02)
+
+
+### Bug Fixes
+
+* **ui:** define widget theme tokens and repair alpha tints ([#472](https://github.com/kiwifs/kiwifs/issues/472)) ([c91937d](https://github.com/kiwifs/kiwifs/commit/c91937d4edb110b4d6b0ec0fff665b248f4c5088))
+
 ## [0.19.46](https://github.com/kiwifs/kiwifs/compare/v0.19.45...v0.19.46) (2026-08-02)
 
 
