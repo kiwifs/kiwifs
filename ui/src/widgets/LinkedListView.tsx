@@ -1,3 +1,5 @@
+import { alpha } from "./colors";
+
 export interface LLNode {
   value: string | number;
   next?: boolean;
@@ -84,7 +86,7 @@ export function LinkedListView({
             border = activeColor;
             color = "#111827";
           } else if (isHighlight) {
-            bg = highlightColor + "2e";
+            bg = alpha(highlightColor, 18);
             border = highlightColor;
           } else if (isDim) {
             border = DEFAULTS.dimColor;
@@ -134,7 +136,7 @@ export function LinkedListView({
                     alignItems: "center",
                     justifyContent: "center",
                     borderLeft: `1.5px solid ${border}`,
-                    background: bg === "transparent" ? "transparent" : bg + "66",
+                    background: bg === "transparent" ? "transparent" : alpha(bg, 40),
                     fontSize: "0.6rem",
                     color: DEFAULTS.dimColor,
                   }}>

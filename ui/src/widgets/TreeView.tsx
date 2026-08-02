@@ -1,3 +1,5 @@
+import { alpha } from "./colors";
+
 export interface TreeNode {
   value: string | number;
   left?: TreeNode | null;
@@ -204,7 +206,7 @@ export function TreeView({
             stroke = activeColor;
             textColor = "#111827";
           } else if (isHighlight) {
-            fill = highlightColor + "2e";
+            fill = alpha(highlightColor, 18);
             stroke = highlightColor;
           } else if (isDim) {
             stroke = DEFAULTS.dimColor;

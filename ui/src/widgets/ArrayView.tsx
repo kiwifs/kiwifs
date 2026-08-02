@@ -1,3 +1,5 @@
+import { alpha } from "./colors";
+
 interface CellStyle {
   border: string;
   background: string;
@@ -60,12 +62,12 @@ function getCellStyle(
   };
   if (isHighlighted) return {
     border: highlightColor,
-    background: highlightColor + "2e",
+    background: alpha(highlightColor, 18),
     color: DEFAULTS.text,
   };
   if (isDim) return {
     border: DEFAULTS.dimColor,
-    background: DEFAULTS.dimColor + "2e",
+    background: alpha(DEFAULTS.dimColor, 18),
     color: DEFAULTS.text,
     opacity: 0.55,
   };

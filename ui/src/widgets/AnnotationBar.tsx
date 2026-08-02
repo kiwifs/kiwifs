@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { alpha } from "./colors";
 
 export interface AnnotationBarProps {
   /** Step explanation. Supports inline markdown: **bold**, *italic*, `code`. */
@@ -69,7 +70,7 @@ export function AnnotationBar({ text, label, variant = "info" }: AnnotationBarPr
   return (
     <div style={{
       borderLeft: `3px solid ${style.border}`,
-      background: style.bg + "0d",
+      background: alpha(style.bg, 5),
       borderRadius: "0 6px 6px 0",
       padding: "8px 14px",
       fontSize: "0.82rem",

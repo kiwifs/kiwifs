@@ -1,3 +1,5 @@
+import { alpha } from "./colors";
+
 export interface PropertyEntry {
   label: string;
   value: string | number | boolean;
@@ -29,7 +31,7 @@ export function PropertyBar({ entries, title }: PropertyBarProps) {
           fontWeight: 600,
           color: "var(--kw-widget-dim, #94a3b8)",
           borderBottom: "1px solid var(--kw-widget-border, #3f3f46)",
-          background: "var(--kw-widget-border, #3f3f46)" + "33",
+          background: alpha("var(--kw-widget-border, #3f3f46)", 20),
         }}>
           {title}
         </div>
@@ -45,7 +47,7 @@ export function PropertyBar({ entries, title }: PropertyBarProps) {
               padding: "6px 14px",
               borderRight: i < entries.length - 1 ? "1px solid var(--kw-widget-border, #3f3f46)" : undefined,
               transition: "background 0.15s ease",
-              background: entry.changed ? "var(--kw-widget-active, #a78bfa)" + "1a" : "transparent",
+              background: entry.changed ? alpha("var(--kw-widget-active, #a78bfa)", 10) : "transparent",
             }}
           >
             <span style={{

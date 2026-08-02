@@ -1,3 +1,5 @@
+import { alpha } from "./colors";
+
 export interface BarPointer {
   /** Column index the pointer sits above. */
   index: number;
@@ -95,7 +97,7 @@ function resolveBarColor(
   const custom = barColors?.[index];
   if (custom) return { fill: custom, stroke: custom, opacity: 1 };
   if (activeIndices?.has(index)) return { fill: activeColor, stroke: activeColor, opacity: 1 };
-  if (highlightIndices?.has(index)) return { fill: highlightColor + "cc", stroke: highlightColor, opacity: 1 };
+  if (highlightIndices?.has(index)) return { fill: alpha(highlightColor, 80), stroke: highlightColor, opacity: 1 };
   if (dimIndices?.has(index)) return { fill: DEFAULTS.dimColor, stroke: DEFAULTS.dimColor, opacity: 0.4 };
   return { fill: DEFAULTS.bar, stroke: DEFAULTS.bar, opacity: 0.85 };
 }
