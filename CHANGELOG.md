@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.46](https://github.com/kiwifs/kiwifs/compare/v0.19.45...v0.19.46) (2026-08-02)
+
+
+### Features
+
+* **ui:** let live widgets write personal state and read the page index ([#470](https://github.com/kiwifs/kiwifs/issues/470)) ([11a3c2d](https://github.com/kiwifs/kiwifs/commit/11a3c2defc94656d47e0b60e1102336b86d047c2))
+
 ## [0.19.45](https://github.com/kiwifs/kiwifs/compare/v0.19.44...v0.19.45) (2026-07-29)
 
 
