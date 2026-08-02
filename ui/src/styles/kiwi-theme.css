@@ -77,6 +77,15 @@
 
   --kiwi-shiki-filter: none;
 
+  /* Widgets (ArrayView, MatrixView, TreeView, … — see ui/src/widgets) */
+  --kw-widget-text: hsl(0 0% 9%);
+  --kw-widget-dim: hsl(215 16% 47%);
+  --kw-widget-border: hsl(240 5% 84%);
+  --kw-widget-active: #a78bfa;
+  --kw-widget-highlight: #22c55e;
+  --kw-widget-water: #38bdf8;
+  --kw-widget-bar: #94a3b8;
+
   /* Graph (hex — read by readKiwiGraphTheme()) */
   --kiwi-graph-default-node: #7c8a6e;
   --kiwi-graph-edge: #c8c8c8;
@@ -132,6 +141,14 @@
 
   --code-bg: hsl(0 0% 12%);
   --code-border: hsl(0 0% 18%);
+
+  --kw-widget-text: hsl(0 0% 95%);
+  --kw-widget-dim: hsl(215 20% 65%);
+  --kw-widget-border: hsl(240 6% 26%);
+  --kw-widget-active: #a78bfa;
+  --kw-widget-highlight: #22c55e;
+  --kw-widget-water: #38bdf8;
+  --kw-widget-bar: #475569;
 
   --kiwi-graph-default-node: #a4b894;
   --kiwi-graph-edge: #555555;

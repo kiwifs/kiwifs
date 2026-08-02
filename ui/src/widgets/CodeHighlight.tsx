@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getHighlighter, hasLang } from "@kw/lib/shiki";
+import { alpha } from "./colors";
 
 export interface CodeHighlightProps {
   /** The source code to display (plain text, one line per array entry or newline-separated string). */
@@ -67,7 +68,7 @@ export function CodeHighlight({ code, activeLine, title, lang = "python" }: Code
           fontWeight: 600,
           color: "var(--kw-widget-dim, #94a3b8)",
           borderBottom: "1px solid var(--kw-widget-border, #3f3f46)",
-          background: "var(--kw-widget-border, #3f3f46)" + "33",
+          background: alpha("var(--kw-widget-border, #3f3f46)", 20),
         }}>
           {title}
         </div>
@@ -82,7 +83,7 @@ export function CodeHighlight({ code, activeLine, title, lang = "python" }: Code
               style={{
                 display: "flex",
                 padding: "1px 12px",
-                background: active ? "var(--kw-widget-active, #a78bfa)" + "22" : "transparent",
+                background: active ? alpha("var(--kw-widget-active, #a78bfa)", 13) : "transparent",
                 borderLeft: active
                   ? "3px solid var(--kw-widget-active, #a78bfa)"
                   : "3px solid transparent",

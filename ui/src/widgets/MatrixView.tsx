@@ -1,3 +1,5 @@
+import { alpha } from "./colors";
+
 export interface MatrixViewProps {
   /** 2D array of cell values. Rows can have different lengths (ragged/triangular). */
   values: (string | number)[][];
@@ -151,7 +153,7 @@ export function MatrixView({
                   border = activeColor;
                   color = "#111827";
                 } else if (isHighlight) {
-                  bg = highlightColor + "2e";
+                  bg = alpha(highlightColor, 18);
                   border = highlightColor;
                 } else if (isDim) {
                   border = DEFAULTS.dimColor;

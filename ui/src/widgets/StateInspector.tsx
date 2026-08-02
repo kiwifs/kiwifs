@@ -1,3 +1,5 @@
+import { alpha } from "./colors";
+
 export interface StateInspectorProps {
   /** Key-value pairs to display. Values can be primitives, arrays, or objects. */
   state: Record<string, unknown>;
@@ -64,7 +66,7 @@ export function StateInspector({ state, changedKeys, title }: StateInspectorProp
           fontWeight: 600,
           color: DEFAULTS.dimColor,
           borderBottom: `1px solid ${DEFAULTS.border}`,
-          background: DEFAULTS.border + "33",
+          background: alpha(DEFAULTS.border, 20),
           fontFamily: "system-ui, sans-serif",
         }}>
           {title}
@@ -79,7 +81,7 @@ export function StateInspector({ state, changedKeys, title }: StateInspectorProp
               style={{
                 display: "flex",
                 padding: "3px 12px",
-                background: changed ? DEFAULTS.activeColor + "15" : "transparent",
+                background: changed ? alpha(DEFAULTS.activeColor, 8) : "transparent",
                 transition: "background 0.15s ease",
                 gap: 8,
                 alignItems: "baseline",

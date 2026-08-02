@@ -1,3 +1,5 @@
+import { alpha } from "./colors";
+
 export interface InputField {
   key: string;
   label: string;
@@ -145,7 +147,7 @@ export function InputPanel({
                     padding: "2px 8px",
                     borderRadius: 4,
                     border: `1px solid ${DEFAULTS.border}`,
-                    background: val ? "var(--kw-widget-highlight, #22c55e)" + "2e" : "transparent",
+                    background: val ? alpha("var(--kw-widget-highlight, #22c55e)", 18) : "transparent",
                     color: val ? "var(--kw-widget-highlight, #22c55e)" : DEFAULTS.dimColor,
                     fontSize: "0.75rem",
                     fontWeight: 600,
