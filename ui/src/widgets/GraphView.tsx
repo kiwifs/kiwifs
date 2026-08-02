@@ -1,9 +1,11 @@
 import { alpha } from "./colors";
+import { layoutGraph, type GraphLayout } from "./graphLayout";
 
 export interface GraphNode {
   id: string | number;
-  x: number;
-  y: number;
+  /** Pixel position. Omit both to have the layout place this node. */
+  x?: number;
+  y?: number;
   label?: string;
 }
 
@@ -31,6 +33,13 @@ export interface GraphViewProps {
   directed?: boolean;
   /** Node labels shown next to nodes (e.g. "src", "dst"). */
   pointers?: { id: string | number; label: string; color?: string }[];
+  /**
+   * How to place nodes that have no `x`/`y`. Every layout is deterministic, so
+   * nodes stay put as an animation steps. Default "force", which suits an
+   * arbitrary graph; prefer "layered" for DAGs and trees, "circular" for small
+   * dense graphs, and "grid" for grid-shaped ones.
+   */
+  layout?: GraphLayout;
   activeColor?: string;
   highlightColor?: string;
   nodeSize?: number;
@@ -61,6 +70,7 @@ export function GraphView({
   highlightEdges,
   directed = false,
   pointers = [],
+  layout = "force",
   activeColor = DEFAULTS.activeColor,
   highlightColor = DEFAULTS.highlightColor,
   nodeSize = DEFAULTS.nodeSize,
@@ -75,7 +85,13 @@ export function GraphView({
     );
   }
 
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  const positions = layoutGraph(nodes, edges, { width, height, nodeSize, layout });
+  const placed = nodes.map((n) => {
+    const p = positions.get(n.id);
+    return { ...n, x: p?.x ?? width / 2, y: p?.y ?? height / 2 };
+  });
+
+  const nodeMap = new Map(placed.map((n) => [n.id, n]));
   const r = nodeSize / 2;
 
   const pointerMap = new Map<string | number, typeof pointers>();
@@ -127,6 +143,37 @@ export function GraphView({
             marker = directed ? `url(#${arrowHighlightId})` : undefined;
           }
 
+          // A self-loop has no direction to draw along — arc it above the node
+          // instead. Union-find roots point at themselves this way.
+          if (e.from === e.to) {
+            const loop = r * 0.9;
+            return (
+              <g key={i}>
+                <path
+                  d={`M ${from.x - loop * 0.6} ${from.y - r * 0.8}
+                      A ${loop} ${loop} 0 1 1 ${from.x + loop * 0.6} ${from.y - r * 0.8}`}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth={strokeWidth}
+                  markerEnd={marker}
+                  style={{ transition: "all 0.25s ease" }}
+                />
+                {(e.weight !== undefined || e.label) && (
+                  <text
+                    x={from.x} y={from.y - r - loop - 4}
+                    textAnchor="middle"
+                    fill={isActive ? activeColor : DEFAULTS.dimColor}
+                    fontSize={10}
+                    fontWeight={600}
+                    fontFamily="ui-monospace, monospace"
+                  >
+                    {e.weight !== undefined ? e.weight : e.label}
+                  </text>
+                )}
+              </g>
+            );
+          }
+
           const dx = to.x - from.x;
           const dy = to.y - from.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -165,7 +212,7 @@ export function GraphView({
           );
         })}
 
-        {nodes.map((n) => {
+        {placed.map((n) => {
           const isActive = activeNodes?.has(n.id) ?? false;
           const isHighlight = highlightNodes?.has(n.id) ?? false;
           const isDim = dimNodes?.has(n.id) ?? false;

@@ -13,6 +13,12 @@ export interface MatrixViewProps {
   rowPointers?: { row: number; label: string; color?: string }[];
   /** Column pointer labels (shown above the column). */
   colPointers?: { col: number; label: string; color?: string }[];
+  /** Captions for each column, outside the index strip — the characters of a
+   *  string in an edit-distance table, item weights in a knapsack, bit place
+   *  values in a bit grid. */
+  colHeaders?: (string | number | null)[];
+  /** Captions for each row. */
+  rowHeaders?: (string | number | null)[];
   /** Whether to show row/col indices. Default true. */
   showIndices?: boolean;
   /** Ragged row mode — only render actual cells per row (no padding to max width).
@@ -41,6 +47,8 @@ export function MatrixView({
   dimCells,
   rowPointers = [],
   colPointers = [],
+  colHeaders,
+  rowHeaders,
   showIndices = true,
   centerRows = false,
   roundCells = false,
@@ -77,12 +85,18 @@ export function MatrixView({
     colPtrMap.set(p.col, list);
   }
 
+  const hasRowHeaders = !!rowHeaders && !isRagged;
+  const hasColHeaders = !!colHeaders && !isRagged;
+  const rowHeaderW = 34;
+  const indexGutter = showIndices && !isRagged ? 28 : 0;
+  const leftGutter = (hasRowHeaders ? rowHeaderW : 0) + indexGutter;
+
   return (
     <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
       <div style={{ display: "inline-flex", flexDirection: "column", gap: 0 }}>
         {/* Column pointer row (hidden for ragged layouts) */}
         {colPointers.length > 0 && !isRagged && (
-          <div style={{ display: "flex", marginLeft: showIndices ? 28 : 0 }}>
+          <div style={{ display: "flex", marginLeft: leftGutter }}>
             {Array.from({ length: cols }, (_, c) => {
               const ptrs = colPtrMap.get(c);
               return (
@@ -96,9 +110,28 @@ export function MatrixView({
           </div>
         )}
 
+        {/* Column header captions */}
+        {hasColHeaders && (
+          <div style={{ display: "flex", marginLeft: leftGutter }}>
+            {Array.from({ length: cols }, (_, c) => (
+              <div key={c} style={{
+                width: cellSize,
+                textAlign: "center",
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                color: DEFAULTS.text,
+                fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                paddingBottom: 2,
+              }}>
+                {colHeaders?.[c] ?? ""}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Column index row (hidden for ragged layouts) */}
         {showIndices && !isRagged && (
-          <div style={{ display: "flex", marginLeft: 28 }}>
+          <div style={{ display: "flex", marginLeft: leftGutter }}>
             {Array.from({ length: cols }, (_, c) => (
               <div key={c} style={{
                 width: cellSize,
@@ -120,6 +153,22 @@ export function MatrixView({
           const rowLen = isRagged ? row.length : cols;
           return (
             <div key={r} style={{ display: "flex", alignItems: "center", justifyContent: raggedAlign }}>
+              {/* Row header caption */}
+              {hasRowHeaders && (
+                <div style={{
+                  width: rowHeaderW,
+                  textAlign: "right",
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  color: DEFAULTS.text,
+                  fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                  paddingRight: 6,
+                  flexShrink: 0,
+                }}>
+                  {rowHeaders?.[r] ?? ""}
+                </div>
+              )}
+
               {/* Row index */}
               {showIndices && !isRagged && (
                 <div style={{
