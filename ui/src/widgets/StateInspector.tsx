@@ -33,10 +33,10 @@ function renderValue(val: unknown): string {
 
 function typeColor(val: unknown): string {
   if (val === null || val === undefined) return DEFAULTS.dimColor;
-  if (typeof val === "boolean") return "#f59e0b";
-  if (typeof val === "number") return "#60a5fa";
-  if (typeof val === "string") return "#34d399";
-  if (Array.isArray(val)) return "#c084fc";
+  if (typeof val === "boolean") return "var(--kw-widget-value-boolean, #f59e0b)";
+  if (typeof val === "number") return "var(--kw-widget-value-number, #60a5fa)";
+  if (typeof val === "string") return "var(--kw-widget-value-string, #34d399)";
+  if (Array.isArray(val)) return "var(--kw-widget-value-object, #c084fc)";
   return DEFAULTS.text;
 }
 

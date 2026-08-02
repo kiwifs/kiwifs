@@ -149,13 +149,16 @@ export function BarView({
       )
     : 0;
   const pointerPad = pointerRows * 16;
+  // Value labels sit just above each bar, so pointers have to clear them or
+  // they collide on whichever bar reaches the top of the plot.
+  const valueLabelPad = valueLabels === false ? 0 : 14;
 
   let axisMax = maxValue ?? Math.max(dataMax, overlayMax, guideMax, 0);
   let axisMin = minValue ?? Math.min(dataMin, 0);
   if (axisMax === axisMin) axisMax = axisMin + 1; // avoid zero range
   const range = axisMax - axisMin;
 
-  const plotTop = topPad + pointerPad;
+  const plotTop = topPad + pointerPad + (hasPointers ? valueLabelPad : 0);
   const chartWidth = n * barWidth + (n - 1) * gap;
   const svgWidth = chartWidth + sidePad * 2;
   const svgHeight = plotTop + chartHeight + bottomPad;
@@ -313,7 +316,7 @@ export function BarView({
             <text
               key={`ptr-${idx}-${j}`}
               x={xFor(idx) + barWidth / 2}
-              y={plotTop - 6 - j * 16}
+              y={plotTop - 6 - valueLabelPad - j * 16}
               textAnchor="middle"
               fontSize={12}
               fontWeight={700}

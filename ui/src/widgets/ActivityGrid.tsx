@@ -41,7 +41,9 @@ const DEFAULTS = {
   weeks: 53,
 };
 
-const LEVEL_OPACITY = [0.35, 0.3, 0.5, 0.72, 1];
+// Empty days render the border color at full strength; without it they wash
+// out to nearly the page background on light surfaces.
+const LEVEL_OPACITY = [1, 0.3, 0.5, 0.72, 1];
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

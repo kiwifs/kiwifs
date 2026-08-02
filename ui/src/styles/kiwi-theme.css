@@ -8,6 +8,11 @@
 
 /* ─── Light ─── */
 :root {
+  /* Tells the UA which palette to paint native controls with. Without it the
+     browser follows the OS preference, so range inputs, number spinners and
+     scrollbars render dark on a light page. */
+  color-scheme: light;
+
   --background: hsl(0 0% 100%);
   --foreground: hsl(0 0% 9%);
   --card: hsl(0 0% 100%);
@@ -81,10 +86,27 @@
   --kw-widget-text: hsl(0 0% 9%);
   --kw-widget-dim: hsl(215 16% 47%);
   --kw-widget-border: hsl(240 5% 84%);
-  --kw-widget-active: #a78bfa;
-  --kw-widget-highlight: #22c55e;
-  --kw-widget-water: #38bdf8;
+  /* Accents double as fills and as label text, so they need enough weight to
+     read against the page, and a paired foreground for text drawn on top. */
+  --kw-widget-active: #7c3aed;
+  --kw-widget-active-foreground: #ffffff;
+  --kw-widget-highlight: #16a34a;
+  --kw-widget-water: #0284c7;
   --kw-widget-bar: #94a3b8;
+  /* StateInspector value types */
+  /* Panel fills used inside widgets */
+  --kw-widget-surface: hsl(240 5% 96%);
+  --kw-widget-surface-raised: hsl(240 5% 91%);
+  /* Accents for widget authors, weighted to stay legible on the page surface */
+  --kw-widget-accent-red: #dc2626;
+  --kw-widget-accent-amber: #b45309;
+  --kw-widget-accent-blue: #2563eb;
+  --kw-widget-accent-indigo: #4f46e5;
+  /* StateInspector value types */
+  --kw-widget-value-string: var(--kw-widget-highlight);
+  --kw-widget-value-number: var(--kw-widget-accent-blue);
+  --kw-widget-value-boolean: var(--kw-widget-accent-amber);
+  --kw-widget-value-object: #9333ea;
 
   /* Graph (hex — read by readKiwiGraphTheme()) */
   --kiwi-graph-default-node: #7c8a6e;
@@ -106,6 +128,8 @@
 
 /* ─── Dark ─── */
 .dark {
+  color-scheme: dark;
+
   --background: hsl(0 0% 5%);
   --foreground: hsl(0 0% 95%);
   --card: hsl(0 0% 7%);
@@ -146,9 +170,20 @@
   --kw-widget-dim: hsl(215 20% 65%);
   --kw-widget-border: hsl(240 6% 26%);
   --kw-widget-active: #a78bfa;
+  --kw-widget-active-foreground: #111827;
   --kw-widget-highlight: #22c55e;
   --kw-widget-water: #38bdf8;
   --kw-widget-bar: #475569;
+  --kw-widget-surface: #18181b;
+  --kw-widget-surface-raised: #27272a;
+  --kw-widget-accent-red: #f87171;
+  --kw-widget-accent-amber: #f59e0b;
+  --kw-widget-accent-blue: #60a5fa;
+  --kw-widget-accent-indigo: #818cf8;
+  --kw-widget-value-string: #34d399;
+  --kw-widget-value-number: var(--kw-widget-accent-blue);
+  --kw-widget-value-boolean: var(--kw-widget-accent-amber);
+  --kw-widget-value-object: #c084fc;
 
   --kiwi-graph-default-node: #a4b894;
   --kiwi-graph-edge: #555555;

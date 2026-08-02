@@ -58,7 +58,7 @@ function getCellStyle(
   if (isActive) return {
     border: activeColor,
     background: activeColor,
-    color: "#111827",
+    color: "var(--kw-widget-active-foreground, #111827)",
   };
   if (isHighlighted) return {
     border: highlightColor,

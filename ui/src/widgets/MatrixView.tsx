@@ -151,7 +151,7 @@ export function MatrixView({
                 if (isActive) {
                   bg = activeColor;
                   border = activeColor;
-                  color = "#111827";
+                  color = "var(--kw-widget-active-foreground, #111827)";
                 } else if (isHighlight) {
                   bg = alpha(highlightColor, 18);
                   border = highlightColor;

@@ -179,7 +179,7 @@ export function GraphView({
           if (isActive) {
             fill = activeColor;
             stroke = activeColor;
-            textColor = "#111827";
+            textColor = "var(--kw-widget-active-foreground, #111827)";
           } else if (isHighlight) {
             fill = alpha(highlightColor, 18);
             stroke = highlightColor;

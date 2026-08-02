@@ -44,7 +44,7 @@ function parseInlineMarkdown(text: string): (string | ReactNode)[] {
     } else if (match[4]) {
       parts.push(
         <code key={key++} style={{
-          background: "rgba(255,255,255,0.08)",
+          background: alpha("var(--kw-widget-dim, #94a3b8)", 18),
           padding: "1px 5px",
           borderRadius: 4,
           fontSize: "0.8em",

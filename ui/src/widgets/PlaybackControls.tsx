@@ -51,7 +51,12 @@ export function PlaybackControls({
           onStop();
           onSeek(Number(e.target.value));
         }}
-        className="w-full accent-primary h-1.5 cursor-pointer"
+        className="w-full h-1.5 cursor-pointer"
+        style={{
+          ["--kw-range-progress" as string]: `${
+            totalSteps > 1 ? (currentStep / (totalSteps - 1)) * 100 : 0
+          }%`,
+        }}
         aria-label={`Step ${currentStep + 1} of ${totalSteps}`}
       />
 
