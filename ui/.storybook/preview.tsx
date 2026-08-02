@@ -35,6 +35,7 @@ const preview: Preview = {
       const theme = context.globals.theme || "light";
 
       document.documentElement.classList.toggle("dark", theme === "dark");
+      document.documentElement.style.colorScheme = theme;
       document.body.style.backgroundColor =
         theme === "dark" ? "hsl(0 0% 5%)" : "hsl(0 0% 100%)";
 

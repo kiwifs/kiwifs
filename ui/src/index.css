@@ -419,8 +419,47 @@
 }
 .kiwi-widget input[type="text"]:focus,
 .kiwi-widget input:not([type]):focus {
-  border-color: hsl(var(--primary)) !important;
-  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.3);
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+/* ─── Widget range scrubber ─── */
+/* Native range tracks follow the UA palette rather than the app theme, which
+   leaves a dark bar sitting on a light page. Paint the whole control instead:
+   the filled portion comes from a gradient stop the component positions. */
+.kiwi-widget input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  outline: none;
+  background: linear-gradient(
+    to right,
+    var(--primary) 0%,
+    var(--primary) var(--kw-range-progress, 0%),
+    var(--kw-widget-border) var(--kw-range-progress, 0%),
+    var(--kw-widget-border) 100%
+  );
+}
+.kiwi-widget input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--background);
+  box-shadow: 0 0 0 1px var(--kw-widget-border);
+  cursor: pointer;
+}
+.kiwi-widget input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--background);
+  box-shadow: 0 0 0 1px var(--kw-widget-border);
+  cursor: pointer;
 }
 
 /* ─── Code block line highlighting ─── */
