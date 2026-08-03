@@ -15,6 +15,7 @@ type ProgressState = Record<string, ProgressEntry>;
 type PageMeta = {
   title?: string;
   difficulty?: string;
+  tags?: string[];
 };
 
 type PageItem = {
@@ -98,6 +99,10 @@ function parsePageMeta(fm: Record<string, unknown>): PageMeta {
   const meta: PageMeta = {};
   if (typeof fm.title === "string") meta.title = fm.title;
   if (typeof fm.difficulty === "string") meta.difficulty = fm.difficulty;
+  const raw = fm.tags;
+  const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+  const tags = list.map((t) => String(t).trim()).filter(Boolean);
+  if (tags.length > 0) meta.tags = tags;
   return meta;
 }
 
@@ -125,14 +130,36 @@ function difficultyClass(d: string): string {
   return "";
 }
 
+/** Every label a page can be filtered by, difficulty included. */
+function pageTags(meta?: PageMeta): string[] {
+  const tags = new Set(meta?.tags ?? []);
+  if (meta?.difficulty) tags.add(meta.difficulty.toLowerCase());
+  return [...tags];
+}
+
+/** Tags that merely restate the difficulty would double every row's badges. */
+function extraTags(meta?: PageMeta): string[] {
+  if (!meta?.tags) return [];
+  const difficulty = meta.difficulty?.toLowerCase();
+  return meta.tags.filter((t) => t.toLowerCase() !== difficulty);
+}
+
 function PageTags({ meta }: { meta?: PageMeta }) {
-  if (!meta?.difficulty) return null;
+  const extra = extraTags(meta);
+  if (!meta?.difficulty && extra.length === 0) return null;
 
   return (
     <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-      <Badge variant="outline" className={"text-[10px] px-1.5 py-0 h-5 " + difficultyClass(meta.difficulty)}>
-        {meta.difficulty}
-      </Badge>
+      {meta?.difficulty && (
+        <Badge variant="outline" className={"text-[10px] px-1.5 py-0 h-5 " + difficultyClass(meta.difficulty)}>
+          {meta.difficulty}
+        </Badge>
+      )}
+      {extra.map((tag) => (
+        <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">
+          {tag}
+        </Badge>
+      ))}
     </div>
   );
 }
@@ -142,6 +169,16 @@ function persist(stateName: string, state: ProgressState) {
     console.error(`Failed to save ${stateName}:`, err);
   });
 }
+
+/** Chips cycle off → require → exclude, so "blind75 but not premium" is one click each. */
+type TagFilter = "in" | "out";
+type StatusFilter = "all" | "todo" | "done";
+
+const STATUS_LABELS: Record<StatusFilter, string> = {
+  all: "All",
+  todo: "Todo",
+  done: "Done",
+};
 
 type Props = {
   onNavigate?: (path: string) => void;
@@ -153,6 +190,8 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
   const [progress, setProgress] = useState<ProgressState>({});
   const [metaByPath, setMetaByPath] = useState<Record<string, PageMeta>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [tagFilter, setTagFilter] = useState<Record<string, TagFilter>>({});
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -182,6 +221,50 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
       })),
     }));
   }, [tree, metaByPath]);
+
+  const tagUniverse = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const group of groups) {
+      for (const page of group.pages) {
+        for (const tag of pageTags(page.meta)) {
+          counts.set(tag, (counts.get(tag) ?? 0) + 1);
+        }
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || naturalCompare(a[0], b[0]))
+      .map(([tag, count]) => ({ tag, count }));
+  }, [groups]);
+
+  const filteredGroups = useMemo(() => {
+    const required = Object.keys(tagFilter).filter((t) => tagFilter[t] === "in");
+    const excluded = Object.keys(tagFilter).filter((t) => tagFilter[t] === "out");
+    if (required.length === 0 && excluded.length === 0 && statusFilter === "all") {
+      return groups;
+    }
+    return groups
+      .map((group) => ({
+        ...group,
+        pages: group.pages.filter((page) => {
+          const done = progress[page.path]?.done ?? false;
+          if (statusFilter === "todo" && done) return false;
+          if (statusFilter === "done" && !done) return false;
+          const tags = new Set(pageTags(page.meta));
+          return required.every((t) => tags.has(t)) && !excluded.some((t) => tags.has(t));
+        }),
+      }))
+      .filter((group) => group.pages.length > 0);
+  }, [groups, tagFilter, statusFilter, progress]);
+
+  const cycleTag = useCallback((tag: string) => {
+    setTagFilter((prev) => {
+      const next = { ...prev };
+      if (!next[tag]) next[tag] = "in";
+      else if (next[tag] === "in") next[tag] = "out";
+      else delete next[tag];
+      return next;
+    });
+  }, []);
 
   const toggleDone = useCallback((pagePath: string) => {
     setProgress((prev) => {
@@ -217,11 +300,15 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
     });
   }, []);
 
-  const totalPages = useMemo(() => groups.reduce((s, g) => s + g.pages.length, 0), [groups]);
-  const totalDone = useMemo(
-    () => groups.reduce((s, g) => s + g.pages.filter((p) => progress[p.path]?.done).length, 0),
-    [groups, progress],
+  const totalPages = useMemo(
+    () => filteredGroups.reduce((s, g) => s + g.pages.length, 0),
+    [filteredGroups],
   );
+  const totalDone = useMemo(
+    () => filteredGroups.reduce((s, g) => s + g.pages.filter((p) => progress[p.path]?.done).length, 0),
+    [filteredGroups, progress],
+  );
+  const filtering = Object.keys(tagFilter).length > 0 || statusFilter !== "all";
 
   if (loading) {
     return (
@@ -243,6 +330,65 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
 
   return (
     <div className="kiwi-page-tracker space-y-4">
+      {tagUniverse.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          {(Object.keys(STATUS_LABELS) as StatusFilter[]).map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setStatusFilter(status)}
+              className={
+                "text-[11px] px-2 py-0.5 rounded-full border transition-colors " +
+                (statusFilter === status
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted/50")
+              }
+            >
+              {STATUS_LABELS[status]}
+            </button>
+          ))}
+
+          <span className="w-px h-4 bg-border mx-1" />
+
+          {tagUniverse.map(({ tag, count }) => {
+            const state = tagFilter[tag];
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => cycleTag(tag)}
+                title={
+                  state === "in" ? "Required — click to exclude"
+                    : state === "out" ? "Excluded — click to clear"
+                      : "Click to require"
+                }
+                className={
+                  "text-[11px] px-2 py-0.5 rounded-full border transition-colors " +
+                  (state === "in"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : state === "out"
+                      ? "border-red-500/50 bg-red-500/10 text-red-600 dark:text-red-400 line-through"
+                      : "border-border text-muted-foreground hover:bg-muted/50")
+                }
+              >
+                {tag}
+                <span className="ml-1 opacity-60">{count}</span>
+              </button>
+            );
+          })}
+
+          {filtering && (
+            <button
+              type="button"
+              onClick={() => { setTagFilter({}); setStatusFilter("all"); }}
+              className="text-[11px] px-2 py-0.5 text-muted-foreground hover:text-foreground underline"
+            >
+              clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Overall progress bar */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
@@ -258,7 +404,12 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
 
       {/* Folder groups */}
       <div className="space-y-1">
-        {groups.map((group) => {
+        {filtering && filteredGroups.length === 0 && (
+          <div className="p-6 text-sm text-muted-foreground">
+            No pages match these filters.
+          </div>
+        )}
+        {filteredGroups.map((group) => {
           const groupDone = group.pages.filter((p) => progress[p.path]?.done).length;
           const isCollapsed = collapsedGroups.has(group.folder);
           const groupPct = group.pages.length > 0
