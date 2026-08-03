@@ -27,6 +27,17 @@ type FS struct {
 	apiKey string // empty = auth disabled
 }
 
+type actorContextKey struct{}
+
+func (f *FS) actorFor(ctx context.Context) string {
+	if ctx != nil {
+		if actor, ok := ctx.Value(actorContextKey{}).(string); ok && actor != "" {
+			return actor
+		}
+	}
+	return f.actor
+}
+
 // New builds a WebDAV filesystem rooted at `root`. Writes fan out through
 // `pipe`; `actor` is attributed to the resulting git commits. apiKey, if
 // non-empty, requires Basic or Bearer auth on every request.
@@ -44,10 +55,27 @@ func (f *FS) Handler(prefix string) http.Handler {
 		FileSystem: f,
 		LockSystem: webdav.NewMemLS(),
 	}
-	if f.apiKey == "" {
-		return h
+
+	// X-Actor attribution is independent of KiwiFS API-key authentication.
+	// The gateway may authenticate the user while KiwiFS auth is disabled, so
+	// the actor context must still be installed when apiKey is empty.
+	var next http.Handler = f.withActor(h)
+	if f.apiKey != "" {
+		next = f.auth(next)
 	}
-	return f.auth(h)
+	return next
+}
+
+// withActor copies the trusted gateway identity into the request context used
+// by FS write, delete, and rename operations.
+func (f *FS) withActor(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		actor := strings.TrimSpace(r.Header.Get("X-Actor"))
+		if actor != "" {
+			r = r.WithContext(context.WithValue(r.Context(), actorContextKey{}, actor))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // auth gates every WebDAV request behind Bearer-token or Basic auth.
@@ -119,8 +147,9 @@ func (f *FS) RemoveAll(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
+	actor := f.actorFor(ctx)
 	if !info.IsDir() {
-		return f.pipe.Delete(ctx, rel, f.actor)
+		return f.pipe.Delete(ctx, rel, actor)
 	}
 	// For directories, walk and delete each file through the pipeline so git
 	// sees per-file deletes.
@@ -135,7 +164,7 @@ func (f *FS) RemoveAll(ctx context.Context, name string) error {
 		if rerr != nil {
 			return rerr
 		}
-		return f.pipe.Delete(ctx, filepath.ToSlash(childRel), f.actor)
+		return f.pipe.Delete(ctx, filepath.ToSlash(childRel), actor)
 	})
 	if walkErr != nil {
 		return walkErr
@@ -169,7 +198,7 @@ func (f *FS) Rename(ctx context.Context, oldName, newName string) error {
 		return os.Rename(absOld, absNew)
 	}
 
-	_, rerr := f.pipe.Rename(ctx, oldRel, newRel, f.actor)
+	_, rerr := f.pipe.Rename(ctx, oldRel, newRel, f.actorFor(ctx))
 	return rerr
 }
 
@@ -209,6 +238,7 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMo
 	return &writeFile{
 		fs:      f,
 		ctx:     ctx,
+		actor:   f.actorFor(ctx),
 		rel:     rel,
 		abs:     abs,
 		buf:     bytes.NewBuffer(buf),
@@ -229,6 +259,7 @@ const webdavSpillThreshold = pipeline.StreamInMemoryThreshold
 type writeFile struct {
 	fs      *FS
 	ctx     context.Context // captured from OpenFile so Close can plumb it through to pipeline.Write
+	actor   string
 	rel     string
 	abs     string
 	buf     *bytes.Buffer
@@ -310,7 +341,7 @@ func (w *writeFile) Close() error {
 		ctx = context.Background()
 	}
 	if w.spill == nil {
-		_, err := w.fs.pipe.Write(ctx, w.rel, w.buf.Bytes(), w.fs.actor)
+		_, err := w.fs.pipe.Write(ctx, w.rel, w.buf.Bytes(), w.actor)
 		return err
 	}
 	// Spilled body — rewind the tempfile and hand it to the streaming
@@ -324,7 +355,7 @@ func (w *writeFile) Close() error {
 	if _, err := w.spill.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("rewind spill: %w", err)
 	}
-	_, err := w.fs.pipe.WriteStream(ctx, w.rel, w.spill, w.written, w.fs.actor)
+	_, err := w.fs.pipe.WriteStream(ctx, w.rel, w.spill, w.written, w.actor)
 	return err
 }
 
