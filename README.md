@@ -105,6 +105,12 @@ curl -X PUT 'localhost:3333/api/kiwi/file?path=pages/auth.md' \
   -d "# Authentication\n\nOAuth2 + JWT..."
 ```
 
+### Write identity
+
+Writes take the actor from the `X-Actor` request header. Empty or missing
+becomes `anonymous`. The value is used as the git commit author. Currently
+implemented for REST and WebDAV. The web UI uses REST.
+
 ---
 
 ## Vector embedder options
