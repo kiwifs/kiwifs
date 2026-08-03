@@ -67,10 +67,12 @@ func (f *FS) Handler(prefix string) http.Handler {
 }
 
 // withActor copies the trusted gateway identity into the request context used
-// by FS write, delete, and rename operations.
+// by FS write, delete, and rename operations. The header is normalized the
+// same way REST normalizes X-Actor, so neither protocol can put an
+// oversized name into a git commit.
 func (f *FS) withActor(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		actor := strings.TrimSpace(r.Header.Get("X-Actor"))
+		actor := pipeline.NormalizeActor(r.Header.Get("X-Actor"))
 		if actor != "" {
 			r = r.WithContext(context.WithValue(r.Context(), actorContextKey{}, actor))
 		}

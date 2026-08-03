@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kiwifs/kiwifs/internal/events"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
@@ -115,7 +116,12 @@ func TestRequestActorContext(t *testing.T) {
 
 	assertActor := func(want string) {
 		t.Helper()
-		msg := <-messages
+		var msg events.Message
+		select {
+		case msg = <-messages:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out waiting for an event with actor %q", want)
+		}
 		var event events.Event
 		if err := json.Unmarshal(msg.Data, &event); err != nil {
 			t.Fatalf("decode event: %v", err)
@@ -178,6 +184,36 @@ func TestWithActorAddsActorToContext(t *testing.T) {
 		if rec.Code != http.StatusNoContent {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
 		}
+	})
+
+	// The actor lands in GIT_AUTHOR_NAME and the commit subject, so an
+	// oversized header must not reach git verbatim.
+	t.Run("oversized header is clamped", func(t *testing.T) {
+		fs := &FS{}
+		var got string
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got, _ = r.Context().Value(actorContextKey{}).(string)
+			w.WriteHeader(http.StatusNoContent)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Actor", strings.Repeat("A", 5000))
+		fs.withActor(next).ServeHTTP(httptest.NewRecorder(), req)
+		if len(got) != pipeline.MaxActorLen {
+			t.Fatalf("actor length = %d, want %d", len(got), pipeline.MaxActorLen)
+		}
+	})
+
+	t.Run("whitespace-only header falls back", func(t *testing.T) {
+		fs := &FS{}
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := r.Context().Value(actorContextKey{}).(string); ok {
+				t.Fatal("actor context should be unset when X-Actor is blank")
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Actor", "   ")
+		fs.withActor(next).ServeHTTP(httptest.NewRecorder(), req)
 	})
 }
 
