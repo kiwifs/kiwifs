@@ -18,6 +18,7 @@ func TestADRWorkflowAdvanceSyncsStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := NewLocalBackend(root)
+	defer b.Close()
 	ctx := context.Background()
 
 	path := "decisions/ADR-002-test-sync.md"
@@ -73,6 +74,7 @@ func TestADRWorkflowAdvanceRejectsInvalidTransition(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := NewLocalBackend(root)
+	defer b.Close()
 	ctx := context.Background()
 
 	path := "decisions/ADR-003-skip-test.md"
