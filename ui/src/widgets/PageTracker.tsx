@@ -130,6 +130,39 @@ function difficultyClass(d: string): string {
   return "";
 }
 
+/**
+ * Free of the emerald/amber/red that difficulty already claims, which leaves
+ * only the blue-to-pink arc — too narrow for every entry to be far from every
+ * other. Ordered so consecutive slots are the ones furthest apart in hue, since
+ * a workspace with a handful of tags only ever reaches the front of the list.
+ */
+const TAG_PALETTE = [
+  "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400",
+  "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
+  "border-pink-500/40 bg-pink-500/10 text-pink-700 dark:text-pink-400",
+  "border-purple-500/40 bg-purple-500/10 text-purple-700 dark:text-purple-400",
+  "border-indigo-500/40 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
+  "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-400",
+];
+
+/**
+ * Colour by position in the sorted tag list rather than by hashing the name:
+ * a hash is stable across workspaces but collides, and two tags sharing a
+ * colour defeats the only thing the colour is for. Adding a tag can reshuffle
+ * the others, which is the cheaper trade.
+ */
+function assignColors(tags: string[]): Record<string, string> {
+  const colors: Record<string, string> = {};
+  let next = 0;
+  for (const tag of [...tags].sort((a, b) => naturalCompare(a, b))) {
+    const difficulty = difficultyClass(tag);
+    colors[tag] = difficulty || TAG_PALETTE[next++ % TAG_PALETTE.length];
+  }
+  return colors;
+}
+
 /** Every label a page can be filtered by, difficulty included. */
 function pageTags(meta?: PageMeta): string[] {
   const tags = new Set(meta?.tags ?? []);
@@ -144,7 +177,7 @@ function extraTags(meta?: PageMeta): string[] {
   return meta.tags.filter((t) => t.toLowerCase() !== difficulty);
 }
 
-function PageTags({ meta }: { meta?: PageMeta }) {
+function PageTags({ meta, colors }: { meta?: PageMeta; colors: Record<string, string> }) {
   const extra = extraTags(meta);
   if (!meta?.difficulty && extra.length === 0) return null;
 
@@ -156,7 +189,11 @@ function PageTags({ meta }: { meta?: PageMeta }) {
         </Badge>
       )}
       {extra.map((tag) => (
-        <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">
+        <Badge
+          key={tag}
+          variant="outline"
+          className={"text-[10px] px-1.5 py-0 h-5 " + (colors[tag] ?? "text-muted-foreground")}
+        >
           {tag}
         </Badge>
       ))}
@@ -235,6 +272,11 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
       .sort((a, b) => b[1] - a[1] || naturalCompare(a[0], b[0]))
       .map(([tag, count]) => ({ tag, count }));
   }, [groups]);
+
+  const tagColors = useMemo(
+    () => assignColors(tagUniverse.map((t) => t.tag)),
+    [tagUniverse],
+  );
 
   const filteredGroups = useMemo(() => {
     const required = Object.keys(tagFilter).filter((t) => tagFilter[t] === "in");
@@ -368,7 +410,7 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
                     ? "border-primary bg-primary text-primary-foreground"
                     : state === "out"
                       ? "border-red-500/50 bg-red-500/10 text-red-600 dark:text-red-400 line-through"
-                      : "border-border text-muted-foreground hover:bg-muted/50")
+                      : (tagColors[tag] ?? "border-border text-muted-foreground") + " hover:brightness-95")
                 }
               >
                 {tag}
@@ -478,7 +520,7 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
                         >
                           {page.title}
                         </button>
-                        <PageTags meta={page.meta} />
+                        <PageTags meta={page.meta} colors={tagColors} />
                         {entry?.doneAt && (
                           <span className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5">
                             <CalendarIcon className="h-2.5 w-2.5" />
