@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.19.50](https://github.com/kiwifs/kiwifs/compare/v0.19.49...v0.19.50) (2026-08-04)
+
+
+### Features
+
+* **ui:** filter the page tracker by frontmatter tags ([#478](https://github.com/kiwifs/kiwifs/issues/478)) ([785c9c3](https://github.com/kiwifs/kiwifs/commit/785c9c3314f7cbbe4854b979652cb0fe40842619))
+* **ui:** give each tracker tag its own colour ([#481](https://github.com/kiwifs/kiwifs/issues/481)) ([2ac35cf](https://github.com/kiwifs/kiwifs/commit/2ac35cf7b8655b17dca57f8031682bd2e39ea1eb))
+* **webdav:** add X-Actor header support ([#482](https://github.com/kiwifs/kiwifs/issues/482)) ([65af208](https://github.com/kiwifs/kiwifs/commit/65af2080867ee1f3fb4972ebaab86555614941c7))
+
+
+### Bug Fixes
+
+* **ci:** auto-merge Cursor agent fix ([#480](https://github.com/kiwifs/kiwifs/issues/480)) ([021001c](https://github.com/kiwifs/kiwifs/commit/021001c8d2476cefbda2855a1dfd03e3d733580e))
+* **webdav:** normalize X-Actor and correct write-identity docs ([#483](https://github.com/kiwifs/kiwifs/issues/483)) ([c8e7775](https://github.com/kiwifs/kiwifs/commit/c8e7775dc641a1fa7adc14e35604009fd3f4a767))
+
 ## [0.19.49](https://github.com/kiwifs/kiwifs/compare/v0.19.48...v0.19.49) (2026-08-02)
 
 
