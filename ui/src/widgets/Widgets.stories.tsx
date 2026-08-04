@@ -7,6 +7,7 @@ import { ArrayView } from "./ArrayView";
 import { BarView } from "./BarView";
 import { CallStackView } from "./CallStackView";
 import { CodeHighlight } from "./CodeHighlight";
+import { DateField } from "./DateField";
 import { GraphView } from "./GraphView";
 import { InputPanel } from "./InputPanel";
 import { LinkedListView } from "./LinkedListView";
@@ -131,6 +132,7 @@ function Gallery() {
     label: "two-sum",
     verbose: true,
   });
+  const [day, setDay] = useState("2026-08-04");
   const [step, setStep] = useState(3);
   const [playing, setPlaying] = useState(false);
 
@@ -406,6 +408,20 @@ function Gallery() {
           values={inputs}
           onChange={(key, value) => setInputs((prev) => ({ ...prev, [key]: value }))}
         />
+      </Section>
+
+      <Section name="DateField">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <DateField value={day} onChange={setDay} ariaLabel="Target date" clearable />
+          <DateField value="" placeholder="No date yet" />
+          <DateField
+            value={day}
+            min={day}
+            max="2027-12-31"
+            weekStartsOn={1}
+            ariaLabel="Bounded date"
+          />
+        </div>
       </Section>
 
       <Section name="CodeHighlight">
