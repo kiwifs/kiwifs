@@ -22,6 +22,7 @@ import { AnnotationBar } from "@kw/widgets/AnnotationBar";
 import { WidgetLayout, WidgetPanel } from "@kw/widgets/WidgetLayout";
 import { StateInspector } from "@kw/widgets/StateInspector";
 import { InputPanel } from "@kw/widgets/InputPanel";
+import { DateField } from "@kw/widgets/DateField";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 const liveScope = {
@@ -51,6 +52,7 @@ const liveScope = {
   WidgetPanel,
   StateInspector,
   InputPanel,
+  DateField,
 };
 
 interface Props {
