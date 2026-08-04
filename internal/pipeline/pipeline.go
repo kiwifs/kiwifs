@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/kiwifs/kiwifs/internal/events"
 	"github.com/kiwifs/kiwifs/internal/links"
@@ -34,6 +35,36 @@ const inflightWindow = 2 * time.Second
 // S3 → "s3", watcher → "fswatch") pass their own; the REST API falls
 // through to this when X-Actor is absent.
 const DefaultActor = "kiwifs"
+
+// MaxActorLen bounds an actor string. The actor reaches git as
+// GIT_AUTHOR_NAME and is echoed into the commit subject, so an unbounded
+// value from a request header would otherwise write megabyte-wide names
+// into history.
+const MaxActorLen = 256
+
+// NormalizeActor makes a caller-supplied actor safe to hand to git and
+// frontmatter: it drops control characters and clamps the result to
+// MaxActorLen. It returns "" when nothing usable remains so each protocol
+// keeps its own fallback (REST → "anonymous", WebDAV → its configured
+// actor) rather than having one imposed here.
+func NormalizeActor(raw string) string {
+	s := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, raw)
+	if len(s) > MaxActorLen {
+		// Cut on a rune boundary so truncation can't leave invalid UTF-8
+		// behind, which git and the JSON event encoder both mangle.
+		cut := MaxActorLen
+		for cut > 0 && !utf8.RuneStart(s[cut]) {
+			cut--
+		}
+		s = s[:cut]
+	}
+	return strings.TrimSpace(s)
+}
 
 // Pipeline bundles the side effects that must run on every write or delete.
 // Dependencies are held by interface so protocols can construct one cheaply
