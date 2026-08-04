@@ -105,6 +105,28 @@ curl -X PUT 'localhost:3333/api/kiwi/file?path=pages/auth.md' \
   -d "# Authentication\n\nOAuth2 + JWT..."
 ```
 
+### Write identity
+
+Writes take the actor from the `X-Actor` request header and use it as the git
+commit author. Currently implemented for REST and WebDAV; the web UI uses REST.
+The header is normalized before it reaches git: control characters are stripped
+and the value is capped at 256 characters.
+
+When the header is empty or missing, the fallback depends on the protocol:
+
+| Protocol | Fallback actor |
+|---|---|
+| REST | `anonymous` |
+| WebDAV | the server's configured WebDAV actor, `webdav` by default |
+
+`X-Actor` is trusted input, so it only carries the identity you can vouch for.
+On REST, the scoped-token and OIDC middleware overwrite the header with the
+authenticated identity, so a client cannot forge it. WebDAV auth is a single
+shared API key that carries no identity, so KiwiFS takes `X-Actor` at face
+value — anyone holding that key can attribute a write to any actor. Terminate
+authentication at a gateway that sets `X-Actor` itself and strips any
+client-supplied value before forwarding.
+
 ---
 
 ## Vector embedder options

@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/markdown"
+	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/labstack/echo/v4"
@@ -29,24 +29,13 @@ func requirePath(c echo.Context) (string, error) {
 	return path, nil
 }
 
-// sanitizeActor strips control characters (newlines, null bytes, tabs) and
-// clamps the actor string to a safe length for use in git env vars and
-// frontmatter. Returns "anonymous" if the result is empty.
+// sanitizeActor normalizes an actor for use in git env vars and frontmatter,
+// falling back to "anonymous" when the caller supplied nothing usable.
 func sanitizeActor(raw string) string {
-	s := strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f { // control characters
-			return -1
-		}
-		return r
-	}, raw)
-	if len(s) > 256 {
-		s = s[:256]
+	if s := pipeline.NormalizeActor(raw); s != "" {
+		return s
 	}
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return "anonymous"
-	}
-	return s
+	return "anonymous"
 }
 
 func readFileOr404(ctx context.Context, store storage.Storage, path string) ([]byte, error) {

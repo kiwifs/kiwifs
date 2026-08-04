@@ -1,6 +1,8 @@
 package webdav
 
 import (
+	"context"
+	"encoding/json"
 	"encoding/xml"
 	"io"
 	"net/http"
@@ -9,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kiwifs/kiwifs/internal/events"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
@@ -94,6 +97,124 @@ func assertHasHref(t *testing.T, hrefs []string, suffix string) {
 		}
 	}
 	t.Fatalf("missing href ending in %q from %v", suffix, hrefs)
+}
+
+func TestRequestActorContext(t *testing.T) {
+	root := t.TempDir()
+	store, err := storage.NewLocal(root)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+	hub := events.NewHub()
+	pipe := pipeline.New(store, versioning.NewNoop(), search.NewGrep(root), nil, hub, nil, root)
+	fs := New(root, pipe, "webdav", "")
+	messages, err := hub.Subscribe()
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer hub.Unsubscribe(messages)
+
+	assertActor := func(want string) {
+		t.Helper()
+		var msg events.Message
+		select {
+		case msg = <-messages:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out waiting for an event with actor %q", want)
+		}
+		var event events.Event
+		if err := json.Unmarshal(msg.Data, &event); err != nil {
+			t.Fatalf("decode event: %v", err)
+		}
+		if event.Actor != want {
+			t.Fatalf("actor = %q, want %q", event.Actor, want)
+		}
+	}
+
+	ctx := context.WithValue(context.Background(), actorContextKey{}, "writer")
+	file, err := fs.OpenFile(ctx, "note.md", os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if _, err := file.Write([]byte("hello")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	assertActor("writer")
+
+	ctx = context.WithValue(context.Background(), actorContextKey{}, "")
+	if err := fs.RemoveAll(ctx, "note.md"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	assertActor("webdav")
+}
+
+func TestWithActorAddsActorToContext(t *testing.T) {
+	t.Run("header present", func(t *testing.T) {
+		fs := &FS{}
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			actor, ok := r.Context().Value(actorContextKey{}).(string)
+			if !ok || actor != "writer" {
+				t.Fatalf("actor context = %q, %v; want %q, true", actor, ok, "writer")
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Actor", "writer")
+		rec := httptest.NewRecorder()
+		fs.withActor(next).ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+		}
+	})
+
+	t.Run("header absent", func(t *testing.T) {
+		fs := &FS{}
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := r.Context().Value(actorContextKey{}).(string); ok {
+				t.Fatal("actor context should be unset when X-Actor is absent")
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		fs.withActor(next).ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+		}
+	})
+
+	// The actor lands in GIT_AUTHOR_NAME and the commit subject, so an
+	// oversized header must not reach git verbatim.
+	t.Run("oversized header is clamped", func(t *testing.T) {
+		fs := &FS{}
+		var got string
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got, _ = r.Context().Value(actorContextKey{}).(string)
+			w.WriteHeader(http.StatusNoContent)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Actor", strings.Repeat("A", 5000))
+		fs.withActor(next).ServeHTTP(httptest.NewRecorder(), req)
+		if len(got) != pipeline.MaxActorLen {
+			t.Fatalf("actor length = %d, want %d", len(got), pipeline.MaxActorLen)
+		}
+	})
+
+	t.Run("whitespace-only header falls back", func(t *testing.T) {
+		fs := &FS{}
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := r.Context().Value(actorContextKey{}).(string); ok {
+				t.Fatal("actor context should be unset when X-Actor is blank")
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Actor", "   ")
+		fs.withActor(next).ServeHTTP(httptest.NewRecorder(), req)
+	})
 }
 
 func TestWebDAVPROPFINDListsRootEntries(t *testing.T) {
