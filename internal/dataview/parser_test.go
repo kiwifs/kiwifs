@@ -257,6 +257,44 @@ func TestParseQuery_ColumnAlias(t *testing.T) {
 	}
 }
 
+// An unquoted alias written tight against the column separator used to be
+// scanned as "t," — the comma reached the emitted SQL and every multi-alias
+// TABLE query failed. The quoted form in the test above never hit this path.
+func TestParseQuery_UnquotedAliasFollowedByComma(t *testing.T) {
+	for _, q := range []string{
+		`TABLE title AS t, status AS s`,
+		`TABLE title AS t,status AS s`,
+		`TABLE a AS x, b AS y, c AS z`,
+	} {
+		plan, err := ParseQuery(q)
+		if err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+		for i, f := range plan.Fields {
+			if strings.ContainsAny(f.Alias, ",") {
+				t.Errorf("%s: field[%d] alias %q contains a separator", q, i, f.Alias)
+			}
+			if f.Alias == "" {
+				t.Errorf("%s: field[%d] (%s) lost its alias", q, i, f.Expr)
+			}
+		}
+	}
+
+	plan, err := ParseQuery(`TABLE title AS t, status AS s`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Fields) != 2 {
+		t.Fatalf("got %d fields, want 2", len(plan.Fields))
+	}
+	if plan.Fields[0].Expr != "title" || plan.Fields[0].Alias != "t" {
+		t.Errorf("field[0] = %+v, want {Expr:title, Alias:t}", plan.Fields[0])
+	}
+	if plan.Fields[1].Expr != "status" || plan.Fields[1].Alias != "s" {
+		t.Errorf("field[1] = %+v, want {Expr:status, Alias:s}", plan.Fields[1])
+	}
+}
+
 func TestParseQuery_WithoutID(t *testing.T) {
 	plan, err := ParseQuery(`TABLE WITHOUT ID name, status`)
 	if err != nil {

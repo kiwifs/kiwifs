@@ -291,6 +291,12 @@ func scanAlias(s string) (string, string, error) {
 		return s[1 : end+1], strings.TrimSpace(s[end+2:]), nil
 	}
 	word := firstWord(s)
+	// firstWord splits on whitespace only, so an alias written tight against
+	// the column separator ("AS a, b") would otherwise come back as "a,"
+	// and land the comma in the emitted SQL.
+	if i := strings.IndexByte(word, ','); i >= 0 {
+		word = word[:i]
+	}
 	if word == "" {
 		return "", "", fmt.Errorf("expected alias after AS")
 	}
