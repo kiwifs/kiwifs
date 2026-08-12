@@ -36,14 +36,14 @@ func nearly(t *testing.T, name string, got, want float64) {
 }
 
 // evalCorpus seeds four pages whose BM25 order is forced by term frequency:
-// the two held-out pages outrank everything, then s5e5, then stacking. That
+// the two held-out pages outrank everything, then borealis, then stacking. That
 // makes "did exclusion actually move the ranking" observable rather than a
 // coin flip between tied documents.
 func evalCorpus(t *testing.T, s *Server) {
 	t.Helper()
-	mustPutFile(t, s, "competitions/s5e4/index.md", "# S5E4\n\nzebrabyte zebrabyte zebrabyte held out\n")
-	mustPutFile(t, s, "sources/writeups/s5e4.md", "# Writeup\n\nzebrabyte zebrabyte zebrabyte held out\n")
-	mustPutFile(t, s, "competitions/s5e5/index.md", "# S5E5\n\nzebrabyte zebrabyte kept\n")
+	mustPutFile(t, s, "projects/atlas/index.md", "# Atlas\n\nzebrabyte zebrabyte zebrabyte held out\n")
+	mustPutFile(t, s, "sources/reports/atlas.md", "# Report\n\nzebrabyte zebrabyte zebrabyte held out\n")
+	mustPutFile(t, s, "projects/borealis/index.md", "# Borealis\n\nzebrabyte zebrabyte kept\n")
 	mustPutFile(t, s, "techniques/stacking.md", "# Stacking\n\nzebrabyte kept\n")
 }
 
@@ -52,7 +52,7 @@ func TestEvalInlineQueries(t *testing.T) {
 	evalCorpus(t, s)
 
 	rec, resp := postEval(t, s, `{
-		"queries": [{"question": "zebrabyte", "expected_paths": ["competitions/s5e4/index.md"]}]
+		"queries": [{"question": "zebrabyte", "expected_paths": ["projects/atlas/index.md"]}]
 	}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
@@ -79,15 +79,15 @@ func TestEvalExcludePrefixRemovesHeldOutSubtree(t *testing.T) {
 	evalCorpus(t, s)
 
 	_, before := postEval(t, s, `{
-		"queries": [{"question": "zebrabyte", "expected_paths": ["competitions/s5e5/index.md"]}]
+		"queries": [{"question": "zebrabyte", "expected_paths": ["projects/borealis/index.md"]}]
 	}`)
 	if len(before.PerQuery) != 1 {
 		t.Fatalf("per_query = %+v", before.PerQuery)
 	}
 
 	_, after := postEval(t, s, `{
-		"queries": [{"question": "zebrabyte", "expected_paths": ["competitions/s5e5/index.md"]}],
-		"exclude_prefix": ["competitions/s5e4/", "sources/writeups/"],
+		"queries": [{"question": "zebrabyte", "expected_paths": ["projects/borealis/index.md"]}],
+		"exclude_prefix": ["projects/atlas/", "sources/reports/"],
 		"top_k": 2
 	}`)
 	if after.TopK != 2 {
@@ -114,12 +114,12 @@ func TestEvalExcludePrefixAcceptsScalar(t *testing.T) {
 
 	rec, resp := postEval(t, s, `{
 		"queries": [{"question": "zebrabyte", "expected_paths": ["techniques/stacking.md"]}],
-		"exclude_prefix": "competitions/"
+		"exclude_prefix": "projects/"
 	}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
 	}
-	if len(resp.ExcludePrefix) != 1 || resp.ExcludePrefix[0] != "competitions/" {
+	if len(resp.ExcludePrefix) != 1 || resp.ExcludePrefix[0] != "projects/" {
 		t.Fatalf("exclude_prefix = %v", resp.ExcludePrefix)
 	}
 }
@@ -132,10 +132,10 @@ func TestEvalSkipsFullyExcludedQuery(t *testing.T) {
 
 	_, resp := postEval(t, s, `{
 		"queries": [
-			{"question": "zebrabyte", "expected_paths": ["competitions/s5e4/index.md"]},
+			{"question": "zebrabyte", "expected_paths": ["projects/atlas/index.md"]},
 			{"question": "zebrabyte", "expected_paths": ["techniques/stacking.md"]}
 		],
-		"exclude_prefix": ["competitions/s5e4/"]
+		"exclude_prefix": ["projects/atlas/"]
 	}`)
 	if len(resp.Skipped) != 1 {
 		t.Fatalf("skipped = %+v, want 1", resp.Skipped)
@@ -205,7 +205,7 @@ func TestEvalGoldenSet(t *testing.T) {
 	if err := os.MkdirAll(evalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	qrels := "q1 0 competitions/s5e5/index.md 1\nq2 0 techniques/stacking.md 1\n"
+	qrels := "q1 0 projects/borealis/index.md 1\nq2 0 techniques/stacking.md 1\n"
 	topics := "q1\tzebrabyte\nq2\tzebrabyte\n"
 	if err := os.WriteFile(filepath.Join(evalDir, "leave-one-out.qrels"), []byte(qrels), 0o644); err != nil {
 		t.Fatal(err)
@@ -214,7 +214,7 @@ func TestEvalGoldenSet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec, resp := postEval(t, s, `{"set": "leave-one-out", "exclude_prefix": ["competitions/s5e4/", "sources/writeups/"]}`)
+	rec, resp := postEval(t, s, `{"set": "leave-one-out", "exclude_prefix": ["projects/atlas/", "sources/reports/"]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
 	}

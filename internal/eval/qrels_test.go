@@ -10,8 +10,8 @@ import (
 
 func TestParseQrelsFourColumn(t *testing.T) {
 	in := `# leave-one-out golden set
-q1 0 competitions/a/index.md 1
-q1 0 competitions/b/index.md 2
+q1 0 projects/a/index.md 1
+q1 0 projects/b/index.md 2
 
 q2 0 techniques/stacking.md 1
 `
@@ -20,7 +20,7 @@ q2 0 techniques/stacking.md 1
 		t.Fatalf("ParseQrels: %v", err)
 	}
 	want := map[string]map[string]int{
-		"q1": {"competitions/a/index.md": 1, "competitions/b/index.md": 2},
+		"q1": {"projects/a/index.md": 1, "projects/b/index.md": 2},
 		"q2": {"techniques/stacking.md": 1},
 	}
 	if !reflect.DeepEqual(got, want) {

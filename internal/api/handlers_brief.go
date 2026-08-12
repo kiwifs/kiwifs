@@ -14,7 +14,7 @@ type briefRequest struct {
 	// is how a caller asks "what would this cost?".
 	BudgetTokens int    `json:"budget_tokens" example:"4000"`
 	MaxPages     int    `json:"max_pages" example:"20"`
-	PathPrefix   string `json:"path_prefix" example:"competitions/"`
+	PathPrefix   string `json:"path_prefix" example:"projects/"`
 	// Encoding names the BPE vocabulary used to count. Empty uses cl100k_base.
 	Encoding string `json:"encoding" example:"cl100k_base"`
 }

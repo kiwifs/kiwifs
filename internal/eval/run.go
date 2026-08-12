@@ -16,7 +16,7 @@ const DefaultTopK = 5
 // exclude is a list of path prefixes that must be dropped *before* ranking, so
 // that the K slots are filled by the next-best eligible documents. Removing
 // them afterwards would leave short lists and understate every metric — which
-// is precisely the leave-one-competition-out setup this package exists for.
+// is precisely the leave-one-topic-out setup this package exists for.
 type Engine interface {
 	Name() string
 	Rank(ctx context.Context, question string, topK int, exclude []string) ([]string, error)
@@ -27,9 +27,9 @@ type Options struct {
 	// TopK is the rank cutoff for every metric. Zero means DefaultTopK.
 	TopK int
 	// ExcludePrefixes hides a subtree from retrieval — the held-out set.
-	// It is a list, not a single prefix: material about one competition also
-	// lives under sources/ and experiments/, and excluding only the obvious
-	// path leaks the answer.
+	// It is a list, not a single prefix: material about one topic also lives
+	// under sources/ and experiments/, and excluding only the obvious path
+	// leaks the answer.
 	ExcludePrefixes []string
 }
 

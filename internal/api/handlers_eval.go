@@ -9,8 +9,8 @@ import (
 )
 
 // stringList accepts either a JSON string or an array of strings, so
-// `"exclude_prefix": "competitions/x/"` and
-// `"exclude_prefix": ["competitions/x/", "sources/writeups/"]` both work.
+// `"exclude_prefix": "projects/atlas/"` and
+// `"exclude_prefix": ["projects/atlas/", "sources/reports/"]` both work.
 // The single-prefix form is the one people reach for first; rejecting it would
 // only produce a 400 that teaches nothing.
 type stringList []string
@@ -39,7 +39,7 @@ type evalRequest struct {
 	Queries []evalQuery `json:"queries"`
 	// ExcludePrefix hides path subtrees from retrieval before ranking. A
 	// string or an array of strings.
-	ExcludePrefix stringList `json:"exclude_prefix" swaggertype:"array,string" example:"competitions/playground-series-s5e4/"`
+	ExcludePrefix stringList `json:"exclude_prefix" swaggertype:"array,string" example:"projects/atlas/"`
 	TopK          int        `json:"top_k" example:"5"`
 }
 

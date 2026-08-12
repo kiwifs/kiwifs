@@ -807,10 +807,10 @@ func TestSearchWithOptions_ExcludePrefixes(t *testing.T) {
 	s := newTestSQLite(t)
 
 	files := map[string][]byte{
-		"competitions/s5e4/index.md":      []byte("# S5E4\n\nzebrabyte held out\n"),
-		"sources/kaggle-writeups/s5e4.md": []byte("# Writeup\n\nzebrabyte held out\n"),
-		"competitions/s5e5/index.md":      []byte("# S5E5\n\nzebrabyte kept\n"),
-		"techniques/stacking.md":          []byte("# Stacking\n\nzebrabyte kept\n"),
+		"projects/atlas/index.md":    []byte("# Atlas\n\nzebrabyte held out\n"),
+		"sources/reports/atlas.md":   []byte("# Report\n\nzebrabyte held out\n"),
+		"projects/borealis/index.md": []byte("# Borealis\n\nzebrabyte kept\n"),
+		"techniques/stacking.md":     []byte("# Stacking\n\nzebrabyte kept\n"),
 	}
 	for path, content := range files {
 		if err := s.Index(ctxBG, path, content); err != nil {
@@ -822,7 +822,7 @@ func TestSearchWithOptions_ExcludePrefixes(t *testing.T) {
 	}
 
 	results, err := s.SearchWithOptions(ctxBG, "zebrabyte", 10, 0, "", SearchOptions{
-		ExcludePrefixes: []string{"competitions/s5e4/", "sources/kaggle-writeups/"},
+		ExcludePrefixes: []string{"projects/atlas/", "sources/reports/"},
 	})
 	if err != nil {
 		t.Fatalf("excluded search: %v", err)
@@ -831,7 +831,7 @@ func TestSearchWithOptions_ExcludePrefixes(t *testing.T) {
 	for _, r := range results {
 		got[r.Path] = true
 	}
-	if len(got) != 2 || !got["competitions/s5e5/index.md"] || !got["techniques/stacking.md"] {
+	if len(got) != 2 || !got["projects/borealis/index.md"] || !got["techniques/stacking.md"] {
 		t.Fatalf("got %+v, want the two non-excluded pages", results)
 	}
 }
@@ -1586,12 +1586,12 @@ See [[pages/peer.md]] in the body.
 	}
 
 	wantTyped := map[string]string{
-		"pages/old-adr.md":    "supersedes",
-		"pages/new-adr.md":    "superseded_by",
+		"pages/old-adr.md":     "supersedes",
+		"pages/new-adr.md":     "superseded_by",
 		"pages/base-prompt.md": "variant_of",
-		"pages/alt-prompt.md": "variant_of",
-		"pages/paper.md":      "cites",
-		"runbooks/oncall.md":  "services",
+		"pages/alt-prompt.md":  "variant_of",
+		"pages/paper.md":       "cites",
+		"runbooks/oncall.md":   "services",
 	}
 	edges, err := s.AllEdges(ctxBG)
 	if err != nil {

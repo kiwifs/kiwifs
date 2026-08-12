@@ -41,8 +41,8 @@ is excluded are skipped and reported, not scored as failures.
 
 Exits non-zero if a metric threshold is set and not met, so this gates CI.`,
 	Example: `  kiwifs eval --set leave-one-out
-  kiwifs eval --set leave-one-out --exclude-prefix competitions/playground-series-s5e4/
-  kiwifs eval --set leave-one-out -x competitions/s5e4/ -x sources/kaggle-writeups/ --top-k 10
+  kiwifs eval --set leave-one-out --exclude-prefix projects/atlas/
+  kiwifs eval --set leave-one-out -x projects/atlas/ -x sources/reports/ --top-k 10
   kiwifs eval --list
   kiwifs eval --set leave-one-out --format json --min-hit-rate 0.6`,
 	RunE: runEval,

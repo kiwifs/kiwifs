@@ -23,9 +23,9 @@ func setupEvalBackend(t *testing.T) (*LocalBackend, string) {
 			t.Fatal(err)
 		}
 	}
-	writeEvalPage("competitions/s5e4/index.md", "# S5E4\n\nzebrabyte zebrabyte zebrabyte held out\n")
-	writeEvalPage("sources/writeups/s5e4.md", "# Writeup\n\nzebrabyte zebrabyte zebrabyte held out\n")
-	writeEvalPage("competitions/s5e5/index.md", "# S5E5\n\nzebrabyte zebrabyte kept\n")
+	writeEvalPage("projects/atlas/index.md", "# Atlas\n\nzebrabyte zebrabyte zebrabyte held out\n")
+	writeEvalPage("sources/reports/atlas.md", "# Report\n\nzebrabyte zebrabyte zebrabyte held out\n")
+	writeEvalPage("projects/borealis/index.md", "# Borealis\n\nzebrabyte zebrabyte kept\n")
 	writeEvalPage("techniques/stacking.md", "# Stacking\n\nzebrabyte kept\n")
 
 	if err := b.init(); err != nil {
@@ -44,7 +44,7 @@ func TestEvalToolInlineQueries(t *testing.T) {
 		"queries": []any{
 			map[string]any{
 				"question":       "zebrabyte",
-				"expected_paths": []any{"competitions/s5e4/index.md"},
+				"expected_paths": []any{"projects/atlas/index.md"},
 			},
 		},
 	})
@@ -62,9 +62,9 @@ func TestEvalToolExcludePrefix(t *testing.T) {
 	res, err := b.Eval(context.Background(), EvalRequest{
 		Queries: []EvalQuery{{
 			Question:      "zebrabyte",
-			ExpectedPaths: []string{"competitions/s5e5/index.md"},
+			ExpectedPaths: []string{"projects/borealis/index.md"},
 		}},
-		ExcludePrefix: []string{"competitions/s5e4/", "sources/writeups/"},
+		ExcludePrefix: []string{"projects/atlas/", "sources/reports/"},
 		TopK:          2,
 	})
 	if err != nil {
@@ -90,9 +90,9 @@ func TestEvalToolAcceptsScalarExcludePrefix(t *testing.T) {
 		"queries": []any{
 			map[string]any{"question": "zebrabyte", "expected_paths": []any{"techniques/stacking.md"}},
 		},
-		"exclude_prefix": "competitions/",
+		"exclude_prefix": "projects/",
 	})
-	if !strings.Contains(out, "Excluded before ranking: competitions/") {
+	if !strings.Contains(out, "Excluded before ranking: projects/") {
 		t.Fatalf("scalar exclude_prefix should be honoured:\n%s", out)
 	}
 }
@@ -104,7 +104,7 @@ func TestEvalToolGoldenSet(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "loo.qrels"), []byte("q1 0 competitions/s5e5/index.md 1\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "loo.qrels"), []byte("q1 0 projects/borealis/index.md 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "loo.topics"), []byte("q1\tzebrabyte\n"), 0o644); err != nil {
@@ -132,9 +132,9 @@ func TestEvalToolReportsSkipped(t *testing.T) {
 
 	out := mustCallTool(t, handleEval(b), "kiwi_eval", map[string]any{
 		"queries": []any{
-			map[string]any{"question": "zebrabyte", "expected_paths": []any{"competitions/s5e4/index.md"}},
+			map[string]any{"question": "zebrabyte", "expected_paths": []any{"projects/atlas/index.md"}},
 		},
-		"exclude_prefix": []any{"competitions/s5e4/"},
+		"exclude_prefix": []any{"projects/atlas/"},
 	})
 	if !strings.Contains(out, "SKIPPED") {
 		t.Fatalf("expected a skip line:\n%s", out)

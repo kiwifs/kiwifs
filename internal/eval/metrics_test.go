@@ -216,13 +216,13 @@ func TestRunMultipleEngines(t *testing.T) {
 }
 
 func TestExcluded(t *testing.T) {
-	prefixes := []string{"competitions/s5e4/", "sources/kaggle-writeups/"}
+	prefixes := []string{"projects/atlas/", "sources/reports/"}
 	for path, want := range map[string]bool{
-		"competitions/s5e4/index.md":            true,
-		"sources/kaggle-writeups/s5e4.md":       true,
-		"competitions/s5e5/index.md":            false,
-		"techniques/stacking.md":                false,
-		"competitions/s5e40-something/index.md": false,
+		"projects/atlas/index.md":         true,
+		"sources/reports/atlas.md":        true,
+		"projects/borealis/index.md":      false,
+		"techniques/stacking.md":          false,
+		"projects/atlas-archive/index.md": false,
 	} {
 		if got := Excluded(path, prefixes); got != want {
 			t.Errorf("Excluded(%q) = %v, want %v", path, got, want)
