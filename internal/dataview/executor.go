@@ -51,7 +51,9 @@ func (e *Executor) Query(ctx context.Context, dql string, limitOverride, offsetO
 		plan.Offset = offsetOverride
 	}
 	result, err := e.Execute(ctx, plan)
-	if err == nil && e.indexer != nil {
+	// The auto-indexer generates columns on file_meta, so it has nothing to
+	// offer a record-grain query.
+	if err == nil && e.indexer != nil && plan.Source != SourceRecords {
 		for _, field := range CollectFields(plan) {
 			e.indexer.EnsureIndex(ctx, field)
 		}
@@ -62,13 +64,11 @@ func (e *Executor) Query(ctx context.Context, dql string, limitOverride, offsetO
 // Execute runs a pre-parsed QueryPlan and returns results.
 func (e *Executor) Execute(ctx context.Context, plan *QueryPlan) (*QueryResult, error) {
 	if e.maxScanRows > 0 && (plan.Limit == 0 || plan.Limit > e.maxScanRows) {
-		plan = &QueryPlan{
-			Type: plan.Type, From: plan.From, FromTags: plan.FromTags,
-			Fields: plan.Fields, WithoutID: plan.WithoutID,
-			Where: plan.Where, Sort: plan.Sort, Order: plan.Order,
-			Sorts: plan.Sorts, GroupBy: plan.GroupBy, Flatten: plan.Flatten,
-			Limit: e.maxScanRows, Offset: plan.Offset,
-		}
+		// Copy wholesale so a new QueryPlan field can never be silently
+		// dropped by the row cap.
+		capped := *plan
+		capped.Limit = e.maxScanRows
+		plan = &capped
 	}
 	if e.queryTimeout > 0 {
 		var cancel context.CancelFunc
@@ -213,10 +213,7 @@ func (e *Executor) execGroupBy(ctx context.Context, sqlStr string, args []any, p
 			row["path"] = path
 		}
 		for i, fs := range plan.Fields {
-			val := fieldVals[i]
-			if b, ok := val.([]byte); ok {
-				val = string(b)
-			}
+			val := decodeFieldValue(fs, fieldVals[i])
 			name := fs.Expr
 			if fs.Alias != "" {
 				name = fs.Alias
@@ -242,6 +239,37 @@ func (e *Executor) execGroupBy(ctx context.Context, sqlStr string, args []any, p
 	}
 	result.Total = len(result.Groups)
 	return result, rows.Err()
+}
+
+// decodeFieldValue normalises one scanned column into a row value.
+//
+// rollup() returns a JSON array as text; decoding it here means consumers
+// get a real list instead of a string that happens to look like one. A
+// value that fails to decode is passed through unchanged rather than
+// dropped.
+func decodeFieldValue(fs FieldSpec, val any) any {
+	if b, ok := val.([]byte); ok {
+		val = string(b)
+	}
+	if !fieldReturnsJSONArray(fs) {
+		return val
+	}
+	s, ok := val.(string)
+	if !ok {
+		return val
+	}
+	var decoded []any
+	if err := json.Unmarshal([]byte(s), &decoded); err != nil {
+		return val
+	}
+	return decoded
+}
+
+// fieldReturnsJSONArray reports whether a column is a rollup, whose SQL
+// value is a json_group_array string.
+func fieldReturnsJSONArray(fs FieldSpec) bool {
+	fc, ok := fs.Parsed.(*FuncCall)
+	return ok && strings.EqualFold(fc.Name, "rollup")
 }
 
 // taskRow is used to parse the JSON tasks column from file_meta.
@@ -627,10 +655,7 @@ func (e *Executor) execSelect(ctx context.Context, sqlStr string, args []any, pl
 			row["path"] = path
 		}
 		for i, fs := range plan.Fields {
-			val := fieldVals[i]
-			if b, ok := val.([]byte); ok {
-				val = string(b)
-			}
+			val := decodeFieldValue(fs, fieldVals[i])
 			name := fs.Expr
 			if fs.Alias != "" {
 				name = fs.Alias
