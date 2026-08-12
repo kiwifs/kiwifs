@@ -46,6 +46,12 @@ type = "none"
 # toggle_sidebar = "Ctrl+B"
 # shortcuts_help = "Ctrl+/"
 
+# Validate frontmatter against .kiwi/schemas/{value}.json on write.
+# [schema]
+# enforce = true
+# discriminator = "type"    # frontmatter field naming the schema, e.g. "kind"
+# enforce_level = "reject"  # "warn" logs violations instead of failing the write
+
 # [links]
 # typed_fields = ["supersedes", "superseded_by", "variant_of", "cites", "extends", "services", "contradicts"]
 

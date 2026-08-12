@@ -12,10 +12,15 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
+// DefaultDiscriminator is the frontmatter field consulted to pick a schema
+// when none is configured.
+const DefaultDiscriminator = "type"
+
 type Validator struct {
-	mu      sync.RWMutex
-	schemas map[string]*jsonschema.Schema
-	root    string
+	mu            sync.RWMutex
+	schemas       map[string]*jsonschema.Schema
+	root          string
+	discriminator string
 }
 
 type ValidationError struct {
@@ -28,12 +33,32 @@ func (e *ValidationError) Error() string {
 }
 
 func NewValidator(root string) *Validator {
+	return NewValidatorWithDiscriminator(root, DefaultDiscriminator)
+}
+
+// NewValidatorWithDiscriminator builds a validator that selects
+// .kiwi/schemas/{value}.json using the named frontmatter field. Workspaces
+// that type their pages with something other than `type` (`kind`, `category`)
+// need this or no schema ever matches.
+func NewValidatorWithDiscriminator(root, discriminator string) *Validator {
+	if discriminator == "" {
+		discriminator = DefaultDiscriminator
+	}
 	v := &Validator{
-		schemas: make(map[string]*jsonschema.Schema),
-		root:    root,
+		schemas:       make(map[string]*jsonschema.Schema),
+		root:          root,
+		discriminator: discriminator,
 	}
 	v.loadSchemas()
 	return v
+}
+
+// Discriminator reports the frontmatter field this validator keys on.
+func (v *Validator) Discriminator() string {
+	if v == nil || v.discriminator == "" {
+		return DefaultDiscriminator
+	}
+	return v.discriminator
 }
 
 func (v *Validator) loadSchemas() {
@@ -86,7 +111,7 @@ func (v *Validator) Validate(frontmatter map[string]any) *ValidationError {
 	if v == nil {
 		return nil
 	}
-	typeName, ok := frontmatter["type"].(string)
+	typeName, ok := frontmatter[v.Discriminator()].(string)
 	if !ok || typeName == "" {
 		return nil
 	}
@@ -99,7 +124,7 @@ func (v *Validator) Validate(frontmatter map[string]any) *ValidationError {
 		return nil
 	}
 
-	err := sch.Validate(frontmatter)
+	err := sch.Validate(normalizeForSchema(frontmatter))
 	if err == nil {
 		return nil
 	}
@@ -117,6 +142,39 @@ func (v *Validator) Validate(frontmatter map[string]any) *ValidationError {
 	}
 
 	return &ValidationError{Type: typeName, Errors: errs}
+}
+
+// normalizeForSchema converts YAML-parsed values into the JSON-like shapes
+// jsonschema accepts. goldmark-meta decodes nested mappings as map[any]any,
+// which the validator rejects outright as an unknown type — so without this
+// any schema describing a nested object fails on valid input.
+func normalizeForSchema(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = normalizeForSchema(val)
+		}
+		return out
+	case map[any]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			ks, ok := k.(string)
+			if !ok {
+				ks = fmt.Sprint(k)
+			}
+			out[ks] = normalizeForSchema(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, x := range t {
+			out[i] = normalizeForSchema(x)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 func (v *Validator) ListTypes() []string {

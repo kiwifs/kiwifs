@@ -146,6 +146,29 @@ type WebhooksConfig struct {
 
 type SchemaConfig struct {
 	Enforce bool `toml:"enforce"`
+	// Discriminator names the frontmatter field whose value selects the schema
+	// in .kiwi/schemas/{value}.json. Workspace templates disagree on this —
+	// some use "type", others "kind" — so it has to be configurable.
+	// Default: "type".
+	Discriminator string `toml:"discriminator"`
+	// EnforceLevel is "reject" (default) or "warn". Warn logs the violation and
+	// lets the write through, which is what makes adopting schemas on an
+	// existing workspace practical.
+	EnforceLevel string `toml:"enforce_level"`
+}
+
+// DiscriminatorField returns the configured discriminator, defaulting to "type".
+func (c SchemaConfig) DiscriminatorField() string {
+	if c.Discriminator == "" {
+		return "type"
+	}
+	return c.Discriminator
+}
+
+// IsWarnOnly reports whether validation failures should be logged rather than
+// rejecting the write.
+func (c SchemaConfig) IsWarnOnly() bool {
+	return strings.EqualFold(strings.TrimSpace(c.EnforceLevel), "warn")
 }
 
 // LintConfig controls markdown lint and auto-format behaviour.
