@@ -22,6 +22,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/dataview"
 	"github.com/kiwifs/kiwifs/internal/draft"
+	"github.com/kiwifs/kiwifs/internal/eval"
 	"github.com/kiwifs/kiwifs/internal/graphutil"
 	"github.com/kiwifs/kiwifs/internal/janitor"
 	"github.com/kiwifs/kiwifs/internal/links"
@@ -1926,96 +1927,90 @@ func parsePeriodDays(period string) int {
 	return 30
 }
 
-func (b *LocalBackend) Eval(ctx context.Context, queries []EvalQuery) (*EvalResult, error) {
+// Eval delegates to internal/eval so the MCP tool and POST /api/kiwi/eval
+// report the same numbers for the same request — they used to carry two
+// separate copies of the metric arithmetic, which had already drifted (the
+// handler deduped vector chunks by path; this one did not).
+func (b *LocalBackend) Eval(ctx context.Context, req EvalRequest) (*EvalResult, error) {
 	if err := b.init(); err != nil {
 		return nil, err
 	}
+	queries, err := eval.Resolve(b.root, eval.Request{Set: req.Set, Queries: toEvalQueries(req.Queries)})
+	if err != nil {
+		return nil, err
+	}
+	report, err := eval.Run(ctx, queries, eval.DefaultEngines(b.stack.Searcher, b.stack.Vectors), eval.Options{
+		TopK:            req.TopK,
+		ExcludePrefixes: req.ExcludePrefix,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return evalReportToResult(report), nil
+}
 
-	topK := 5
-	var ftsHitCount, semHitCount int
-	var ftsMRRSum, semMRRSum float64
-	var ftsPrecSum, semPrecSum float64
-	perQuery := make([]EvalQueryResult, len(queries))
-
-	for i, q := range queries {
-		expected := make(map[string]bool, len(q.ExpectedPaths))
+func toEvalQueries(in []EvalQuery) []eval.Query {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]eval.Query, 0, len(in))
+	for _, q := range in {
+		relevant := make(map[string]int, len(q.ExpectedPaths)+len(q.Grades))
 		for _, p := range q.ExpectedPaths {
-			expected[p] = true
+			relevant[p] = 1
 		}
+		for p, g := range q.Grades {
+			relevant[p] = g
+		}
+		out = append(out, eval.Query{Question: q.Question, Relevant: relevant})
+	}
+	return out
+}
 
-		pq := EvalQueryResult{
+func evalReportToResult(report *eval.Report) *EvalResult {
+	res := &EvalResult{
+		TopK:          report.TopK,
+		ExcludePrefix: report.ExcludePrefixes,
+		FTS:           toMCPEvalMetrics(report.Metrics(eval.EngineFTS)),
+		Semantic:      toMCPEvalMetrics(report.Metrics(eval.EngineSemantic)),
+		PerQuery:      make([]EvalQueryResult, 0, len(report.Queries)),
+		Errors:        report.Errors,
+	}
+	for _, q := range report.Queries {
+		fts := q.Scores[eval.EngineFTS]
+		sem := q.Scores[eval.EngineSemantic]
+		res.PerQuery = append(res.PerQuery, EvalQueryResult{
 			Question:     q.Question,
-			FTSHits:      []string{},
-			SemanticHits: []string{},
-		}
-
-		// FTS search
-		ftsResults, _ := b.stack.Searcher.Search(ctx, q.Question, topK, 0, "")
-		ftsRank := 0
-		ftsPrec := 0
-		for j, r := range ftsResults {
-			if expected[r.Path] {
-				pq.FTSHits = append(pq.FTSHits, r.Path)
-				if ftsRank == 0 {
-					ftsRank = j + 1
-				}
-				ftsPrec++
-			}
-		}
-		pq.FTSRank = ftsRank
-		if ftsRank > 0 {
-			ftsHitCount++
-			ftsMRRSum += 1.0 / float64(ftsRank)
-		}
-		if len(ftsResults) > 0 {
-			ftsPrecSum += float64(ftsPrec) / float64(len(ftsResults))
-		}
-
-		// Semantic search
-		if b.stack.Vectors != nil {
-			semResults, _ := b.stack.Vectors.Search(ctx, q.Question, topK)
-			semRank := 0
-			semPrec := 0
-			for j, r := range semResults {
-				if expected[r.Path] {
-					pq.SemanticHits = append(pq.SemanticHits, r.Path)
-					if semRank == 0 {
-						semRank = j + 1
-					}
-					semPrec++
-				}
-			}
-			pq.SemanticRank = semRank
-			if semRank > 0 {
-				semHitCount++
-				semMRRSum += 1.0 / float64(semRank)
-			}
-			if len(semResults) > 0 {
-				semPrecSum += float64(semPrec) / float64(len(semResults))
-			}
-		}
-
-		perQuery[i] = pq
+			Relevant:     q.Relevant,
+			FTSRank:      fts.Rank,
+			SemanticRank: sem.Rank,
+			FTSHits:      emptyIfNil(fts.Hits),
+			SemanticHits: emptyIfNil(sem.Hits),
+			FTSNDCG:      fts.NDCG,
+			SemanticNDCG: sem.NDCG,
+		})
 	}
-
-	total := float64(len(queries))
-	if total == 0 {
-		total = 1
+	for _, s := range report.Skipped {
+		res.Skipped = append(res.Skipped, EvalSkipped{Question: s.Question, Reason: s.Reason})
 	}
+	return res
+}
 
-	return &EvalResult{
-		FTS: EvalMetrics{
-			HitRate:      float64(ftsHitCount) / total,
-			MRR:          ftsMRRSum / total,
-			PrecisionAtK: ftsPrecSum / total,
-		},
-		Semantic: EvalMetrics{
-			HitRate:      float64(semHitCount) / total,
-			MRR:          semMRRSum / total,
-			PrecisionAtK: semPrecSum / total,
-		},
-		PerQuery: perQuery,
-	}, nil
+func toMCPEvalMetrics(m eval.Metrics) EvalMetrics {
+	return EvalMetrics{
+		HitRate:      m.HitRate,
+		MRR:          m.MRR,
+		PrecisionAtK: m.PrecisionAtK,
+		NDCG:         m.NDCG,
+		Queries:      m.Queries,
+	}
+}
+
+func emptyIfNil(in []string) []string {
+	if in == nil {
+		return []string{}
+	}
+	return in
 }
 
 func (b *LocalBackend) Eligible(ctx context.Context, limit int, pathPrefix string) (*QueryResult, error) {

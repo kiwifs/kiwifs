@@ -172,7 +172,7 @@ type Backend interface {
 	GraphPath(ctx context.Context, from, to string) (*GraphPathResult, error)
 	Velocity(ctx context.Context, period string, limit int, pathPrefix string) (*VelocityResult, error)
 	Timeline(ctx context.Context, limit, offset int, actor, eventType, pathPrefix string) (*TimelineResult, error)
-	Eval(ctx context.Context, queries []EvalQuery) (*EvalResult, error)
+	Eval(ctx context.Context, req EvalRequest) (*EvalResult, error)
 	Eligible(ctx context.Context, limit int, pathPrefix string) (*QueryResult, error)
 	Claim(ctx context.Context, path, claimedBy string, leaseDuration time.Duration) (*claims.Claim, error)
 	Release(ctx context.Context, path, claimedBy string) error
@@ -310,28 +310,55 @@ type BurstEntry struct {
 }
 
 type EvalQuery struct {
-	Question      string   `json:"question"`
-	ExpectedPaths []string `json:"expected_paths"`
+	Question      string         `json:"question"`
+	ExpectedPaths []string       `json:"expected_paths"`
+	Grades        map[string]int `json:"grades,omitempty"`
+}
+
+// EvalRequest selects what to evaluate. Set names a golden set under
+// .kiwi/eval/; Queries supplies topics inline. Exactly one of the two.
+type EvalRequest struct {
+	Set     string      `json:"set,omitempty"`
+	Queries []EvalQuery `json:"queries,omitempty"`
+	// ExcludePrefix hides path subtrees from retrieval before ranking. It is
+	// a list because the material for one held-out topic is rarely confined
+	// to one directory.
+	ExcludePrefix []string `json:"exclude_prefix,omitempty"`
+	TopK          int      `json:"top_k,omitempty"`
 }
 
 type EvalResult struct {
-	FTS      EvalMetrics       `json:"fts"`
-	Semantic EvalMetrics       `json:"semantic"`
-	PerQuery []EvalQueryResult `json:"per_query"`
+	TopK          int               `json:"top_k"`
+	ExcludePrefix []string          `json:"exclude_prefix,omitempty"`
+	FTS           EvalMetrics       `json:"fts"`
+	Semantic      EvalMetrics       `json:"semantic"`
+	PerQuery      []EvalQueryResult `json:"per_query"`
+	Skipped       []EvalSkipped     `json:"skipped,omitempty"`
+	Errors        int               `json:"errors"`
 }
 
 type EvalMetrics struct {
 	HitRate      float64 `json:"hit_rate"`
 	MRR          float64 `json:"mrr"`
-	PrecisionAtK float64 `json:"precision_at_5"`
+	PrecisionAtK float64 `json:"precision_at_k"`
+	NDCG         float64 `json:"ndcg"`
+	Queries      int     `json:"queries"`
 }
 
 type EvalQueryResult struct {
 	Question     string   `json:"question"`
+	Relevant     []string `json:"relevant"`
 	FTSRank      int      `json:"fts_rank"`
 	SemanticRank int      `json:"semantic_rank"`
 	FTSHits      []string `json:"fts_hits"`
 	SemanticHits []string `json:"semantic_hits"`
+	FTSNDCG      float64  `json:"fts_ndcg"`
+	SemanticNDCG float64  `json:"semantic_ndcg"`
+}
+
+type EvalSkipped struct {
+	Question string `json:"question"`
+	Reason   string `json:"reason"`
 }
 
 type ClipResultMCP struct {

@@ -702,9 +702,22 @@ func (r *RemoteBackend) Timeline(ctx context.Context, limit, offset int, actor, 
 	return &result, nil
 }
 
-func (r *RemoteBackend) Eval(ctx context.Context, queries []EvalQuery) (*EvalResult, error) {
+func (r *RemoteBackend) Eval(ctx context.Context, req EvalRequest) (*EvalResult, error) {
+	body := map[string]any{}
+	if req.Set != "" {
+		body["set"] = req.Set
+	}
+	if len(req.Queries) > 0 {
+		body["queries"] = req.Queries
+	}
+	if len(req.ExcludePrefix) > 0 {
+		body["exclude_prefix"] = req.ExcludePrefix
+	}
+	if req.TopK > 0 {
+		body["top_k"] = req.TopK
+	}
 	var result EvalResult
-	if err := r.postJSON(ctx, r.apiPrefix+"/eval", map[string]any{"queries": queries}, &result); err != nil {
+	if err := r.postJSON(ctx, r.apiPrefix+"/eval", body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

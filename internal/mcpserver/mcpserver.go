@@ -524,8 +524,9 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 		},
 		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_eval",
-				mcp.WithDescription("Evaluate retrieval quality: send queries with expected paths, get Hit Rate, MRR, and Precision@5 for both FTS and semantic search."),
-				mcp.WithArray("queries", mcp.Required(), mcp.Description("Array of {question, expected_paths} evaluation queries"),
+				mcp.WithDescription("Evaluate retrieval quality: send queries with expected paths (or name a golden set under .kiwi/eval/), get Hit Rate, MRR, Precision@K and nDCG@K for both FTS and semantic search."),
+				mcp.WithString("set", mcp.Description("Name of a golden set under .kiwi/eval/ (loads <set>.qrels and <set>.topics). Alternative to queries.")),
+				mcp.WithArray("queries", mcp.Description("Array of {question, expected_paths} evaluation queries. Alternative to set."),
 					mcp.Items(map[string]any{
 						"type": "object",
 						"properties": map[string]any{
@@ -535,6 +536,10 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 						"required": []string{"question", "expected_paths"},
 					}),
 				),
+				mcp.WithArray("exclude_prefix", mcp.Description("Path prefixes to hide from retrieval before ranking — the held-out set for leave-one-out evaluation."),
+					mcp.Items(map[string]any{"type": "string"}),
+				),
+				mcp.WithNumber("top_k", mcp.Description("Rank cutoff for every metric (default 5)")),
 				mcp.WithReadOnlyHintAnnotation(true),
 				mcp.WithDestructiveHintAnnotation(false),
 			),
@@ -2697,47 +2702,84 @@ func handleTimeline(b Backend) server.ToolHandlerFunc {
 	}
 }
 
+// stringArrayArg reads an array-of-strings tool argument, also accepting a
+// bare string. Models routinely send the scalar form for a single-element
+// list, and rejecting it costs a round trip to learn nothing.
+func stringArrayArg(args map[string]any, key string) []string {
+	switch v := args[key].(type) {
+	case string:
+		if v == "" {
+			return nil
+		}
+		return []string{v}
+	case []any:
+		var out []string
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return v
+	}
+	return nil
+}
+
 func handleEval(b Backend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := req.GetArguments()
-		var queries []EvalQuery
-		if raw, ok := args["queries"]; ok {
-			switch v := raw.(type) {
-			case []any:
-				for _, item := range v {
-					if m, ok := item.(map[string]any); ok {
-						q := EvalQuery{}
-						q.Question, _ = m["question"].(string)
-						if paths, ok := m["expected_paths"].([]any); ok {
-							for _, p := range paths {
-								if s, ok := p.(string); ok {
-									q.ExpectedPaths = append(q.ExpectedPaths, s)
-								}
-							}
-						}
-						if q.Question != "" {
-							queries = append(queries, q)
+		evalReq := EvalRequest{}
+		evalReq.Set, _ = args["set"].(string)
+		if raw, ok := args["queries"].([]any); ok {
+			for _, item := range raw {
+				m, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				q := EvalQuery{}
+				q.Question, _ = m["question"].(string)
+				if paths, ok := m["expected_paths"].([]any); ok {
+					for _, p := range paths {
+						if s, ok := p.(string); ok {
+							q.ExpectedPaths = append(q.ExpectedPaths, s)
 						}
 					}
 				}
+				if q.Question != "" {
+					evalReq.Queries = append(evalReq.Queries, q)
+				}
 			}
 		}
-		if len(queries) == 0 {
-			return mcp.NewToolResultError("queries is required — array of {question, expected_paths} objects"), nil
+		evalReq.ExcludePrefix = stringArrayArg(args, "exclude_prefix")
+		if k, ok := args["top_k"].(float64); ok && k > 0 {
+			evalReq.TopK = int(k)
+		}
+		if evalReq.Set == "" && len(evalReq.Queries) == 0 {
+			return mcp.NewToolResultError("set or queries is required — a golden set name, or an array of {question, expected_paths} objects"), nil
 		}
 
-		result, err := b.Eval(ctx, queries)
+		result, err := b.Eval(ctx, evalReq)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Eval failed: %v", err)), nil
 		}
 
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "Retrieval Evaluation (%d queries)\n\n", len(queries))
-		fmt.Fprintf(&sb, "FTS:      hit_rate=%.2f  mrr=%.2f  precision@5=%.2f\n", result.FTS.HitRate, result.FTS.MRR, result.FTS.PrecisionAtK)
-		fmt.Fprintf(&sb, "Semantic: hit_rate=%.2f  mrr=%.2f  precision@5=%.2f\n\n", result.Semantic.HitRate, result.Semantic.MRR, result.Semantic.PrecisionAtK)
+		fmt.Fprintf(&sb, "Retrieval Evaluation (%d queries scored, top_k=%d)\n", result.FTS.Queries, result.TopK)
+		if len(result.ExcludePrefix) > 0 {
+			fmt.Fprintf(&sb, "Excluded before ranking: %s\n", strings.Join(result.ExcludePrefix, ", "))
+		}
+		sb.WriteString("\n")
+		fmt.Fprintf(&sb, "FTS:      hit_rate=%.2f  mrr=%.2f  precision@%d=%.2f  ndcg=%.2f\n",
+			result.FTS.HitRate, result.FTS.MRR, result.TopK, result.FTS.PrecisionAtK, result.FTS.NDCG)
+		fmt.Fprintf(&sb, "Semantic: hit_rate=%.2f  mrr=%.2f  precision@%d=%.2f  ndcg=%.2f\n\n",
+			result.Semantic.HitRate, result.Semantic.MRR, result.TopK, result.Semantic.PrecisionAtK, result.Semantic.NDCG)
 		for _, pq := range result.PerQuery {
 			fmt.Fprintf(&sb, "Q: %s\n", pq.Question)
 			fmt.Fprintf(&sb, "  FTS rank: %d, Semantic rank: %d\n", pq.FTSRank, pq.SemanticRank)
+		}
+		for _, sk := range result.Skipped {
+			fmt.Fprintf(&sb, "SKIPPED: %s — %s\n", sk.Question, sk.Reason)
 		}
 		return mcp.NewToolResultText(sb.String()), nil
 	}

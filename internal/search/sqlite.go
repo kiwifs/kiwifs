@@ -442,6 +442,14 @@ WHERE docs MATCH ?`
 		sqlQ += ` AND dp.path LIKE ?`
 		args = append(args, pathPrefix+"%")
 	}
+	for _, prefix := range opts.ExcludePrefixes {
+		if prefix == "" {
+			continue
+		}
+		// ESCAPE so a literal % or _ in a held-out path stays literal.
+		sqlQ += ` AND dp.path NOT LIKE ? ESCAPE '\'`
+		args = append(args, escapeLikePrefix(prefix)+"%")
+	}
 	if opts.Scope != "" {
 		sqlQ += ` AND EXISTS (
 			SELECT 1 FROM file_meta fm_scope

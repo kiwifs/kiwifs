@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -799,6 +800,106 @@ func TestSearchWithOptions_FiltersScope(t *testing.T) {
 	}
 	if len(allResults) != 3 {
 		t.Fatalf("unscoped search should keep all matches, got %+v", allResults)
+	}
+}
+
+func TestSearchWithOptions_ExcludePrefixes(t *testing.T) {
+	s := newTestSQLite(t)
+
+	files := map[string][]byte{
+		"competitions/s5e4/index.md":      []byte("# S5E4\n\nzebrabyte held out\n"),
+		"sources/kaggle-writeups/s5e4.md": []byte("# Writeup\n\nzebrabyte held out\n"),
+		"competitions/s5e5/index.md":      []byte("# S5E5\n\nzebrabyte kept\n"),
+		"techniques/stacking.md":          []byte("# Stacking\n\nzebrabyte kept\n"),
+	}
+	for path, content := range files {
+		if err := s.Index(ctxBG, path, content); err != nil {
+			t.Fatalf("index %s: %v", path, err)
+		}
+		if err := s.IndexMeta(ctxBG, path, content); err != nil {
+			t.Fatalf("index meta %s: %v", path, err)
+		}
+	}
+
+	results, err := s.SearchWithOptions(ctxBG, "zebrabyte", 10, 0, "", SearchOptions{
+		ExcludePrefixes: []string{"competitions/s5e4/", "sources/kaggle-writeups/"},
+	})
+	if err != nil {
+		t.Fatalf("excluded search: %v", err)
+	}
+	got := map[string]bool{}
+	for _, r := range results {
+		got[r.Path] = true
+	}
+	if len(got) != 2 || !got["competitions/s5e5/index.md"] || !got["techniques/stacking.md"] {
+		t.Fatalf("got %+v, want the two non-excluded pages", results)
+	}
+}
+
+// Exclusion runs inside the SQL, before ORDER BY and LIMIT, so a two-slot page
+// is filled with the next-best eligible hits instead of coming back short.
+// Held-out evaluation depends on this: post-filtering understates every metric.
+func TestSearchWithOptions_ExcludeAppliesBeforeLimit(t *testing.T) {
+	s := newTestSQLite(t)
+
+	// Two excluded pages score highest (the term appears twice); the two
+	// eligible pages mention it once.
+	files := map[string][]byte{
+		"held/one.md": []byte("# One\n\nzebrabyte zebrabyte\n"),
+		"held/two.md": []byte("# Two\n\nzebrabyte zebrabyte\n"),
+		"keep/one.md": []byte("# Three\n\nzebrabyte\n"),
+		"keep/two.md": []byte("# Four\n\nzebrabyte\n"),
+	}
+	for path, content := range files {
+		if err := s.Index(ctxBG, path, content); err != nil {
+			t.Fatalf("index %s: %v", path, err)
+		}
+		if err := s.IndexMeta(ctxBG, path, content); err != nil {
+			t.Fatalf("index meta %s: %v", path, err)
+		}
+	}
+
+	results, err := s.SearchWithOptions(ctxBG, "zebrabyte", 2, 0, "", SearchOptions{
+		ExcludePrefixes: []string{"held/"},
+	})
+	if err != nil {
+		t.Fatalf("excluded search: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("got %d results, want the limit filled with eligible hits: %+v", len(results), results)
+	}
+	for _, r := range results {
+		if strings.HasPrefix(r.Path, "held/") {
+			t.Fatalf("excluded path %q survived", r.Path)
+		}
+	}
+}
+
+// A path containing LIKE wildcards must not widen the exclusion.
+func TestSearchWithOptions_ExcludeEscapesWildcards(t *testing.T) {
+	s := newTestSQLite(t)
+
+	files := map[string][]byte{
+		"a_b/one.md": []byte("# One\n\nzebrabyte\n"),
+		"axb/one.md": []byte("# Two\n\nzebrabyte\n"),
+	}
+	for path, content := range files {
+		if err := s.Index(ctxBG, path, content); err != nil {
+			t.Fatalf("index %s: %v", path, err)
+		}
+		if err := s.IndexMeta(ctxBG, path, content); err != nil {
+			t.Fatalf("index meta %s: %v", path, err)
+		}
+	}
+
+	results, err := s.SearchWithOptions(ctxBG, "zebrabyte", 10, 0, "", SearchOptions{
+		ExcludePrefixes: []string{"a_b/"},
+	})
+	if err != nil {
+		t.Fatalf("excluded search: %v", err)
+	}
+	if len(results) != 1 || results[0].Path != "axb/one.md" {
+		t.Fatalf("got %+v; '_' must stay literal", results)
 	}
 }
 

@@ -92,6 +92,11 @@ type SearchOptions struct {
 	// RecencyWeight blends recency into the relevance score when > 0.
 	// Valid range is 0.0 through 1.0; callers should validate user input.
 	RecencyWeight float64
+	// ExcludePrefixes drops every path under any of these prefixes. Backends
+	// must apply it before ranking and before the limit, so the returned page
+	// is filled with the next-best eligible hits rather than left short.
+	// Held-out retrieval evaluation depends on that ordering.
+	ExcludePrefixes []string
 }
 
 // OptionsSearcher supports optional search tuning beyond the base Searcher contract.
