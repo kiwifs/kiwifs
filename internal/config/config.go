@@ -49,6 +49,39 @@ type Config struct {
 	ValidateWriteRules []ValidateWriteRuleConfig `toml:"validate_write"`
 	// FormatHooks from [format_hooks.*] — pipeline FormatWrite extensions.
 	FormatHooks FormatHooksConfig `toml:"format_hooks"`
+	// SimilarityProfiles from [[similarity.profiles]] — named
+	// nearest-neighbour spaces over frontmatter, served by
+	// GET /api/kiwi/similar and the kiwi_similar tool.
+	Similarity SimilarityConfig `toml:"similarity"`
+}
+
+// SimilarityConfig groups the [[similarity.profiles]] stanzas.
+type SimilarityConfig struct {
+	Profiles []SimilarityProfileConfig `toml:"profiles"`
+}
+
+// SimilarityProfileConfig is one [[similarity.profiles]] stanza: which pages
+// are candidates and which of their frontmatter fields form the vector.
+//
+//	[[similarity.profiles]]
+//	name = "dataset"
+//	match = { kind = "dataset" }
+//	numeric = ["stats.rows", "stats.columns"]
+//	categorical = ["format", "license", "stats.ordered"]
+//	weights = { "stats.ordered" = 3.0 }
+type SimilarityProfileConfig struct {
+	Name string `toml:"name"`
+	// Match keeps only pages whose frontmatter field equals the value.
+	Match map[string]string `toml:"match"`
+	// PathPrefix further restricts candidates to a subtree.
+	PathPrefix string `toml:"path_prefix"`
+	// Numeric fields are compared by range-scaled difference; Categorical
+	// fields by equality. Names may be dotted paths into nested
+	// frontmatter, e.g. "stats.rows".
+	Numeric     []string `toml:"numeric"`
+	Categorical []string `toml:"categorical"`
+	// Weights scales a field's contribution; unlisted fields weigh 1.
+	Weights map[string]float64 `toml:"weights"`
 }
 
 // FormatHooksConfig groups optional FormatWrite hooks declared in config.toml.
@@ -555,6 +588,19 @@ type VectorStoreConfig struct {
 type VectorChunkConfig struct {
 	Size    int `toml:"size"`
 	Overlap int `toml:"overlap"`
+	// ContextTemplate is a text/template rendered per chunk and prepended to
+	// the chunk text before embedding, so a chunk carries the page it came
+	// from instead of being a naked paragraph. Fields: .Title, .Path,
+	// .Headings, .HeadingPath, .Frontmatter. Empty means the built-in default
+	// ("{{ .Headings }}"), which matches pre-existing indexes byte for byte.
+	// Changing this requires a reindex — stored chunk text is not rewritten.
+	ContextTemplate string `toml:"context_template"`
+	// ContextHookURL, when set, is POSTed per chunk and its {"context": "..."}
+	// response replaces the rendered template. Any failure (timeout, non-2xx,
+	// bad JSON, empty string) falls back to the template rather than dropping
+	// the chunk. This is deliberately a plain HTTP hook: the server does no
+	// LLM inference of its own.
+	ContextHookURL string `toml:"context_hook_url"`
 }
 
 type VersioningConfig struct {

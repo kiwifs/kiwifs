@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/memory"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/search"
+	"github.com/kiwifs/kiwifs/internal/similar"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/kiwifs/kiwifs/internal/tracing"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
@@ -38,6 +40,7 @@ type LocalBackend struct {
 	root     string
 	stack    *bootstrap.Stack
 	dvExec   *dataview.Executor
+	simIdx   *similar.Index
 	draftMgr *draft.Manager
 
 	once     sync.Once
@@ -68,8 +71,32 @@ func NewStackBackend(stack *bootstrap.Stack) Backend {
 			}
 			b.dvExec.SetLimits(maxRows, timeout)
 		}
+		b.simIdx = buildSimilarIndex(stack, stack.Config)
 	})
 	return b
+}
+
+// buildSimilarIndex wires the configured [[similarity.profiles]] to the
+// frontmatter index. Nil means kiwi_similar reports that no profiles are
+// configured rather than failing at call time.
+func buildSimilarIndex(stack *bootstrap.Stack, cfg *config.Config) *similar.Index {
+	if stack == nil || cfg == nil {
+		return nil
+	}
+	sq, ok := stack.Searcher.(*search.SQLite)
+	if !ok {
+		return nil
+	}
+	profiles := similar.ProfilesFromConfig(cfg.Similarity)
+	if len(profiles) == 0 {
+		return nil
+	}
+	idx, err := similar.New(sq.ReadDB(), profiles)
+	if err != nil {
+		log.Printf("mcp: similarity disabled: %v", err)
+		return nil
+	}
+	return idx
 }
 
 func (b *LocalBackend) init() error {
@@ -110,8 +137,23 @@ func (b *LocalBackend) init() error {
 			}
 			b.dvExec.SetLimits(maxRows, timeout)
 		}
+		b.simIdx = buildSimilarIndex(b.stack, cfg)
 	})
 	return b.err
+}
+
+// Similar ranks pages by Gower distance over the frontmatter fields named by
+// a similarity profile. Either an indexed path or an inline vector serves as
+// the query; the inline form is what lets an agent ask about a case that is
+// not in the corpus yet.
+func (b *LocalBackend) Similar(ctx context.Context, path, profile string, k int, vector map[string]any) (*similar.Result, error) {
+	if err := b.init(); err != nil {
+		return nil, err
+	}
+	if b.simIdx == nil {
+		return nil, fmt.Errorf("no similarity profiles configured — add a [[similarity.profiles]] block to .kiwi/config.toml")
+	}
+	return b.simIdx.Similar(ctx, similar.Query{Path: path, Profile: profile, K: k, Vector: vector})
 }
 
 func (b *LocalBackend) Changes(ctx context.Context, since string, limit int) (*ChangesResult, error) {

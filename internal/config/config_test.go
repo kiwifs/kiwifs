@@ -228,6 +228,33 @@ overlap = 80
 	}
 }
 
+func TestVectorChunkContextTOML(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[search.vector.chunk]
+context_template = "{{ .Title }} > {{ .Headings }}"
+context_hook_url = "http://127.0.0.1:8099/context"
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got, want := cfg.Search.Vector.Chunk.ContextTemplate, "{{ .Title }} > {{ .Headings }}"; got != want {
+		t.Fatalf("context_template = %q, want %q", got, want)
+	}
+	if got, want := cfg.Search.Vector.Chunk.ContextHookURL, "http://127.0.0.1:8099/context"; got != want {
+		t.Fatalf("context_hook_url = %q, want %q", got, want)
+	}
+	// Unset must stay empty so the vectorstore falls back to its own default
+	// rather than config baking a duplicate copy of the template string.
+	if (VectorChunkConfig{}).ContextTemplate != "" {
+		t.Fatal("zero-value ContextTemplate should be empty")
+	}
+}
+
 func TestEmbedderConfigResolvedProvider(t *testing.T) {
 	if got := (EmbedderConfig{Provider: "openai"}).ResolvedProvider(); got != "openai" {
 		t.Fatalf("provider wins: got %q", got)

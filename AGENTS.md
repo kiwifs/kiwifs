@@ -21,7 +21,7 @@ kiwifs/
 |   |-- storage/      # Filesystem abstraction
 |   |-- vectorstore/  # Pluggable vector search backends
 |   |-- versioning/   # Git, copy-on-write, noop
-|   |-- mcpserver/    # MCP server (62 tools)
+|   |-- mcpserver/    # MCP server (69 tools)
 |   |-- dataview/     # DQL parser and query engine (Pratt parser)
 |   |-- workflow/     # Workflow state machine engine
 |   |-- claims/       # Task claim system (path-level leases)
@@ -97,7 +97,7 @@ All PRs must pass the `test` CI check (go vet, go test, UI build) before merge.
 ## Key Patterns
 
 - **REST handlers** are in `internal/api/handlers*.go`, registered in `internal/api/server.go`.
-- **MCP tools** are registered in `internal/mcpserver/mcpserver.go` (62 tools).
+- **MCP tools** are registered in `internal/mcpserver/mcpserver.go` (69 tools: 67 there + 2 in memory_tools.go).
 - **DQL queries** go through the Pratt parser in `internal/dataview/parser.go` and evaluator in `internal/dataview/evaluator.go`.
 - **Workflows** are JSON state machines in `.kiwi/workflows/*.json`, managed by `internal/workflow/`.
 - **UI state** uses React context + localStorage. No global state library.

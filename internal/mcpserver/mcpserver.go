@@ -449,6 +449,18 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 			Handler: handlePeek(b),
 		},
 		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_similar",
+				mcp.WithDescription("Find pages structurally similar to a case, using a configured similarity profile over frontmatter fields (Gower distance: range-scaled numerics, exact-match categoricals). Query by an existing page path, or pass an inline vector to ask about a case that is not in the knowledge base yet. Every result reports its per-field distance contributions and how many fields were actually comparable, so a high score over two filled fields is visibly weak evidence. Use this to retrieve prior cases before planning new work."),
+				mcp.WithString("path", mcp.Description("Page to find neighbours of. Optional when vector is given; when both are given, vector overrides individual fields of the page.")),
+				mcp.WithString("profile", mcp.Description("Similarity profile name from [[similarity.profiles]]. Optional when exactly one profile is configured.")),
+				mcp.WithNumber("k", mcp.Description("Number of neighbours to return (default 5)")),
+				mcp.WithObject("vector", mcp.Description("Inline field vector, e.g. {\"format\":\"csv\",\"stats.rows\":750000}. Field names match the profile's numeric/categorical lists, including dotted paths into nested frontmatter.")),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleSimilar(b),
+		},
+		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_section",
 				mcp.WithDescription("Read a single heading section from a file. Specify either a heading text (fuzzy match) or a section index (0-based). Returns only that section's content — much cheaper than reading the whole file. Use after kiwi_peek tells you which heading is relevant."),
 				mcp.WithString("path", pathOpts...),
@@ -2513,6 +2525,28 @@ func handlePeek(b Backend) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		result, err := b.Peek(ctx, path)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		data, _ := json.MarshalIndent(result, "", "  ")
+		return mcp.NewToolResultText(string(data)), nil
+	}
+}
+
+func handleSimilar(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		path, _ := args["path"].(string)
+		profile, _ := args["profile"].(string)
+		k := 0
+		if n, ok := args["k"].(float64); ok {
+			k = int(n)
+		}
+		vector, _ := args["vector"].(map[string]any)
+		if path == "" && len(vector) == 0 {
+			return mcp.NewToolResultError("path or vector is required"), nil
+		}
+		result, err := b.Similar(ctx, path, profile, k, vector)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

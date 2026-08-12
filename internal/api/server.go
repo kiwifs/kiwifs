@@ -29,6 +29,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/rbac"
 	"github.com/kiwifs/kiwifs/internal/search"
+	"github.com/kiwifs/kiwifs/internal/similar"
 	"github.com/kiwifs/kiwifs/internal/tracing"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
 	"github.com/kiwifs/kiwifs/internal/webhooks"
@@ -389,9 +390,20 @@ func (s *Server) setupRoutes() {
 	// search backend is SQLite.
 	var dvExec *dataview.Executor
 	var viewReg *dataview.Registry
+	var simIdx *similar.Index
 	if sq, ok := s.pipe.Searcher.(*search.SQLite); ok {
 		readDB := sq.ReadDB()
 		writeDB := sq.WriteDB()
+		// Nearest-neighbour profiles read the same frontmatter index as
+		// DQL, so they live and die with the SQLite backend too.
+		if profiles := similar.ProfilesFromConfig(s.cfg.Similarity); len(profiles) > 0 {
+			idx, serr := similar.New(readDB, profiles)
+			if serr != nil {
+				log.Printf("api: similarity disabled: %v", serr)
+			} else {
+				simIdx = idx
+			}
+		}
 		dvExec = dataview.NewExecutor(readDB)
 		ai := dataview.NewAutoIndexer(writeDB, readDB, s.cfg.Dataview.MaxAutoIndexes)
 		dvExec.SetAutoIndexer(ai)
@@ -444,6 +456,7 @@ func (s *Server) setupRoutes() {
 		vectors:              s.vectors,
 		dv:                   dvExec,
 		viewReg:              viewReg,
+		similar:              simIdx,
 		comments:             s.comments,
 		shares:               s.shares,
 		assets:               s.cfg.Assets,
@@ -594,6 +607,7 @@ func (s *Server) setupRoutes() {
 	api.GET("/rules", h.Rules)
 	api.PUT("/rules", h.PutRules)
 	api.GET("/suggestions", h.Suggestions)
+	api.GET("/similar", h.Similar)
 	api.GET("/embeddings", h.Embeddings)
 	api.GET("/graph/analytics", h.GraphAnalytics)
 	api.GET("/graph/centrality", h.GraphCentrality)

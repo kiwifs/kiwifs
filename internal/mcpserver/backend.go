@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/claims"
+	"github.com/kiwifs/kiwifs/internal/similar"
 )
 
 func sanitizePathPrefix(s string) string {
@@ -163,6 +164,7 @@ type Backend interface {
 	GraphWalk(ctx context.Context, path string, includeSiblings bool) (*GraphWalkResult, error)
 	Context(ctx context.Context) (schema, playbook, index, rules string, err error)
 	Suggestions(ctx context.Context, path string, limit int) ([]SuggestionResult, error)
+	Similar(ctx context.Context, path, profile string, k int, vector map[string]any) (*similar.Result, error)
 	Embeddings(ctx context.Context, path string) (*EmbeddingsResult, error)
 	GraphAnalytics(ctx context.Context, limit int) (*GraphAnalyticsResult, error)
 	GraphCentrality(ctx context.Context, limit int) (*GraphCentralityResult, error)
