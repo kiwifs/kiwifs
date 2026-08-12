@@ -348,6 +348,10 @@ func parseFrom(s string, plan *QueryPlan) (string, error) {
 		return parseFromRecords(rest, plan)
 	}
 
+	if strings.EqualFold(firstWord(rest), "CLAIMS") {
+		return parseFromClaims(rest, plan)
+	}
+
 	if rest[0] == '#' || (rest[0] == '-' && len(rest) > 1 && rest[1] == '#') {
 		return parseFromTags(rest, plan)
 	}
@@ -401,6 +405,52 @@ func parseFromRecords(s string, plan *QueryPlan) (string, error) {
 	}
 
 	return strings.TrimSpace(rest), nil
+}
+
+// parseFromClaims handles `FROM CLAIMS ["<evidence>"] [IN "<folder>"]`, one
+// row per claim directive.
+//
+// Unlike RECORDS the kind is optional: "every claim on the page regardless of
+// how it was evidenced" is the normal audit question, whereas "every record of
+// every kind" mixes incompatible shapes and is never what someone means.
+func parseFromClaims(s string, plan *QueryPlan) (string, error) {
+	rest := strings.TrimSpace(skipWord(s)) // skip "CLAIMS"
+	plan.Source = SourceClaims
+
+	if rest != "" && !isClaimsClauseKeyword(firstWord(rest)) {
+		evidence, remaining, err := scanQuotedOrWord(rest)
+		if err != nil {
+			return "", fmt.Errorf("FROM CLAIMS: %w", err)
+		}
+		plan.RecordKind = evidence
+		rest = remaining
+	}
+
+	if strings.EqualFold(firstWord(rest), "IN") {
+		rest = strings.TrimSpace(skipWord(rest))
+		folder, remaining, ferr := scanQuotedOrWord(rest)
+		if ferr != nil {
+			return "", fmt.Errorf("FROM CLAIMS ... IN: %w", ferr)
+		}
+		if folder == "" {
+			return "", fmt.Errorf(`FROM CLAIMS ... IN requires a folder, e.g. IN "projects/"`)
+		}
+		plan.From = folder
+		rest = remaining
+	}
+
+	return strings.TrimSpace(rest), nil
+}
+
+// isClaimsClauseKeyword tells an omitted evidence class from the start of the
+// next clause, so `FROM CLAIMS WHERE ...` does not read "WHERE" as an
+// evidence class and silently return nothing.
+func isClaimsClauseKeyword(word string) bool {
+	switch strings.ToUpper(word) {
+	case "IN", "WHERE", "SORT", "ORDER", "GROUP", "LIMIT", "OFFSET", "FLATTEN":
+		return true
+	}
+	return false
 }
 
 // scanQuotedOrWord reads either a quoted string or a bare word, returning it

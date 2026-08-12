@@ -13,20 +13,76 @@ import { visit } from "unist-util-visit";
 import type { Root } from "mdast";
 
 /**
+ * Attribute names a claim carries through to the DOM.
+ *
+ * rehype-sanitize strips anything not allow-listed, so an attribute missing
+ * from a schema does not fail loudly — the claim renders as an unmarked div
+ * with none of the metadata that makes it a claim. There are two copies of
+ * the schema (`kiwiSanitizeSchema` in `lib/kiwiMarkdown.ts` and the one in
+ * `components/KiwiPage.tsx`); both splice this constant in so at least the
+ * claim attributes cannot drift apart.
+ */
+export const CLAIM_DATA_ATTRIBUTES: string[] = [
+  "data-evidence",
+  "data-confidence",
+  "data-source",
+];
+
+/**
+ * Normalise a claim's directive attributes into DOM data-attributes.
+ *
+ * `confidence` is emitted only when it parses as a number. A claim written
+ * `{confidence=high}` renders as having no confidence rather than as the
+ * literal string, which matches how the server indexes it — the two must
+ * agree or the badge disagrees with the audit query.
+ */
+export function claimProperties(attrs: Record<string, string> = {}): Record<string, string> {
+  const props: Record<string, string> = {
+    "data-kiwi-directive": "claim",
+  };
+  if (attrs.evidence) props["data-evidence"] = attrs.evidence;
+  if (attrs.source) props["data-source"] = attrs.source;
+  if (attrs.confidence != null && attrs.confidence !== "") {
+    const parsed = Number(attrs.confidence);
+    if (Number.isFinite(parsed)) props["data-confidence"] = String(parsed);
+  }
+  return props;
+}
+
+/**
  * remarkKiwiDirectives — Transform directive AST nodes into renderable HTML.
  *
  * Handles:
  * - :::tabs / ::tab[Label] — tabbed content panels
  * - :::columns / ::col — side-by-side column layouts
+ * - :::claim{...} / :claim[text]{...} — claim-level provenance
  */
 export function remarkKiwiDirectives() {
   return (tree: Root) => {
     visit(tree, (node: any) => {
+      // Inline directives: :name[label]{attrs}
+      if (node.type === "textDirective" && node.name === "claim") {
+        node.data = node.data || {};
+        node.data.hName = "span";
+        node.data.hProperties = {
+          ...claimProperties(node.attributes || {}),
+          className: "kiwi-claim kiwi-claim-inline",
+        };
+        return;
+      }
+
       // Container directives: :::name
       if (node.type === "containerDirective") {
         const name = node.name as string;
 
-        if (name === "tabs") {
+        if (name === "claim") {
+          node.data = node.data || {};
+          node.data.hName = "div";
+          node.data.hProperties = {
+            ...claimProperties(node.attributes || {}),
+            className: "kiwi-claim kiwi-claim-block",
+          };
+        } else if (name === "tabs") {
           // Convert to a div with data-kiwi-tabs
           node.data = node.data || {};
           node.data.hName = "div";

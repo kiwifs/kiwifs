@@ -22,7 +22,7 @@ import rehypeKatex from "rehype-katex";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 
 import { remarkMark, remarkInlineTags, rehypeCodeMeta } from "./remarkPlugins";
-import { remarkKiwiDirectives } from "./remarkDirectives";
+import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "./remarkDirectives";
 import { remarkWikiLinks, type LinkResolver } from "./wikiLinks";
 
 export { stripObsidianComments } from "./remarkPlugins";
@@ -52,6 +52,9 @@ export const kiwiSanitizeSchema = {
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
       "data-tag", "metastring",
       "data-kiwi-directive", "data-label", "data-ratio", "data-cols",
+      // Claim provenance, shared with the copy of this schema in
+      // components/KiwiPage.tsx so the two cannot disagree.
+      ...CLAIM_DATA_ATTRIBUTES,
       "aria-describedby", "aria-label"],
     a: [...(defaultSchema.attributes?.a || []), "className", "data-kiwi-target", "data-kiwi-missing"],
     iframe: ["src", "title", "className", "style"],

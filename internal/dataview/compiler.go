@@ -31,18 +31,37 @@ type compiler struct {
 	rollupAlias string
 }
 
-// records reports whether this query runs at kiwi-data record grain. Inside
-// a rollup subquery the row is always a page, whatever the outer grain is.
+// records reports whether this query runs at record grain — one row per
+// kiwi-data record or per claim, rather than per page. Inside a rollup
+// subquery the row is always a page, whatever the outer grain is.
 func (c *compiler) records() bool {
-	return c.plan != nil && c.plan.Source == SourceRecords && c.rollupAlias == ""
+	if c.plan == nil || c.rollupAlias != "" {
+		return false
+	}
+	_, ok := recordGrainTables[c.plan.Source]
+	return ok
 }
 
-// fromClause is the table expression every compile path selects from. In
-// records mode page_records is the driving table and file_meta is joined so
-// the parent page's frontmatter stays addressable.
+// recordTable is the driving table for the current record grain. The two
+// record-grain tables have identical columns, which is what lets every
+// expression below name the table through this one accessor.
+func (c *compiler) recordTable() string {
+	if c.plan == nil {
+		return "page_records"
+	}
+	if t, ok := recordGrainTables[c.plan.Source]; ok {
+		return t
+	}
+	return "page_records"
+}
+
+// fromClause is the table expression every compile path selects from. At
+// record grain the record table drives and file_meta is joined so the parent
+// page's frontmatter stays addressable.
 func (c *compiler) fromClause() string {
 	if c.records() {
-		return " FROM page_records LEFT JOIN file_meta ON file_meta.path = page_records.path"
+		t := c.recordTable()
+		return " FROM " + t + " LEFT JOIN file_meta ON file_meta.path = " + t + ".path"
 	}
 	return " FROM file_meta"
 }
@@ -50,7 +69,7 @@ func (c *compiler) fromClause() string {
 // pathColumn is the column holding the page path for the current grain.
 func (c *compiler) pathColumn() string {
 	if c.records() {
-		return "page_records.path"
+		return c.recordTable() + ".path"
 	}
 	return "file_meta.path"
 }
@@ -71,14 +90,14 @@ func (c *compiler) jsonBase() string {
 		return c.rollupAlias + ".frontmatter"
 	}
 	if c.records() {
-		return "page_records.json"
+		return c.recordTable() + ".json"
 	}
 	return "file_meta.frontmatter"
 }
 
 func (c *compiler) compile() (string, []any, error) {
 	if c.records() {
-		if c.plan.RecordKind == "" {
+		if c.plan.Source == SourceRecords && c.plan.RecordKind == "" {
 			return "", nil, fmt.Errorf("FROM RECORDS requires a record kind")
 		}
 		if c.plan.Type == "task" {
@@ -274,9 +293,10 @@ func (c *compiler) writeWhere(sb *strings.Builder) error {
 	var conditions []string
 
 	// The record kind is always bound, never interpolated: a kind is
-	// user-authored text and may contain quotes.
-	if c.records() {
-		conditions = append(conditions, "page_records.kind = ?")
+	// user-authored text and may contain quotes. An empty kind is only
+	// reachable for FROM CLAIMS, where it means every evidence class.
+	if c.records() && c.plan.RecordKind != "" {
+		conditions = append(conditions, c.recordTable()+".kind = ?")
 		c.params = append(c.params, c.plan.RecordKind)
 	}
 
@@ -346,7 +366,8 @@ func (c *compiler) writeOrderBy(sb *strings.Builder) error {
 		fmt.Fprintf(sb, " ORDER BY %s %s", sortSQL, dir)
 	} else if c.records() {
 		// Document order: page, then block, then position within the block.
-		sb.WriteString(" ORDER BY page_records.path ASC, page_records.block_index ASC, page_records.record_index ASC")
+		t := c.recordTable()
+		fmt.Fprintf(sb, " ORDER BY %[1]s.path ASC, %[1]s.block_index ASC, %[1]s.record_index ASC", t)
 	} else {
 		sb.WriteString(" ORDER BY file_meta.path ASC")
 	}
@@ -476,7 +497,7 @@ func (c *compiler) resolveFieldSQL(field string, useIndexer bool) (string, error
 			if err := validateFieldPath(sub); err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("json_extract(page_records.json, '$.%s')", sub), nil
+			return fmt.Sprintf("json_extract(%s.json, '$.%s')", c.recordTable(), sub), nil
 		}
 		if sub, ok := strings.CutPrefix(field, "page."); ok {
 			if err := validateFieldPath(sub); err != nil {
@@ -485,9 +506,9 @@ func (c *compiler) resolveFieldSQL(field string, useIndexer bool) (string, error
 			return fmt.Sprintf("json_extract(file_meta.frontmatter, '$.%s')", sub), nil
 		}
 		return fmt.Sprintf(
-			"CASE WHEN json_type(page_records.json, '$.%[1]s') IS NOT NULL"+
-				" THEN json_extract(page_records.json, '$.%[1]s')"+
-				" ELSE json_extract(file_meta.frontmatter, '$.%[1]s') END", field), nil
+			"CASE WHEN json_type(%[2]s.json, '$.%[1]s') IS NOT NULL"+
+				" THEN json_extract(%[2]s.json, '$.%[1]s')"+
+				" ELSE json_extract(file_meta.frontmatter, '$.%[1]s') END", field, c.recordTable()), nil
 	}
 	if useIndexer && c.indexer != nil {
 		if col, ok := c.indexer.IndexedColumn(field); ok {
@@ -509,7 +530,7 @@ func (c *compiler) resolveImplicit(field string) (string, bool) {
 		return strings.ReplaceAll(sql, "file_meta.", c.rollupAlias+"."), true
 	}
 	if c.records() {
-		if mf, ok := recordImplicitFields[field]; ok {
+		if mf, ok := recordImplicitFieldsFor(c.recordTable())[field]; ok {
 			return mf.SQL, true
 		}
 	}

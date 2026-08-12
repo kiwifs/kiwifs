@@ -2,10 +2,29 @@ package dataview
 
 // Row grains a query can run over. SourceFiles is the default and is what
 // every query used before `FROM RECORDS` existed.
+//
+// SourceRecords and SourceClaims share one compile path: the `provenance`
+// table is column-for-column identical to `page_records`, so the only
+// difference is which table the grain drives and whether the kind filter is
+// mandatory.
 const (
 	SourceFiles   = "files"
 	SourceRecords = "records"
+	SourceClaims  = "claims"
 )
+
+// recordGrainTables maps a record-grain source to its driving table.
+var recordGrainTables = map[string]string{
+	SourceRecords: "page_records",
+	SourceClaims:  "provenance",
+}
+
+// isRecordGrain reports whether a source yields one row per record rather
+// than one row per page.
+func isRecordGrain(source string) bool {
+	_, ok := recordGrainTables[source]
+	return ok
+}
 
 // FieldSpec describes a single column in a TABLE/LIST/JSON query.
 type FieldSpec struct {
@@ -25,9 +44,14 @@ type SortSpec struct {
 type QueryPlan struct {
 	Type string // "table" | "list" | "count" | "distinct" | "json" | "calendar"
 	// Source selects the row grain: "" / "files" is one row per page
-	// (file_meta), "records" is one row per kiwi-data record (page_records).
-	Source     string
-	RecordKind string      // record kind when Source == "records"
+	// (file_meta), "records" is one row per kiwi-data record (page_records),
+	// "claims" is one row per claim directive (provenance).
+	Source string
+	// RecordKind is the kiwi-data record kind when Source == "records", and
+	// the claim's evidence class when Source == "claims". It is required for
+	// records (a query over every record kind at once is meaningless) and
+	// optional for claims, where an empty kind means every evidence class.
+	RecordKind string
 	From       string      // folder prefix filter (e.g. "concepts/")
 	FromTags   []TagFilter // tag-based FROM filter (#tag)
 	Fields     []FieldSpec // columns with optional aliases
