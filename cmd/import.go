@@ -21,6 +21,8 @@ var importCmd = &cobra.Command{
   kiwifs import --from jsonl --file data.jsonl
   kiwifs import --from yaml --file data.yaml
   kiwifs import --from bibtex --file references.bib
+  kiwifs import --from croissant --url https://www.kaggle.com/datasets/OWNER/NAME/croissant/download
+  kiwifs import --from croissant --file croissant.json
   kiwifs import --from excel --file students.xlsx --sheet "Sheet1"
   kiwifs import --from sqlite --db /path/to/data.db --table students
   kiwifs import --from postgres --dsn "postgres://user:pass@host/db" --table students
@@ -42,7 +44,7 @@ var importCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(importCmd)
 
-	importCmd.Flags().String("from", "", "source type: markdown, postgres, mysql, firestore, sqlite, mongodb, csv, json, jsonl, yaml, bibtex, excel, notion, airtable, gsheets, obsidian, confluence, dynamodb, redis, elasticsearch")
+	importCmd.Flags().String("from", "", "source type: markdown, postgres, mysql, firestore, sqlite, mongodb, csv, json, jsonl, yaml, bibtex, croissant, excel, notion, airtable, gsheets, obsidian, confluence, dynamodb, redis, elasticsearch")
 	importCmd.MarkFlagRequired("from")
 
 	importCmd.Flags().StringP("root", "r", "./knowledge", "knowledge root directory")
@@ -72,7 +74,7 @@ func init() {
 	importCmd.Flags().String("password", "", "auth password (redis)")
 	importCmd.Flags().Int("redis-db", 0, "Redis database number")
 	importCmd.Flags().String("pattern", "", "key pattern (redis)")
-	importCmd.Flags().String("url", "", "server URL (elasticsearch, confluence API)")
+	importCmd.Flags().String("url", "", "server URL (elasticsearch, confluence API) or metadata URL (croissant)")
 	importCmd.Flags().String("index", "", "index name (elasticsearch)")
 	importCmd.Flags().Bool("api", false, "use live API mode (confluence)")
 	importCmd.Flags().String("space", "", "space key (confluence API mode)")
@@ -288,6 +290,17 @@ func buildSource(cmd *cobra.Command, from string) (importer.Source, error) {
 		}
 		return importer.NewBibTeX(filePath)
 
+	case "croissant":
+		filePath, _ := cmd.Flags().GetString("file")
+		croissantURL, _ := cmd.Flags().GetString("url")
+		if filePath == "" && croissantURL == "" {
+			return nil, fmt.Errorf("--file or --url is required for croissant")
+		}
+		if filePath != "" {
+			return importer.NewCroissant(filePath)
+		}
+		return importer.NewCroissantFromURL(croissantURL)
+
 	case "markdown":
 		path, _ := cmd.Flags().GetString("path")
 		if path == "" {
@@ -357,7 +370,7 @@ func buildSource(cmd *cobra.Command, from string) (importer.Source, error) {
 		return importer.NewElasticsearch(esURL, index, nil)
 
 	default:
-		return nil, fmt.Errorf("unknown source type: %s (supported: markdown, postgres, mysql, firestore, sqlite, mongodb, csv, json, jsonl, yaml, bibtex, excel, notion, airtable, gsheets, obsidian, confluence, dynamodb, redis, elasticsearch)", from)
+		return nil, fmt.Errorf("unknown source type: %s (supported: markdown, postgres, mysql, firestore, sqlite, mongodb, csv, json, jsonl, yaml, bibtex, croissant, excel, notion, airtable, gsheets, obsidian, confluence, dynamodb, redis, elasticsearch)", from)
 	}
 }
 

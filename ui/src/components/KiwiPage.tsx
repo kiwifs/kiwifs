@@ -34,6 +34,7 @@ import { KiwiProgress } from "./KiwiProgress";
 import { KiwiPlayground } from "./KiwiPlayground";
 import { KiwiTabs } from "./KiwiTabs";
 import { KiwiColumns } from "./KiwiColumns";
+import { KiwiClaim } from "./KiwiClaim";
 import { ExcalidrawMarkdownPreview, isExcalidrawMarkdown } from "./ExcalidrawMarkdownPreview";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { KiwiWidget } from "./KiwiWidget";
@@ -51,8 +52,8 @@ import remarkDefinitionList from "remark-definition-list";
 import { buildResolver, remarkWikiLinks } from "@kw/lib/wikiLinks";
 import { remarkMark, stripObsidianComments, remarkInlineTags, rehypeCodeMeta } from "@kw/lib/remarkPlugins";
 import remarkDirective from "remark-directive";
-import { remarkKiwiDirectives } from "@kw/lib/remarkDirectives";
-
+import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "@kw/lib/remarkDirectives";
+import { withDataAttributeAliasesForSchema } from "@kw/lib/sanitizeAttributes";
 type Props = {
   /** Page path in the KiwiFS tree. Used for API fetching in connected mode. */
   path?: string;
@@ -116,12 +117,17 @@ const sanitizeSchema = {
     ...defaultSchema.protocols,
     href: ["http", "https", "irc", "ircs", "mailto", "xmpp", "kiwi", "kiwi-missing"],
   },
-  attributes: {
+  attributes: withDataAttributeAliasesForSchema({
     ...defaultSchema.attributes,
     "*": [...(defaultSchema.attributes?.["*"] || []), "className", "style", "role", "id",
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
       "data-tag", "metastring",
       "data-kiwi-directive", "data-label", "data-ratio", "data-cols",
+      // This schema is a copy of kiwiSanitizeSchema in lib/kiwiMarkdown.ts.
+      // The claim attributes come from a shared constant so that half of the
+      // duplication cannot drift — an omitted attribute here is not a render
+      // bug, it is silently stripped metadata.
+      ...CLAIM_DATA_ATTRIBUTES,
       "aria-describedby", "aria-label"],
     a: [...(defaultSchema.attributes?.a || []), "className", "data-kiwi-target", "data-kiwi-missing"],
     iframe: ["src", "title", "className", "style"],
@@ -173,7 +179,7 @@ const sanitizeSchema = {
     feComposite: ["in", "in2", "operator", "k1", "k2", "k3", "k4", "result"],
     feFlood: ["floodColor", "floodOpacity", "result"],
     feMorphology: ["in", "operator", "radius", "result"],
-  },
+  }),
 };
 
 function findEntry(node: TreeEntry | null | undefined, target: string): TreeEntry | null {
@@ -952,11 +958,38 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                       return <ShikiCode code={raw} lang={lang} title={title} highlightLines={highlightLines} />;
                     },
                     pre: ({ children }) => <>{children}</>,
+                    span: ({ children, node: _node, ...rest }: any) => {
+                      const props = rest as Record<string, unknown>;
+                      if (props["data-kiwi-directive"] === "claim") {
+                        return (
+                          <KiwiClaim
+                            inline
+                            evidence={props["data-evidence"] as string | undefined}
+                            confidence={props["data-confidence"] as string | undefined}
+                            source={props["data-source"] as string | undefined}
+                          >
+                            {children}
+                          </KiwiClaim>
+                        );
+                      }
+                      return <span {...(rest as any)}>{children}</span>;
+                    },
                     div: ({ children, node: _node, ...rest }: any) => {
                       const props = rest as Record<string, unknown>;
                       const directive = props["data-kiwi-directive"];
                       if (directive === "tabs") {
                         return <KiwiTabs>{children}</KiwiTabs>;
+                      }
+                      if (directive === "claim") {
+                        return (
+                          <KiwiClaim
+                            evidence={props["data-evidence"] as string | undefined}
+                            confidence={props["data-confidence"] as string | undefined}
+                            source={props["data-source"] as string | undefined}
+                          >
+                            {children}
+                          </KiwiClaim>
+                        );
                       }
                       if (directive === "columns") {
                         return (

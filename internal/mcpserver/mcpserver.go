@@ -355,6 +355,29 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 			Handler: handleSearchSemantic(b),
 		},
 		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_search_hybrid",
+				mcp.WithDescription("Search with both keyword (BM25) and semantic (vector) retrieval, fused by Reciprocal Rank Fusion. Prefer this over kiwi_search or kiwi_search_semantic when you don't know whether the answer uses the same words as your query: keyword search finds exact terms, semantic search finds paraphrases, and fusion surfaces pages both agree on. Each result reports its rank in each engine. Falls back to keyword-only when no vector index is configured."),
+				mcp.WithString("query", mcp.Required(), mcp.Description("Search query")),
+				mcp.WithNumber("limit", mcp.Description("Max results (default 15)")),
+				mcp.WithString("path_prefix", mcp.Description("Restrict results to paths under this prefix")),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleSearchHybrid(b),
+		},
+		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_brief",
+				mcp.WithDescription("Assemble everything relevant to a question into one token-budgeted pack, replacing a dozen search-then-read round trips. Runs hybrid retrieval, includes each page whole when it fits and its best-matching sections when it doesn't, and stops at the budget. Content is never summarised: whatever did not fit is listed with its token cost so you can ask for it by name or raise the budget."),
+				mcp.WithString("query", mcp.Required(), mcp.Description("The question to assemble context for")),
+				mcp.WithNumber("budget_tokens", mcp.Description("Token ceiling for the assembled content (default 4000)")),
+				mcp.WithNumber("max_pages", mcp.Description("How many retrieved pages to consider (default 20)")),
+				mcp.WithString("path_prefix", mcp.Description("Restrict retrieval to paths under this prefix")),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleBrief(b),
+		},
+		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_backlinks",
 				mcp.WithDescription("List all pages that link to a given page via [[wiki links]]. Useful for understanding page connections and impact of changes."),
 				mcp.WithString("path", pathOpts...),
@@ -524,8 +547,9 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 		},
 		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_eval",
-				mcp.WithDescription("Evaluate retrieval quality: send queries with expected paths, get Hit Rate, MRR, and Precision@5 for both FTS and semantic search."),
-				mcp.WithArray("queries", mcp.Required(), mcp.Description("Array of {question, expected_paths} evaluation queries"),
+				mcp.WithDescription("Evaluate retrieval quality: send queries with expected paths (or name a golden set under .kiwi/eval/), get Hit Rate, MRR, Precision@K and nDCG@K for both FTS and semantic search."),
+				mcp.WithString("set", mcp.Description("Name of a golden set under .kiwi/eval/ (loads <set>.qrels and <set>.topics). Alternative to queries.")),
+				mcp.WithArray("queries", mcp.Description("Array of {question, expected_paths} evaluation queries. Alternative to set."),
 					mcp.Items(map[string]any{
 						"type": "object",
 						"properties": map[string]any{
@@ -535,6 +559,10 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 						"required": []string{"question", "expected_paths"},
 					}),
 				),
+				mcp.WithArray("exclude_prefix", mcp.Description("Path prefixes to hide from retrieval before ranking — the held-out set for leave-one-out evaluation."),
+					mcp.Items(map[string]any{"type": "string"}),
+				),
+				mcp.WithNumber("top_k", mcp.Description("Rank cutoff for every metric (default 5)")),
 				mcp.WithReadOnlyHintAnnotation(true),
 				mcp.WithDestructiveHintAnnotation(false),
 			),
@@ -1706,6 +1734,113 @@ func handleAppend(b Backend) server.ToolHandlerFunc {
 	}
 }
 
+func handleBrief(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		query, _ := args["query"].(string)
+		if query == "" {
+			return mcp.NewToolResultError("query is required"), nil
+		}
+		pathPrefix, err := optionalReadOnlyPathArg(args, "path_prefix")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		breq := BriefRequest{Query: query, PathPrefix: pathPrefix}
+		if v, ok := args["budget_tokens"].(float64); ok {
+			breq.BudgetTokens = int(v)
+		}
+		if v, ok := args["max_pages"].(float64); ok && v > 0 {
+			breq.MaxPages = int(v)
+		}
+
+		pack, err := b.Brief(ctx, breq)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Brief failed: %v", err)), nil
+		}
+
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "# Context pack: %s\n\n", pack.Query)
+		fmt.Fprintf(&sb, "%d/%d tokens used (counted with %s), %d of %d candidate pages included.\n",
+			pack.UsedTokens, pack.BudgetTokens, pack.Tokenizer, len(pack.Items), pack.Candidates)
+
+		for _, item := range pack.Items {
+			sb.WriteString("\n---\n\n")
+			if item.Heading != "" {
+				fmt.Fprintf(&sb, "## %s — %s (%s, %d tokens)\n\n", item.Title, item.Heading, item.Path, item.Tokens)
+			} else {
+				fmt.Fprintf(&sb, "## %s (%s, %d tokens)\n\n", item.Title, item.Path, item.Tokens)
+			}
+			sb.WriteString(item.Content)
+			sb.WriteString("\n")
+		}
+
+		// The manifest is the feature: an agent that knows exactly what was
+		// withheld can ask for it, where one handed a summary cannot.
+		if len(pack.Dropped) > 0 {
+			fmt.Fprintf(&sb, "\n---\n\n## Not included (%d)\n\n", len(pack.Dropped))
+			for _, d := range pack.Dropped {
+				label := d.Path
+				if d.Heading != "" {
+					label += " § " + d.Heading
+				}
+				fmt.Fprintf(&sb, "- %s — %s (%d tokens)\n", label, d.Reason, d.Tokens)
+			}
+			sb.WriteString("\nRead any of these with kiwi_read, or re-run with a larger budget_tokens.\n")
+		}
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+}
+
+func handleSearchHybrid(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		query, _ := args["query"].(string)
+		if query == "" {
+			return mcp.NewToolResultError("query is required"), nil
+		}
+		limit := intArg(args, "limit", 15)
+		if limit > 50 {
+			limit = 50
+		}
+		pathPrefix, err := optionalReadOnlyPathArg(args, "path_prefix")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		results, err := b.SearchHybrid(ctx, query, limit, pathPrefix)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Hybrid search failed: %v", err)), nil
+		}
+		if len(results) == 0 {
+			return mcp.NewToolResultText("No results found."), nil
+		}
+
+		var sb strings.Builder
+		for i, r := range results {
+			// Naming the contributing engines is the point: a keyword-only hit
+			// matched your literal terms, a semantic-only hit did not.
+			fmt.Fprintf(&sb, "%d. %s (%s)\n", i+1, r.Path, describeHybridRanks(r))
+			if r.Snippet != "" {
+				fmt.Fprintf(&sb, "   %s\n", r.Snippet)
+			}
+		}
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+}
+
+func describeHybridRanks(r HybridSearchResult) string {
+	switch {
+	case r.FTSRank > 0 && r.SemanticRank > 0:
+		return fmt.Sprintf("both: keyword #%d, semantic #%d", r.FTSRank, r.SemanticRank)
+	case r.FTSRank > 0:
+		return fmt.Sprintf("keyword only, #%d", r.FTSRank)
+	case r.SemanticRank > 0:
+		return fmt.Sprintf("semantic only, #%d", r.SemanticRank)
+	default:
+		return "unranked"
+	}
+}
+
 func handleSearchSemantic(b Backend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := req.GetArguments()
@@ -2697,47 +2832,84 @@ func handleTimeline(b Backend) server.ToolHandlerFunc {
 	}
 }
 
+// stringArrayArg reads an array-of-strings tool argument, also accepting a
+// bare string. Models routinely send the scalar form for a single-element
+// list, and rejecting it costs a round trip to learn nothing.
+func stringArrayArg(args map[string]any, key string) []string {
+	switch v := args[key].(type) {
+	case string:
+		if v == "" {
+			return nil
+		}
+		return []string{v}
+	case []any:
+		var out []string
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return v
+	}
+	return nil
+}
+
 func handleEval(b Backend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := req.GetArguments()
-		var queries []EvalQuery
-		if raw, ok := args["queries"]; ok {
-			switch v := raw.(type) {
-			case []any:
-				for _, item := range v {
-					if m, ok := item.(map[string]any); ok {
-						q := EvalQuery{}
-						q.Question, _ = m["question"].(string)
-						if paths, ok := m["expected_paths"].([]any); ok {
-							for _, p := range paths {
-								if s, ok := p.(string); ok {
-									q.ExpectedPaths = append(q.ExpectedPaths, s)
-								}
-							}
-						}
-						if q.Question != "" {
-							queries = append(queries, q)
+		evalReq := EvalRequest{}
+		evalReq.Set, _ = args["set"].(string)
+		if raw, ok := args["queries"].([]any); ok {
+			for _, item := range raw {
+				m, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				q := EvalQuery{}
+				q.Question, _ = m["question"].(string)
+				if paths, ok := m["expected_paths"].([]any); ok {
+					for _, p := range paths {
+						if s, ok := p.(string); ok {
+							q.ExpectedPaths = append(q.ExpectedPaths, s)
 						}
 					}
 				}
+				if q.Question != "" {
+					evalReq.Queries = append(evalReq.Queries, q)
+				}
 			}
 		}
-		if len(queries) == 0 {
-			return mcp.NewToolResultError("queries is required — array of {question, expected_paths} objects"), nil
+		evalReq.ExcludePrefix = stringArrayArg(args, "exclude_prefix")
+		if k, ok := args["top_k"].(float64); ok && k > 0 {
+			evalReq.TopK = int(k)
+		}
+		if evalReq.Set == "" && len(evalReq.Queries) == 0 {
+			return mcp.NewToolResultError("set or queries is required — a golden set name, or an array of {question, expected_paths} objects"), nil
 		}
 
-		result, err := b.Eval(ctx, queries)
+		result, err := b.Eval(ctx, evalReq)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Eval failed: %v", err)), nil
 		}
 
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "Retrieval Evaluation (%d queries)\n\n", len(queries))
-		fmt.Fprintf(&sb, "FTS:      hit_rate=%.2f  mrr=%.2f  precision@5=%.2f\n", result.FTS.HitRate, result.FTS.MRR, result.FTS.PrecisionAtK)
-		fmt.Fprintf(&sb, "Semantic: hit_rate=%.2f  mrr=%.2f  precision@5=%.2f\n\n", result.Semantic.HitRate, result.Semantic.MRR, result.Semantic.PrecisionAtK)
+		fmt.Fprintf(&sb, "Retrieval Evaluation (%d queries scored, top_k=%d)\n", result.FTS.Queries, result.TopK)
+		if len(result.ExcludePrefix) > 0 {
+			fmt.Fprintf(&sb, "Excluded before ranking: %s\n", strings.Join(result.ExcludePrefix, ", "))
+		}
+		sb.WriteString("\n")
+		fmt.Fprintf(&sb, "FTS:      hit_rate=%.2f  mrr=%.2f  precision@%d=%.2f  ndcg=%.2f\n",
+			result.FTS.HitRate, result.FTS.MRR, result.TopK, result.FTS.PrecisionAtK, result.FTS.NDCG)
+		fmt.Fprintf(&sb, "Semantic: hit_rate=%.2f  mrr=%.2f  precision@%d=%.2f  ndcg=%.2f\n\n",
+			result.Semantic.HitRate, result.Semantic.MRR, result.TopK, result.Semantic.PrecisionAtK, result.Semantic.NDCG)
 		for _, pq := range result.PerQuery {
 			fmt.Fprintf(&sb, "Q: %s\n", pq.Question)
 			fmt.Fprintf(&sb, "  FTS rank: %d, Semantic rank: %d\n", pq.FTSRank, pq.SemanticRank)
+		}
+		for _, sk := range result.Skipped {
+			fmt.Fprintf(&sb, "SKIPPED: %s — %s\n", sk.Question, sk.Reason)
 		}
 		return mcp.NewToolResultText(sb.String()), nil
 	}

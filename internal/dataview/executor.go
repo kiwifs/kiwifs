@@ -53,7 +53,7 @@ func (e *Executor) Query(ctx context.Context, dql string, limitOverride, offsetO
 	result, err := e.Execute(ctx, plan)
 	// The auto-indexer generates columns on file_meta, so it has nothing to
 	// offer a record-grain query.
-	if err == nil && e.indexer != nil && plan.Source != SourceRecords {
+	if err == nil && e.indexer != nil && !isRecordGrain(plan.Source) {
 		for _, field := range CollectFields(plan) {
 			e.indexer.EnsureIndex(ctx, field)
 		}

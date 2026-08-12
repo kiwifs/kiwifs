@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kiwifs/kiwifs/internal/brief"
 	"github.com/kiwifs/kiwifs/internal/claims"
 	"github.com/kiwifs/kiwifs/internal/similar"
 )
@@ -299,6 +300,41 @@ func (r *RemoteBackend) searchFull(ctx context.Context, query string, limit, off
 
 func (r *RemoteBackend) SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	return r.SearchSemanticScoped(ctx, query, limit, "")
+}
+
+func (r *RemoteBackend) Brief(ctx context.Context, req BriefRequest) (*brief.Pack, error) {
+	body := map[string]any{"query": req.Query}
+	if req.BudgetTokens != 0 {
+		body["budget_tokens"] = req.BudgetTokens
+	}
+	if req.MaxPages > 0 {
+		body["max_pages"] = req.MaxPages
+	}
+	if req.PathPrefix != "" {
+		body["path_prefix"] = req.PathPrefix
+	}
+	if req.Encoding != "" {
+		body["encoding"] = req.Encoding
+	}
+	var pack brief.Pack
+	if err := r.postJSON(ctx, r.apiPrefix+"/brief", body, &pack); err != nil {
+		return nil, err
+	}
+	return &pack, nil
+}
+
+func (r *RemoteBackend) SearchHybrid(ctx context.Context, query string, limit int, pathPrefix string) ([]HybridSearchResult, error) {
+	q := fmt.Sprintf("%s/search?mode=hybrid&q=%s&limit=%d", r.apiPrefix, url.QueryEscape(query), limit)
+	if pathPrefix != "" {
+		q += "&pathPrefix=" + url.QueryEscape(pathPrefix)
+	}
+	var result struct {
+		Results []HybridSearchResult `json:"results"`
+	}
+	if err := r.getJSON(ctx, q, &result); err != nil {
+		return nil, err
+	}
+	return result.Results, nil
 }
 
 func (r *RemoteBackend) SearchSemanticScoped(ctx context.Context, query string, limit int, scope string) ([]SearchResult, error) {
@@ -702,9 +738,22 @@ func (r *RemoteBackend) Timeline(ctx context.Context, limit, offset int, actor, 
 	return &result, nil
 }
 
-func (r *RemoteBackend) Eval(ctx context.Context, queries []EvalQuery) (*EvalResult, error) {
+func (r *RemoteBackend) Eval(ctx context.Context, req EvalRequest) (*EvalResult, error) {
+	body := map[string]any{}
+	if req.Set != "" {
+		body["set"] = req.Set
+	}
+	if len(req.Queries) > 0 {
+		body["queries"] = req.Queries
+	}
+	if len(req.ExcludePrefix) > 0 {
+		body["exclude_prefix"] = req.ExcludePrefix
+	}
+	if req.TopK > 0 {
+		body["top_k"] = req.TopK
+	}
 	var result EvalResult
-	if err := r.postJSON(ctx, r.apiPrefix+"/eval", map[string]any{"queries": queries}, &result); err != nil {
+	if err := r.postJSON(ctx, r.apiPrefix+"/eval", body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

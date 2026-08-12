@@ -13,6 +13,7 @@ require (
 	github.com/bluuewhale/loom v0.0.0-20260402142357-ae7e94ccfead
 	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fvbommel/sortorder v1.1.0
 	github.com/go-git/go-billy/v5 v5.6.0
 	github.com/go-shiori/go-readability v0.0.0-20251205110129-5db1dc9836f0
 	github.com/go-sql-driver/mysql v1.9.3
@@ -27,6 +28,9 @@ require (
 	github.com/mark3labs/mcp-go v0.49.0
 	github.com/nickng/bibtex v1.1.0
 	github.com/parquet-go/parquet-go v0.29.0
+	github.com/piprate/json-gold v0.8.0
+	github.com/pkoukk/tiktoken-go v0.1.8
+	github.com/pkoukk/tiktoken-go-loader v0.0.2
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
@@ -87,6 +91,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.20 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.0 // indirect
 	github.com/aws/smithy-go v1.25.0 // indirect
+	github.com/cayleygraph/quad v1.3.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/containerd v1.7.18 // indirect
@@ -97,6 +102,7 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
+	github.com/dlclark/regexp2 v1.11.0 // indirect
 	github.com/docker/docker v27.1.1+incompatible // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -105,7 +111,6 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flopp/go-findfont v0.1.0 // indirect
 	github.com/fogleman/gg v1.3.0 // indirect
-	github.com/fvbommel/sortorder v1.1.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -154,6 +159,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
+	github.com/pquerna/cachecontrol v0.2.0 // indirect
 	github.com/rasky/go-xdr v0.0.0-20170124162913-1a41d1a06c93 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/richardlehane/mscfb v1.0.6 // indirect

@@ -27,19 +27,33 @@ var implicitFields = map[string]metaField{
 	},
 }
 
-// recordImplicitFields overrides the page-grain implicit fields for
-// `FROM RECORDS` queries. Path-derived fields read page_records.path — the
+// recordImplicitFieldsFor overrides the page-grain implicit fields for
+// record-grain queries. Path-derived fields read the record table's path — the
 // driving table there — so they still resolve when a record's page has no
 // file_meta row; _updated still comes from the joined page. The three
 // record-only fields have no page-grain equivalent.
-var recordImplicitFields = func() map[string]metaField {
-	out := make(map[string]metaField, len(implicitFields)+3)
-	for name, mf := range implicitFields {
-		out[name] = metaField{SQL: strings.ReplaceAll(mf.SQL, "file_meta.path", "page_records.path")}
+//
+// It is computed per table rather than per query: there are exactly two
+// record-grain tables and both maps are built once at init.
+func recordImplicitFieldsFor(table string) map[string]metaField {
+	if m, ok := recordImplicitFieldsByTable[table]; ok {
+		return m
 	}
-	out["_kind"] = metaField{SQL: "page_records.kind"}
-	out["_block"] = metaField{SQL: "page_records.block_index"}
-	out["_record"] = metaField{SQL: "page_records.record_index"}
+	return recordImplicitFieldsByTable["page_records"]
+}
+
+var recordImplicitFieldsByTable = func() map[string]map[string]metaField {
+	out := make(map[string]map[string]metaField, len(recordGrainTables))
+	for _, table := range recordGrainTables {
+		fields := make(map[string]metaField, len(implicitFields)+3)
+		for name, mf := range implicitFields {
+			fields[name] = metaField{SQL: strings.ReplaceAll(mf.SQL, "file_meta.path", table+".path")}
+		}
+		fields["_kind"] = metaField{SQL: table + ".kind"}
+		fields["_block"] = metaField{SQL: table + ".block_index"}
+		fields["_record"] = metaField{SQL: table + ".record_index"}
+		out[table] = fields
+	}
 	return out
 }()
 

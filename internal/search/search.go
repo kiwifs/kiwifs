@@ -92,12 +92,26 @@ type SearchOptions struct {
 	// RecencyWeight blends recency into the relevance score when > 0.
 	// Valid range is 0.0 through 1.0; callers should validate user input.
 	RecencyWeight float64
+	// ExcludePrefixes drops every path under any of these prefixes. Backends
+	// must apply it before ranking and before the limit, so the returned page
+	// is filled with the next-best eligible hits rather than left short.
+	// Held-out retrieval evaluation depends on that ordering.
+	ExcludePrefixes []string
 }
 
 // OptionsSearcher supports optional search tuning beyond the base Searcher contract.
 type OptionsSearcher interface {
 	Searcher
 	SearchWithOptions(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions) ([]Result, error)
+}
+
+// BoostedOptionsSearcher applies trust boosting and SearchOptions together.
+// Hybrid retrieval and held-out evaluation need both at once: boosting alone
+// cannot hide a held-out subtree, and exclusion alone would rank differently
+// from the endpoint people actually call.
+type BoostedOptionsSearcher interface {
+	Searcher
+	SearchBoostedWithOptions(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions) ([]Result, error)
 }
 
 // Searcher searches across all knowledge files and (for index-backed engines)

@@ -625,6 +625,7 @@ func (s *Server) setupRoutes() {
 	api.POST("/ingest", h.Ingest)
 	api.GET("/velocity", h.Velocity)
 	api.POST("/eval", h.Eval)
+	api.POST("/brief", h.Brief)
 	api.POST("/webhooks", h.CreateWebhook)
 	api.GET("/webhooks", h.ListWebhooks)
 	api.DELETE("/webhooks/:id", h.DeleteWebhook)
@@ -701,6 +702,11 @@ func (s *Server) setupRoutes() {
 	s.echo.GET("/p/*", h.PublishedPage)
 
 	s.echo.GET("/raw/*", h.ServeRawFile)
+
+	// llms.txt (llmstxt.org) sits at the root, not under /api/kiwi: agents that
+	// have never heard of MCP look for it by convention at a fixed path.
+	s.echo.GET("/llms.txt", h.LLMsTxt)
+	s.echo.GET("/llms-full.txt", h.LLMsFullTxt)
 
 	if s.mcpHandler != nil {
 		s.echo.Any("/mcp", echo.WrapHandler(s.mcpHandler))

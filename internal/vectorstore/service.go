@@ -304,6 +304,73 @@ func (s *Service) Search(ctx context.Context, query string, topK int) ([]Result,
 	return s.store.Search(ctx, vec, topK)
 }
 
+// maxFilteredFetch caps how far SearchFiltered widens its fetch before giving
+// up on filling topK. A query whose top 4096 chunks are all excluded is not
+// going to be rescued by asking for more.
+const maxFilteredFetch = 4096
+
+// SearchFiltered runs a nearest-neighbour search, drops results the caller
+// rejects, collapses the surviving chunks to one row per path (best chunk
+// wins), and returns the top topK paths.
+//
+// The filter is applied by widening the underlying fetch until topK survivors
+// exist or the index is exhausted — not by trimming a topK list after the
+// fact, which would return short lists. Store is a narrow interface with a
+// dozen implementations, so filtering lives here rather than in each backend.
+func (s *Service) SearchFiltered(ctx context.Context, query string, topK int, keep func(path string) bool) ([]Result, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, nil
+	}
+	if topK <= 0 {
+		topK = DefaultTopK
+	}
+	vec, err := embedQuery(ctx, s.embedder, query)
+	if err != nil {
+		return nil, fmt.Errorf("embed query: %w", err)
+	}
+
+	fetch := topK
+	for {
+		raw, err := s.store.Search(ctx, vec, fetch)
+		if err != nil {
+			return nil, err
+		}
+		out := DedupeByPath(raw, keep, topK)
+		if len(out) >= topK || len(raw) < fetch || fetch >= maxFilteredFetch {
+			return out, nil
+		}
+		fetch *= 4
+		if fetch > maxFilteredFetch {
+			fetch = maxFilteredFetch
+		}
+	}
+}
+
+// DedupeByPath collapses per-chunk results to one row per path, keeping the
+// highest-scoring chunk, and truncates to limit. Input must already be sorted
+// best-first, which every Store.Search returns. keep may be nil.
+//
+// Vector results are per-chunk while FTS results are per-document; anything
+// that compares or fuses the two has to reconcile that first.
+func DedupeByPath(results []Result, keep func(path string) bool, limit int) []Result {
+	out := make([]Result, 0, len(results))
+	seen := make(map[string]bool, len(results))
+	for _, r := range results {
+		if seen[r.Path] {
+			continue
+		}
+		if keep != nil && !keep(r.Path) {
+			continue
+		}
+		seen[r.Path] = true
+		out = append(out, r)
+		if limit > 0 && len(out) == limit {
+			break
+		}
+	}
+	return out
+}
+
 // documentEmbedder lets providers such as E5-style ONNX models distinguish
 // indexed passages from search queries while keeping the public Embedder
 // interface backward compatible for existing providers.

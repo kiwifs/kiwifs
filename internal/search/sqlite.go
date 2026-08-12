@@ -263,6 +263,22 @@ CREATE TABLE IF NOT EXISTS page_records (
 );
 CREATE INDEX IF NOT EXISTS idx_page_records_kind ON page_records(kind);
 CREATE INDEX IF NOT EXISTS idx_page_records_path ON page_records(path);
+-- provenance holds one row per claim directive. It is deliberately
+-- column-for-column identical to page_records so the DQL compiler can drive
+-- either table from one code path; kind carries the claim's evidence class,
+-- block_index is unused (always 0) and record_index is the claim's position
+-- on the page.
+-- Not to be confused with internal/claims, which is task leasing.
+CREATE TABLE IF NOT EXISTS provenance (
+	path TEXT NOT NULL,
+	block_index INTEGER NOT NULL,
+	kind TEXT NOT NULL,
+	record_index INTEGER NOT NULL,
+	json TEXT NOT NULL DEFAULT '{}',
+	PRIMARY KEY (path, block_index, record_index)
+);
+CREATE INDEX IF NOT EXISTS idx_provenance_kind ON provenance(kind);
+CREATE INDEX IF NOT EXISTS idx_provenance_path ON provenance(path);
 CREATE TABLE IF NOT EXISTS failed_searches (
 	query TEXT NOT NULL,
 	search_type TEXT NOT NULL DEFAULT 'search',
@@ -441,6 +457,14 @@ WHERE docs MATCH ?`
 	if pathPrefix != "" {
 		sqlQ += ` AND dp.path LIKE ?`
 		args = append(args, pathPrefix+"%")
+	}
+	for _, prefix := range opts.ExcludePrefixes {
+		if prefix == "" {
+			continue
+		}
+		// ESCAPE so a literal % or _ in a held-out path stays literal.
+		sqlQ += ` AND dp.path NOT LIKE ? ESCAPE '\'`
+		args = append(args, escapeLikePrefix(prefix)+"%")
 	}
 	if opts.Scope != "" {
 		sqlQ += ` AND EXISTS (
@@ -949,6 +973,9 @@ func (s *SQLite) RemoveAll(ctx context.Context, path string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM page_records WHERE path = ?`, path); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM provenance WHERE path = ?`, path); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -1196,7 +1223,56 @@ func (s *SQLite) IndexMeta(ctx context.Context, path string, content []byte) err
 		return err
 	}
 
-	return s.indexDataBlocks(ctx, path, content)
+	if err := s.indexDataBlocks(ctx, path, content); err != nil {
+		return err
+	}
+	return s.indexClaims(ctx, path, content)
+}
+
+// indexClaims refreshes the provenance rows for a page from its `claim`
+// directives, with the same replace-the-whole-page semantics as
+// indexDataBlocks so a rewrite that removes a claim leaves no stale row.
+//
+// A malformed attribute (a non-numeric confidence) is logged and the claim is
+// still indexed with a null confidence — see markdown.ExtractClaims. Only
+// database errors propagate.
+func (s *SQLite) indexClaims(ctx context.Context, path string, content []byte) error {
+	claims, parseErr := markdown.ExtractClaims(content)
+	if parseErr != nil {
+		log.Printf("kiwifs search: %s: %v", path, parseErr)
+	}
+
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM provenance WHERE path = ?`, path); err != nil {
+		return fmt.Errorf("clear provenance %s: %w", path, err)
+	}
+	if len(claims) == 0 {
+		return tx.Commit()
+	}
+
+	stmt, err := tx.PrepareContext(ctx,
+		`INSERT OR REPLACE INTO provenance(path, block_index, kind, record_index, json) VALUES (?, 0, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, c := range claims {
+		payload, jerr := json.Marshal(toJSONSafe(c.Record()))
+		if jerr != nil {
+			log.Printf("kiwifs search: %s: claim %d: %v", path, c.Index, jerr)
+			continue
+		}
+		if _, err := stmt.ExecContext(ctx, path, c.Evidence, c.Index, string(payload)); err != nil {
+			return fmt.Errorf("insert provenance %s[%d]: %w", path, c.Index, err)
+		}
+	}
+	return tx.Commit()
 }
 
 // indexDataBlocks refreshes the page_records rows for a page from its
@@ -1260,6 +1336,9 @@ func (s *SQLite) RemoveMeta(ctx context.Context, path string) error {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM page_records WHERE path = ?`, path); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM provenance WHERE path = ?`, path); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -1760,7 +1839,15 @@ func (s *SQLite) FilterByScope(ctx context.Context, paths []string, scope string
 // multipliers so verified/source-of-truth pages dominate the ranking
 // while deprecated pages drop near the bottom.
 func (s *SQLite) SearchBoosted(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error) {
-	return s.searchTrust(ctx, query, limit, offset, pathPrefix, softTrustBoost)
+	return s.searchTrust(ctx, query, limit, offset, pathPrefix, SearchOptions{}, softTrustBoost)
+}
+
+// SearchBoostedWithOptions is SearchBoosted with the SearchWithOptions tuning
+// applied to the candidate query. Hybrid retrieval and held-out evaluation
+// both need trust boosting *and* prefix exclusion at once; running one without
+// the other would measure a ranker nobody uses.
+func (s *SQLite) SearchBoostedWithOptions(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions) ([]Result, error) {
+	return s.searchTrust(ctx, query, limit, offset, pathPrefix, opts, softTrustBoost)
 }
 
 // SearchVerified runs a normal FTS5 search and then aggressively re-ranks
@@ -1769,7 +1856,7 @@ func (s *SQLite) SearchBoosted(ctx context.Context, query string, limit, offset 
 // are pushed to 0.1x — effectively burying them. Note: this re-ranks
 // the full result set rather than filtering; all BM25 hits are retained.
 func (s *SQLite) SearchVerified(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error) {
-	return s.searchTrust(ctx, query, limit, offset, pathPrefix, hardTrustBoost)
+	return s.searchTrust(ctx, query, limit, offset, pathPrefix, SearchOptions{}, hardTrustBoost)
 }
 
 // searchTrust is the shared re-ranking path for SearchVerified (hard
@@ -1779,13 +1866,13 @@ func (s *SQLite) SearchVerified(ctx context.Context, query string, limit, offset
 // otherwise uses the same BM25 candidates, frontmatter lookup, and
 // paging logic to keep trust-ranked results comparable to the plain
 // /search list.
-func (s *SQLite) searchTrust(ctx context.Context, query string, limit, offset int, pathPrefix string, boostFn func(map[string]any) float64) ([]Result, error) {
+func (s *SQLite) searchTrust(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions, boostFn func(map[string]any) float64) ([]Result, error) {
 	// Over-fetch so we have enough candidates after re-ranking and slicing.
 	fetchLimit := limit * 3
 	if fetchLimit < 60 {
 		fetchLimit = 60
 	}
-	results, err := s.Search(ctx, query, fetchLimit, 0, pathPrefix)
+	results, err := s.SearchWithOptions(ctx, query, fetchLimit, 0, pathPrefix, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -2081,13 +2168,16 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 	if _, err := s.writeDB.ExecContext(ctx, `DELETE FROM page_records`); err != nil {
 		return 0, fmt.Errorf("truncate page_records: %w", err)
 	}
+	if _, err := s.writeDB.ExecContext(ctx, `DELETE FROM provenance`); err != nil {
+		return 0, fmt.Errorf("truncate provenance: %w", err)
+	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	count := 0
 
 	var (
-		tx                                             *sql.Tx
-		docStmt, pathStmt, linkStmt, metaStmt, recStmt *sql.Stmt
+		tx                                                        *sql.Tx
+		docStmt, pathStmt, linkStmt, metaStmt, recStmt, claimStmt *sql.Stmt
 	)
 	openBatch := func() error {
 		var perr error
@@ -2108,6 +2198,9 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 			return perr
 		}
 		if recStmt, perr = tx.PrepareContext(ctx, `INSERT OR REPLACE INTO page_records(path, block_index, kind, record_index, json) VALUES (?, ?, ?, ?, ?)`); perr != nil {
+			return perr
+		}
+		if claimStmt, perr = tx.PrepareContext(ctx, `INSERT OR REPLACE INTO provenance(path, block_index, kind, record_index, json) VALUES (?, 0, ?, ?, ?)`); perr != nil {
 			return perr
 		}
 		return nil
@@ -2132,6 +2225,10 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 		if recStmt != nil {
 			recStmt.Close()
 			recStmt = nil
+		}
+		if claimStmt != nil {
+			claimStmt.Close()
+			claimStmt = nil
 		}
 	}
 	if err := openBatch(); err != nil {
@@ -2226,6 +2323,19 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 					if _, err := recStmt.ExecContext(ctx, e.Path, b.Index, b.Kind, i, string(payload)); err != nil {
 						return fmt.Errorf("insert page_record %s: %w", e.Path, err)
 					}
+				}
+			}
+			claims, cerr := markdown.ExtractClaims(content)
+			if cerr != nil {
+				log.Printf("kiwifs search: %s: %v", e.Path, cerr)
+			}
+			for _, c := range claims {
+				payload, jerr := json.Marshal(toJSONSafe(c.Record()))
+				if jerr != nil {
+					continue
+				}
+				if _, err := claimStmt.ExecContext(ctx, e.Path, c.Evidence, c.Index, string(payload)); err != nil {
+					return fmt.Errorf("insert provenance %s: %w", e.Path, err)
 				}
 			}
 		}

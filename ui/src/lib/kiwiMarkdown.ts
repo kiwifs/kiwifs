@@ -22,7 +22,8 @@ import rehypeKatex from "rehype-katex";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 
 import { remarkMark, remarkInlineTags, rehypeCodeMeta } from "./remarkPlugins";
-import { remarkKiwiDirectives } from "./remarkDirectives";
+import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "./remarkDirectives";
+import { withDataAttributeAliasesForSchema } from "./sanitizeAttributes";
 import { remarkWikiLinks, type LinkResolver } from "./wikiLinks";
 
 export { stripObsidianComments } from "./remarkPlugins";
@@ -46,12 +47,15 @@ export const kiwiSanitizeSchema = {
     ...defaultSchema.protocols,
     href: ["http", "https", "irc", "ircs", "mailto", "xmpp", "kiwi", "kiwi-missing"],
   },
-  attributes: {
+  attributes: withDataAttributeAliasesForSchema({
     ...defaultSchema.attributes,
     "*": [...(defaultSchema.attributes?.["*"] || []), "className", "style", "role", "id",
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
       "data-tag", "metastring",
       "data-kiwi-directive", "data-label", "data-ratio", "data-cols",
+      // Claim provenance, shared with the copy of this schema in
+      // components/KiwiPage.tsx so the two cannot disagree.
+      ...CLAIM_DATA_ATTRIBUTES,
       "aria-describedby", "aria-label"],
     a: [...(defaultSchema.attributes?.a || []), "className", "data-kiwi-target", "data-kiwi-missing"],
     iframe: ["src", "title", "className", "style"],
@@ -102,7 +106,7 @@ export const kiwiSanitizeSchema = {
     feComposite: ["in", "in2", "operator", "k1", "k2", "k3", "k4", "result"],
     feFlood: ["floodColor", "floodOpacity", "result"],
     feMorphology: ["in", "operator", "radius", "result"],
-  },
+  }),
 };
 
 /**
