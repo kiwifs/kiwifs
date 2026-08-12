@@ -69,6 +69,57 @@ var funcRegistry = map[string]FuncCompiler{
 	"dateformat": compileDateFormat,
 	"round":      compileRound,
 	"days_ago":   compileDaysAgo,
+	"rollup":     compileRollup,
+}
+
+// rollupTargetAlias is the file_meta alias for the linked-to page inside a
+// rollup subquery. Underscored so it cannot collide with a user field.
+const rollupTargetAlias = "_rt"
+
+// rollupLinkAlias is the links alias inside a rollup subquery.
+const rollupLinkAlias = "_rl"
+
+// linkTargetMatch is the join predicate between a links row and the
+// file_meta row it points at. A wiki link may be written as a full path, a
+// path without .md, a bare basename, or a basename without .md, so all four
+// forms are matched — the same set updateBacklinkCounts uses in
+// internal/search.
+func linkTargetMatch(linkAlias, pageAlias string) string {
+	p := pageAlias + ".path"
+	basename := fmt.Sprintf("REPLACE(%[1]s, RTRIM(%[1]s, REPLACE(%[1]s, '/', '')), '')", p)
+	return fmt.Sprintf(
+		"(%[1]s.target_lc = LOWER(%[2]s)"+
+			" OR %[1]s.target_lc = LOWER(REPLACE(%[2]s, '.md', ''))"+
+			" OR %[1]s.target_lc = LOWER(%[3]s)"+
+			" OR %[1]s.target_lc = LOWER(REPLACE(%[3]s, '.md', '')))",
+		linkAlias, p, basename)
+}
+
+// compileRollup is wired up in compiler.compileFuncCall, which pre-compiles
+// rollup's arguments differently from every other function: argument 1 is a
+// link field name rather than a value, and argument 2 is an expression
+// evaluated against the *linked-to* page. By the time this runs, args[0].SQL
+// is a bound relation filter and args[1].SQL already refers to the target
+// page's alias.
+func compileRollup(args []compiledArg) (string, []any, error) {
+	if len(args) != 2 {
+		return "", nil, fmt.Errorf("rollup() requires 2 arguments (link field, expression on the linked page)")
+	}
+	// json_group_array over an empty set yields '[]', so a page with no
+	// outbound links of this kind gets an empty array rather than NULL.
+	sql := fmt.Sprintf(
+		"(SELECT json_group_array(%s) FROM links AS %s JOIN file_meta AS %s ON %s"+
+			" WHERE %s.source = file_meta.path AND %s)",
+		args[1].SQL,
+		rollupLinkAlias, rollupTargetAlias,
+		linkTargetMatch(rollupLinkAlias, rollupTargetAlias),
+		rollupLinkAlias,
+		args[0].SQL,
+	)
+	var params []any
+	params = append(params, args[1].Params...)
+	params = append(params, args[0].Params...)
+	return sql, params, nil
 }
 
 func init() {

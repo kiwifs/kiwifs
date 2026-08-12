@@ -55,8 +55,8 @@ func (s *fakeStore) RemoveByPath(ctx context.Context, path string) error {
 	s.removes = append(s.removes, path)
 	return nil
 }
-func (s *fakeStore) Search(context.Context, []float32, int) ([]Result, error)    { return nil, nil }
-func (s *fakeStore) GetVectors(context.Context, string) ([]Chunk, error)        { return nil, nil }
+func (s *fakeStore) Search(context.Context, []float32, int) ([]Result, error) { return nil, nil }
+func (s *fakeStore) GetVectors(context.Context, string) ([]Chunk, error)      { return nil, nil }
 func (s *fakeStore) Reset(context.Context) error                              { return nil }
 func (s *fakeStore) Count(context.Context) (int, error)                       { return 0, nil }
 func (s *fakeStore) Close() error                                             { return nil }
@@ -73,7 +73,10 @@ func (s *fakeStore) upsertCount() int {
 func TestWorkerPoolParallelism(t *testing.T) {
 	emb := &fakeEmbedder{sleepPer: 50 * time.Millisecond}
 	store := &fakeStore{}
-	svc := NewService("/", nil, emb, store, Options{WorkerCount: 5})
+	svc, err := NewService("/", nil, emb, store, Options{WorkerCount: 5})
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
 	defer svc.Close()
 
 	start := time.Now()
@@ -110,7 +113,10 @@ func TestSkipPathShortCircuitsPendingUpsert(t *testing.T) {
 	store := &fakeStore{}
 	// One worker + busy upfront = the target job stays queued long enough
 	// for SkipPath to land before run() fires.
-	svc := NewService("/", nil, emb, store, Options{WorkerCount: 1})
+	svc, err := NewService("/", nil, emb, store, Options{WorkerCount: 1})
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
 	defer svc.Close()
 
 	// Occupy the worker so the next Enqueue sits in the buffered channel.

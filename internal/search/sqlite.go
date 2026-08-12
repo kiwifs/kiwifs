@@ -253,6 +253,16 @@ CREATE INDEX IF NOT EXISTS idx_meta_priority ON file_meta(json_extract(frontmatt
 CREATE INDEX IF NOT EXISTS idx_meta_assignee ON file_meta(json_extract(frontmatter, '$.assignee'));
 CREATE INDEX IF NOT EXISTS idx_meta_claimed_by ON file_meta(json_extract(frontmatter, '$.claimed-by'));
 CREATE INDEX IF NOT EXISTS idx_meta_memory_status ON file_meta(json_extract(frontmatter, '$.memory_status'));
+CREATE TABLE IF NOT EXISTS page_records (
+	path TEXT NOT NULL,
+	block_index INTEGER NOT NULL,
+	kind TEXT NOT NULL,
+	record_index INTEGER NOT NULL,
+	json TEXT NOT NULL DEFAULT '{}',
+	PRIMARY KEY (path, block_index, record_index)
+);
+CREATE INDEX IF NOT EXISTS idx_page_records_kind ON page_records(kind);
+CREATE INDEX IF NOT EXISTS idx_page_records_path ON page_records(path);
 CREATE TABLE IF NOT EXISTS failed_searches (
 	query TEXT NOT NULL,
 	search_type TEXT NOT NULL DEFAULT 'search',
@@ -936,6 +946,9 @@ func (s *SQLite) RemoveAll(ctx context.Context, path string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM file_meta WHERE path = ?`, path); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM page_records WHERE path = ?`, path); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -1176,18 +1189,80 @@ func (s *SQLite) IndexMeta(ctx context.Context, path string, content []byte) err
 		return err
 	}
 
-	_, err = s.writeDB.ExecContext(ctx,
+	if _, err := s.writeDB.ExecContext(ctx,
 		`INSERT OR REPLACE INTO file_meta(path, frontmatter, tasks, updated_at) VALUES (?, ?, ?, ?)`,
 		path, string(payload), tasksPayload, time.Now().UTC().Format(time.RFC3339),
-	)
-	return err
+	); err != nil {
+		return err
+	}
+
+	return s.indexDataBlocks(ctx, path, content)
 }
 
-// RemoveMeta drops the file_meta row for a path — called from the pipeline's
-// delete fan-out so queries don't keep returning stale metadata.
+// indexDataBlocks refreshes the page_records rows for a page from its
+// ```kiwi-data fences. The whole page's records are replaced, so a rewrite
+// that drops records leaves no stale rows behind.
+//
+// A block that fails to parse is logged and skipped: an authoring mistake in
+// one fence must not fail the write or evict the page's other records. Only
+// database errors propagate.
+func (s *SQLite) indexDataBlocks(ctx context.Context, path string, content []byte) error {
+	blocks, parseErr := markdown.ExtractDataBlocks(content)
+	if parseErr != nil {
+		log.Printf("kiwifs search: %s: %v", path, parseErr)
+	}
+
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM page_records WHERE path = ?`, path); err != nil {
+		return fmt.Errorf("clear page_records %s: %w", path, err)
+	}
+	if len(blocks) == 0 {
+		return tx.Commit()
+	}
+
+	stmt, err := tx.PrepareContext(ctx,
+		`INSERT OR REPLACE INTO page_records(path, block_index, kind, record_index, json) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, b := range blocks {
+		for i, rec := range b.Records {
+			payload, jerr := json.Marshal(toJSONSafe(rec))
+			if jerr != nil {
+				log.Printf("kiwifs search: %s: kiwi-data block %d record %d: %v", path, b.Index, i, jerr)
+				continue
+			}
+			if _, err := stmt.ExecContext(ctx, path, b.Index, b.Kind, i, string(payload)); err != nil {
+				return fmt.Errorf("insert page_record %s[%d][%d]: %w", path, b.Index, i, err)
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// RemoveMeta drops the file_meta and page_records rows for a path — called
+// from the pipeline's delete fan-out so queries don't keep returning stale
+// metadata.
 func (s *SQLite) RemoveMeta(ctx context.Context, path string) error {
-	_, err := s.writeDB.ExecContext(ctx, `DELETE FROM file_meta WHERE path = ?`, path)
-	return err
+	tx, err := s.writeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM file_meta WHERE path = ?`, path); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM page_records WHERE path = ?`, path); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // MaxFrontmatterIntInDirectory returns the highest integer stored in field
@@ -2003,13 +2078,16 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 	if _, err := s.writeDB.ExecContext(ctx, `DELETE FROM file_meta`); err != nil {
 		return 0, fmt.Errorf("truncate file_meta: %w", err)
 	}
+	if _, err := s.writeDB.ExecContext(ctx, `DELETE FROM page_records`); err != nil {
+		return 0, fmt.Errorf("truncate page_records: %w", err)
+	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	count := 0
 
 	var (
-		tx                                    *sql.Tx
-		docStmt, pathStmt, linkStmt, metaStmt *sql.Stmt
+		tx                                             *sql.Tx
+		docStmt, pathStmt, linkStmt, metaStmt, recStmt *sql.Stmt
 	)
 	openBatch := func() error {
 		var perr error
@@ -2027,6 +2105,9 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 			return perr
 		}
 		if metaStmt, perr = tx.PrepareContext(ctx, `INSERT OR REPLACE INTO file_meta(path, frontmatter, tasks, updated_at) VALUES (?, ?, ?, ?)`); perr != nil {
+			return perr
+		}
+		if recStmt, perr = tx.PrepareContext(ctx, `INSERT OR REPLACE INTO page_records(path, block_index, kind, record_index, json) VALUES (?, ?, ?, ?, ?)`); perr != nil {
 			return perr
 		}
 		return nil
@@ -2047,6 +2128,10 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 		if metaStmt != nil {
 			metaStmt.Close()
 			metaStmt = nil
+		}
+		if recStmt != nil {
+			recStmt.Close()
+			recStmt = nil
 		}
 	}
 	if err := openBatch(); err != nil {
@@ -2124,6 +2209,23 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 				}
 				if _, err := metaStmt.ExecContext(ctx, e.Path, string(payload), tasksJSON, now); err != nil {
 					return fmt.Errorf("insert meta %s: %w", e.Path, err)
+				}
+			}
+		}
+		if storage.IsKnowledgeFile(e.Path) {
+			blocks, berr := markdown.ExtractDataBlocks(content)
+			if berr != nil {
+				log.Printf("kiwifs search: %s: %v", e.Path, berr)
+			}
+			for _, b := range blocks {
+				for i, rec := range b.Records {
+					payload, jerr := json.Marshal(toJSONSafe(rec))
+					if jerr != nil {
+						continue
+					}
+					if _, err := recStmt.ExecContext(ctx, e.Path, b.Index, b.Kind, i, string(payload)); err != nil {
+						return fmt.Errorf("insert page_record %s: %w", e.Path, err)
+					}
 				}
 			}
 		}

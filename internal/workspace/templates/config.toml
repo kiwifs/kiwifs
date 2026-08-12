@@ -9,6 +9,28 @@ root = "."
 engine = "sqlite"
 # semantic = false  # Enable vector search (requires embedding model config)
 
+# Each chunk is prefixed with a rendered context string before embedding, so a
+# retrieved chunk carries the page it came from instead of being a naked
+# paragraph. Fields: .Title, .Path, .Headings ("Parent > Child"), .HeadingPath
+# (list), .Frontmatter (map).
+#
+# The default is "{{ .Headings }}", which matches indexes built before this
+# setting existed. CHANGING context_template REQUIRES A REINDEX
+# (`kiwifs reindex`) — stored chunk text is not rewritten in place.
+#
+# [search.vector.chunk]
+# size = 1500
+# overlap = 150
+# context_template = "{{ .Title }}{{ if .Headings }} > {{ .Headings }}{{ end }}"
+#
+# Optional sidecar: POSTed per chunk as
+#   {"path","title","heading_path","headings","frontmatter","chunk"}
+# and expected to return {"context": "..."}. Any failure — timeout, non-2xx,
+# bad JSON, empty string — falls back to context_template rather than dropping
+# the chunk. The server performs no LLM inference of its own; that is the
+# hook's job if you want one.
+# context_hook_url = "http://127.0.0.1:8099/context"
+
 [versioning]
 strategy = "git"
 
@@ -68,3 +90,21 @@ type = "none"
 #
 # [janitor.execution_staleness.flag_values]
 # last_outcome = "failure"
+
+# Named nearest-neighbour spaces over frontmatter, served by
+# GET /api/kiwi/similar and the kiwi_similar MCP tool. Distance is Gower's
+# coefficient: numeric fields are scaled by the range observed across the
+# candidate set, categorical fields compare by equality, and a field missing
+# on either side is skipped rather than coerced. Field names may be dotted
+# paths into nested frontmatter.
+#
+# Results carry a `coverage` figure and per-field contributions, because a
+# high score computed over two filled fields out of nine is weak evidence.
+#
+# [[similarity.profiles]]
+# name = "dataset"
+# match = { kind = "dataset" }   # candidates: pages whose frontmatter matches
+# path_prefix = "datasets/"      # optional additional subtree filter
+# numeric = ["stats.rows", "stats.columns"]
+# categorical = ["format", "license", "stats.ordered"]
+# weights = { "stats.ordered" = 3.0 }  # unlisted fields weigh 1

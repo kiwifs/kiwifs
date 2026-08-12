@@ -2,8 +2,8 @@
  * KiwiKanbanBlock — Self-contained drag-and-drop kanban board in markdown.
  *
  * Renders a kanban board from YAML config in ```kiwi-kanban fenced blocks.
- * Uses @dnd-kit for drag-and-drop. Fully self-contained — no API calls,
- * all data comes from the fenced block source.
+ * Uses @dnd-kit for drag-and-drop. Cards come from the fenced block source,
+ * or from a DQL query when the block sets `query` and `groupBy`.
  *
  * Config format:
  * ```kiwi-kanban
@@ -28,9 +28,20 @@
  *   format: markdown
  *   copyLabel: Copy Prioritized List
  * ```
+ *
+ * Query-driven form — lanes are the distinct `groupBy` values, and any
+ * declared columns fix their order and colour:
+ * ```kiwi-kanban
+ * query: |
+ *   TABLE title, status FROM "datasets"
+ * groupBy: status
+ * columns:
+ *   - name: draft
+ *     color: "#f59e0b"
+ * ```
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -55,9 +66,11 @@ import { GripVertical } from "lucide-react";
 import {
   buildKanbanBlockExportText,
   parseKanbanBlockConfig,
+  queryRowsToKanbanColumns,
   type KanbanBlockCard,
   type KanbanBlockColumn,
 } from "@kw/lib/kanbanBlock";
+import { api } from "@kw/lib/api";
 
 // ── Sortable Card Component ──────────────────────────────────────────────────
 
@@ -188,6 +201,40 @@ export function KiwiKanbanBlock({ source }: { source: string }) {
   const [activeCard, setActiveCard] = useState<KanbanBlockCard | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // A query only drives the board when it also says how to group; without
+  // groupBy there are no lanes to build, so the inline columns stand.
+  const dql = initialConfig.groupBy ? initialConfig.query : undefined;
+  const groupBy = initialConfig.groupBy;
+  const [loading, setLoading] = useState(Boolean(dql));
+  const [queryError, setQueryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!dql || !groupBy) {
+      setColumns(initialConfig.columns);
+      setLoading(false);
+      setQueryError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setQueryError(null);
+    api
+      .query(dql)
+      .then((resp) => {
+        if (cancelled) return;
+        setColumns(queryRowsToKanbanColumns(resp.rows, groupBy, initialConfig.columns));
+        setLoading(false);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setQueryError(String(e));
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dql, groupBy, initialConfig]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -293,17 +340,28 @@ export function KiwiKanbanBlock({ source }: { source: string }) {
   }, [columns, initialConfig.export]);
 
   const { error } = useMemo(() => {
-    if (!initialConfig.columns || initialConfig.columns.length === 0) {
+    if (initialConfig.query && !initialConfig.groupBy) {
+      return { error: "A kanban `query` also needs `groupBy` naming the column that forms the lanes" };
+    }
+    // A query-driven board derives its lanes from the rows, so declaring
+    // columns up front is optional there.
+    if (!dql && (!initialConfig.columns || initialConfig.columns.length === 0)) {
       return { error: "No columns defined in kanban config" };
     }
     return { error: null };
-  }, [initialConfig]);
+  }, [initialConfig, dql]);
 
-  if (error) {
+  if (error || queryError) {
     return (
       <div className="kiwi-kanban-error rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
-        <strong>Kanban Error:</strong> {error}
+        <strong>Kanban Error:</strong> {error ?? queryError}
       </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="kiwi-kanban-loading text-muted-foreground text-sm">Loading board…</div>
     );
   }
 

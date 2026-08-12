@@ -334,7 +334,7 @@ State machines defined in `.kiwi/workflows/*.json` that govern frontmatter trans
 
 ### What are widgets?
 
-Rich blocks embedded in markdown pages using fenced code blocks. They render as interactive components in the web UI and degrade to plain code in other viewers. Available widgets: `kiwi-chart` (bar/line/area/pie/radar/scatter), `kiwi-query` (inline DQL tables), `kiwi-kanban` (inline boards), `kiwi-playground` (interactive controls), `kiwi-app` (sandboxed HTML/JS), `kiwi-diff` (annotated diffs), `kiwi-progress` (bars/gauges), `kiwi-color` (color swatches), `mermaid` (diagrams), `widget:live` (React Live), `widget:code` (Python via Pyodide).
+Rich blocks embedded in markdown pages using fenced code blocks. They render as interactive components in the web UI and degrade to plain code in other viewers. Available widgets: `kiwi-chart` (bar/line/area/pie/radar/scatter), `kiwi-query` (inline DQL tables), `kiwi-data` (queryable record tables), `kiwi-kanban` (inline boards), `kiwi-playground` (interactive controls), `kiwi-app` (sandboxed HTML/JS), `kiwi-diff` (annotated diffs), `kiwi-progress` (bars/gauges), `kiwi-color` (color swatches), `mermaid` (diagrams), `widget:live` (React Live), `widget:code` (Python via Pyodide).
 
 Container directives `:::tabs` and `:::columns` provide layout control. GitHub-style callouts (`> [!NOTE]`, `> [!WARNING]`, etc.) render as styled admonitions.
 
@@ -355,6 +355,77 @@ TABLE title, status, priority FROM "pages" WHERE status = "draft" SORT priority 
 ```
 
 Supports `TABLE`, `LIST`, `COUNT`, `DISTINCT` modes, `WHERE` filters with boolean logic, `SORT`, `GROUP BY`, `FLATTEN`, and implicit fields like `_path`, `_updated`, `_size`.
+
+### How do I query structured data inside a page?
+
+Frontmatter holds one set of values per page. When a page needs a *table* of
+values — a dataset schema, a ledger of attempts, a list of measurements — put
+it in a `kiwi-data` block. Every record is indexed as its own row and queried
+with `FROM RECORDS "<kind>"`:
+
+````markdown
+```kiwi-data
+kind: dataset-schema
+records:
+  - name: target
+    dtype: float
+    missing-rate: 0.116
+  - name: id
+    dtype: int
+    missing-rate: 0
+```
+````
+
+```
+TABLE dataset, name, dtype, missing-rate
+FROM RECORDS "dataset-schema"
+WHERE missing-rate > 0.1
+SORT missing-rate DESC
+```
+
+Three body shapes are accepted: `kind:` plus a `records:` list (above); a
+plain mapping with `kind:`, which becomes a single record; and a bare list,
+which takes its kind from the fence info string (`` ```kiwi-data
+dataset-schema `` or `` ```kiwi-data kind=dataset-schema ``).
+
+Field names resolve against the record first and fall back to the owning
+page's frontmatter — which is why `dataset` above works even though it
+lives on the page, not in the record. Force one side with the `record.` and
+`page.` prefixes (`record.status`, `page.status`); those two prefixes are
+reserved in records mode. An explicit `null` in a record stays null rather
+than inheriting the page value.
+
+`FROM RECORDS "<kind>" IN "folder/"` scopes to a subtree, since the plain
+`FROM` slot is taken by the kind. Records add three implicit fields on top of
+the usual ones: `_kind`, `_block` (which fence on the page) and `_record`
+(position within that fence). Rows default to document order.
+
+Records refresh on every write, so no reindex is needed for edits; run
+`kiwifs reindex` once after upgrading to pick up blocks written before this
+feature existed. A block that fails to parse is skipped and logged — the rest
+of the page still indexes.
+
+### How do I pull data from linked pages into a row?
+
+`rollup(<link field>, <expression>)` collects an expression evaluated on
+every page the row links to, as an array:
+
+```
+TABLE title, rollup(related-notes, title) AS notes FROM "datasets"
+```
+
+One row per dataset, each carrying the titles of the note pages it
+links to. The second argument is evaluated against the *linked* page, so
+`rollup(cites, status)` and `rollup(cites, _path)` work too.
+
+The first argument names a typed link field, which must be listed in
+`[links] typed_fields` for it to be indexed as a link. The reserved names
+`links` and `outlinks` roll up every outbound link regardless of relation,
+including plain body wiki links.
+
+Traversal is one hop, so a mutual link cycle cannot loop. A link to a page
+that does not exist contributes nothing, and a page with no matching links
+gets an empty array rather than null.
 
 ### What aggregation functions are available?
 

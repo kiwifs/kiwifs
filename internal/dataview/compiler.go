@@ -26,9 +26,65 @@ type compiler struct {
 	plan    *QueryPlan
 	params  []any
 	indexer *AutoIndexer
+	// rollupAlias, when set, redirects every field reference to that
+	// file_meta alias — the linked-to page inside a rollup() subquery.
+	rollupAlias string
+}
+
+// records reports whether this query runs at kiwi-data record grain. Inside
+// a rollup subquery the row is always a page, whatever the outer grain is.
+func (c *compiler) records() bool {
+	return c.plan != nil && c.plan.Source == SourceRecords && c.rollupAlias == ""
+}
+
+// fromClause is the table expression every compile path selects from. In
+// records mode page_records is the driving table and file_meta is joined so
+// the parent page's frontmatter stays addressable.
+func (c *compiler) fromClause() string {
+	if c.records() {
+		return " FROM page_records LEFT JOIN file_meta ON file_meta.path = page_records.path"
+	}
+	return " FROM file_meta"
+}
+
+// pathColumn is the column holding the page path for the current grain.
+func (c *compiler) pathColumn() string {
+	if c.records() {
+		return "page_records.path"
+	}
+	return "file_meta.path"
+}
+
+// frontmatterColumn is the trailing column every row carries. A record whose
+// page somehow has no file_meta row still needs valid JSON here, because the
+// executor scans it into a string.
+func (c *compiler) frontmatterColumn() string {
+	if c.records() {
+		return "COALESCE(file_meta.frontmatter, '{}')"
+	}
+	return "file_meta.frontmatter"
+}
+
+// jsonBase is the JSON document a bare field path reads from.
+func (c *compiler) jsonBase() string {
+	if c.rollupAlias != "" {
+		return c.rollupAlias + ".frontmatter"
+	}
+	if c.records() {
+		return "page_records.json"
+	}
+	return "file_meta.frontmatter"
 }
 
 func (c *compiler) compile() (string, []any, error) {
+	if c.records() {
+		if c.plan.RecordKind == "" {
+			return "", nil, fmt.Errorf("FROM RECORDS requires a record kind")
+		}
+		if c.plan.Type == "task" {
+			return "", nil, fmt.Errorf("TASK queries run over pages, not records")
+		}
+	}
 	switch c.plan.Type {
 	case "count":
 		return c.compileCount()
@@ -76,7 +132,8 @@ func (c *compiler) compileTask() (string, []any, error) {
 
 func (c *compiler) compileCount() (string, []any, error) {
 	var sb strings.Builder
-	sb.WriteString("SELECT COUNT(*) AS cnt FROM file_meta")
+	sb.WriteString("SELECT COUNT(*) AS cnt")
+	sb.WriteString(c.fromClause())
 
 	if err := c.writeFromAndFlatten(&sb); err != nil {
 		return "", nil, err
@@ -98,7 +155,8 @@ func (c *compiler) compileDistinct() (string, []any, error) {
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "SELECT DISTINCT %s AS val FROM file_meta", fieldSQL)
+	fmt.Fprintf(&sb, "SELECT DISTINCT %s AS val", fieldSQL)
+	sb.WriteString(c.fromClause())
 
 	if err := c.writeFromAndFlatten(&sb); err != nil {
 		return "", nil, err
@@ -136,11 +194,11 @@ func (c *compiler) compileSelect() (string, []any, error) {
 			fmt.Fprintf(&sb, "%s AS %s", fieldSQL, c.aliasFor(fs))
 		}
 		if first {
-			sb.WriteString("file_meta.frontmatter")
+			sb.WriteString(c.frontmatterColumn())
 		}
-		sb.WriteString(", file_meta.frontmatter")
+		fmt.Fprintf(&sb, ", %s", c.frontmatterColumn())
 	} else {
-		sb.WriteString("SELECT file_meta.path")
+		fmt.Fprintf(&sb, "SELECT %s", c.pathColumn())
 		for _, fs := range c.plan.Fields {
 			fieldSQL, fsParams, err := c.fieldSpecToSQL(fs)
 			if err != nil {
@@ -149,9 +207,9 @@ func (c *compiler) compileSelect() (string, []any, error) {
 			c.params = append(c.params, fsParams...)
 			fmt.Fprintf(&sb, ", %s AS %s", fieldSQL, c.aliasFor(fs))
 		}
-		sb.WriteString(", file_meta.frontmatter")
+		fmt.Fprintf(&sb, ", %s", c.frontmatterColumn())
 	}
-	sb.WriteString(" FROM file_meta")
+	sb.WriteString(c.fromClause())
 
 	if err := c.writeFromAndFlatten(&sb); err != nil {
 		return "", nil, err
@@ -186,8 +244,8 @@ func (c *compiler) compileGroupBy() (string, []any, error) {
 		c.params = append(c.params, fsParams...)
 		fmt.Fprintf(&sb, ", %s AS %s", fieldSQL, c.aliasFor(fs))
 	}
-	sb.WriteString(", file_meta.path, file_meta.frontmatter")
-	sb.WriteString(" FROM file_meta")
+	fmt.Fprintf(&sb, ", %s, %s", c.pathColumn(), c.frontmatterColumn())
+	sb.WriteString(c.fromClause())
 
 	if err := c.writeFromAndFlatten(&sb); err != nil {
 		return "", nil, err
@@ -207,7 +265,7 @@ func (c *compiler) writeFromAndFlatten(sb *strings.Builder) error {
 		if err := validateFieldPath(c.plan.Flatten); err != nil {
 			return fmt.Errorf("FLATTEN field: %w", err)
 		}
-		fmt.Fprintf(sb, ", json_each(file_meta.frontmatter, '$.%s') AS _flat", c.plan.Flatten)
+		fmt.Fprintf(sb, ", json_each(%s, '$.%s') AS _flat", c.jsonBase(), c.plan.Flatten)
 	}
 	return nil
 }
@@ -215,14 +273,21 @@ func (c *compiler) writeFromAndFlatten(sb *strings.Builder) error {
 func (c *compiler) writeWhere(sb *strings.Builder) error {
 	var conditions []string
 
+	// The record kind is always bound, never interpolated: a kind is
+	// user-authored text and may contain quotes.
+	if c.records() {
+		conditions = append(conditions, "page_records.kind = ?")
+		c.params = append(c.params, c.plan.RecordKind)
+	}
+
 	if c.plan.From != "" {
-		conditions = append(conditions, "file_meta.path LIKE ? || '%'")
+		conditions = append(conditions, c.pathColumn()+" LIKE ? || '%'")
 		c.params = append(c.params, c.plan.From)
 	}
 
 	if c.plan.Flatten != "" {
 		conditions = append(conditions,
-			fmt.Sprintf("json_type(file_meta.frontmatter, '$.%s') = 'array'", c.plan.Flatten))
+			fmt.Sprintf("json_type(%s, '$.%s') = 'array'", c.jsonBase(), c.plan.Flatten))
 		if c.usesFlattenSubfields() {
 			conditions = append(conditions, "json_type(_flat.value) = 'object'")
 		}
@@ -279,6 +344,9 @@ func (c *compiler) writeOrderBy(sb *strings.Builder) error {
 			dir = "DESC"
 		}
 		fmt.Fprintf(sb, " ORDER BY %s %s", sortSQL, dir)
+	} else if c.records() {
+		// Document order: page, then block, then position within the block.
+		sb.WriteString(" ORDER BY page_records.path ASC, page_records.block_index ASC, page_records.record_index ASC")
 	} else {
 		sb.WriteString(" ORDER BY file_meta.path ASC")
 	}
@@ -375,7 +443,23 @@ func exprUsesFlattenSubfield(expr Expr, prefix string) bool {
 }
 
 func (c *compiler) fieldToSQL(field string) (string, error) {
-	if sql, isImplicit := resolveField(field); isImplicit {
+	return c.resolveFieldSQL(field, c.indexer != nil)
+}
+
+// resolveFieldSQL maps a DQL field path to a SQL expression.
+//
+// In records mode the namespacing rule is:
+//
+//	name          → the record's own field, falling back to the parent
+//	                page's frontmatter when the record has no such key
+//	record.name   → the record's field only
+//	page.name     → the parent page's frontmatter only
+//
+// The fallback keys off json_type rather than COALESCE so an explicit
+// `null` in a record stays null instead of silently inheriting the page
+// value — the Phase 0 null-handling invariant.
+func (c *compiler) resolveFieldSQL(field string, useIndexer bool) (string, error) {
+	if sql, isImplicit := c.resolveImplicit(field); isImplicit {
 		return sql, nil
 	}
 	if sql, ok := c.flattenFieldSQL(field); ok {
@@ -384,12 +468,52 @@ func (c *compiler) fieldToSQL(field string) (string, error) {
 	if err := validateFieldPath(field); err != nil {
 		return "", err
 	}
-	if c.indexer != nil {
+	if c.rollupAlias != "" {
+		return fmt.Sprintf("json_extract(%s, '$.%s')", c.jsonBase(), field), nil
+	}
+	if c.records() {
+		if sub, ok := strings.CutPrefix(field, "record."); ok {
+			if err := validateFieldPath(sub); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("json_extract(page_records.json, '$.%s')", sub), nil
+		}
+		if sub, ok := strings.CutPrefix(field, "page."); ok {
+			if err := validateFieldPath(sub); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("json_extract(file_meta.frontmatter, '$.%s')", sub), nil
+		}
+		return fmt.Sprintf(
+			"CASE WHEN json_type(page_records.json, '$.%[1]s') IS NOT NULL"+
+				" THEN json_extract(page_records.json, '$.%[1]s')"+
+				" ELSE json_extract(file_meta.frontmatter, '$.%[1]s') END", field), nil
+	}
+	if useIndexer && c.indexer != nil {
 		if col, ok := c.indexer.IndexedColumn(field); ok {
 			return col, nil
 		}
 	}
 	return fmt.Sprintf("json_extract(file_meta.frontmatter, '$.%s')", field), nil
+}
+
+// resolveImplicit resolves _-prefixed metadata fields for the current grain.
+func (c *compiler) resolveImplicit(field string) (string, bool) {
+	if c.rollupAlias != "" {
+		// The rollup target is a plain file_meta row, so every implicit
+		// field transfers by rebasing the table name.
+		sql, ok := resolveField(field)
+		if !ok {
+			return "", false
+		}
+		return strings.ReplaceAll(sql, "file_meta.", c.rollupAlias+"."), true
+	}
+	if c.records() {
+		if mf, ok := recordImplicitFields[field]; ok {
+			return mf.SQL, true
+		}
+	}
+	return resolveField(field)
 }
 
 func (c *compiler) aliasFor(fs FieldSpec) string {
@@ -463,16 +587,13 @@ func (c *compiler) compileUnary(e *UnaryExpr) (string, []any, error) {
 }
 
 func (c *compiler) compileFieldRef(e *FieldRef) (string, []any, error) {
-	if sql, isImplicit := resolveField(e.Path); isImplicit {
-		return sql, nil, nil
-	}
-	if sql, ok := c.flattenFieldSQL(e.Path); ok {
-		return sql, nil, nil
-	}
-	if err := validateFieldPath(e.Path); err != nil {
+	// Expressions deliberately skip the generated-column lookup: the
+	// indexer only covers plain SELECT/SORT field references.
+	sql, err := c.resolveFieldSQL(e.Path, false)
+	if err != nil {
 		return "", nil, err
 	}
-	return fmt.Sprintf("json_extract(file_meta.frontmatter, '$.%s')", e.Path), nil, nil
+	return sql, nil, nil
 }
 
 func (c *compiler) compileLiteral(e *Literal) (string, []any, error) {
@@ -488,8 +609,16 @@ func (c *compiler) compileFuncCall(e *FuncCall) (string, []any, error) {
 		return "", nil, fmt.Errorf("unknown function %q", e.Name)
 	}
 
-	cArgs := make([]compiledArg, len(e.Args))
 	nameLower := strings.ToLower(e.Name)
+	if nameLower == "rollup" {
+		cArgs, err := c.compileRollupArgs(e)
+		if err != nil {
+			return "", nil, err
+		}
+		return fn(cArgs)
+	}
+
+	cArgs := make([]compiledArg, len(e.Args))
 	for i, arg := range e.Args {
 		if (nameLower == "contains" || nameLower == "length") && i == 0 {
 			if fr, ok := arg.(*FieldRef); ok {
@@ -509,6 +638,54 @@ func (c *compiler) compileFuncCall(e *FuncCall) (string, []any, error) {
 	}
 
 	return fn(cArgs)
+}
+
+// compileRollupArgs prepares rollup()'s two arguments, neither of which
+// compiles like an ordinary value expression:
+//
+//	arg 0 — a link field name. `rollup(related-notes, ...)` collects
+//	        over the typed frontmatter field of that name; the reserved names
+//	        `links` and `outlinks` collect over every outbound link
+//	        regardless of relation.
+//	arg 1 — an expression evaluated against the *linked-to* page, so its
+//	        field references resolve to the target's frontmatter, not the
+//	        row the query is currently on.
+//
+// A typed frontmatter field is only indexed as a link when it is listed in
+// [links] typed_fields; body wiki links are always available via `links`.
+func (c *compiler) compileRollupArgs(e *FuncCall) ([]compiledArg, error) {
+	if len(e.Args) != 2 {
+		return nil, fmt.Errorf("rollup() requires 2 arguments (link field, expression on the linked page)")
+	}
+	fr, ok := e.Args[0].(*FieldRef)
+	if !ok {
+		return nil, fmt.Errorf("rollup(): the first argument must be a link field name")
+	}
+	if err := validateFieldPath(fr.Path); err != nil {
+		return nil, fmt.Errorf("rollup(): %w", err)
+	}
+
+	var relation compiledArg
+	switch strings.ToLower(fr.Path) {
+	case "links", "outlinks":
+		relation = compiledArg{SQL: "1=1"}
+	default:
+		relation = compiledArg{
+			SQL:    rollupLinkAlias + ".relation = ?",
+			Params: []any{fr.Path},
+		}
+	}
+
+	// The target expression compiles against a fresh compiler bound to the
+	// linked page's alias. The auto-indexer is deliberately not passed
+	// through: its generated columns live on the outer file_meta.
+	sub := &compiler{plan: c.plan, rollupAlias: rollupTargetAlias}
+	sql, params, err := sub.compileExpr(e.Args[1])
+	if err != nil {
+		return nil, fmt.Errorf("rollup(): %w", err)
+	}
+
+	return []compiledArg{relation, {SQL: sql, Params: params}}, nil
 }
 
 func (c *compiler) compileList(e *ListExpr) (string, []any, error) {

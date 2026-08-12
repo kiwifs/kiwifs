@@ -291,6 +291,12 @@ func scanAlias(s string) (string, string, error) {
 		return s[1 : end+1], strings.TrimSpace(s[end+2:]), nil
 	}
 	word := firstWord(s)
+	// firstWord splits on whitespace only, so an alias written tight against
+	// the column separator ("AS a, b") would otherwise come back as "a,"
+	// and land the comma in the emitted SQL.
+	if i := strings.IndexByte(word, ','); i >= 0 {
+		word = word[:i]
+	}
 	if word == "" {
 		return "", "", fmt.Errorf("expected alias after AS")
 	}
@@ -338,6 +344,10 @@ func parseFrom(s string, plan *QueryPlan) (string, error) {
 		return "", fmt.Errorf("FROM requires a folder path or #tag")
 	}
 
+	if strings.EqualFold(firstWord(rest), "RECORDS") {
+		return parseFromRecords(rest, plan)
+	}
+
 	if rest[0] == '#' || (rest[0] == '-' && len(rest) > 1 && rest[1] == '#') {
 		return parseFromTags(rest, plan)
 	}
@@ -354,6 +364,64 @@ func parseFrom(s string, plan *QueryPlan) (string, error) {
 	word := firstWord(rest)
 	plan.From = word
 	return strings.TrimSpace(rest[len(word):]), nil
+}
+
+// parseFromRecords handles `FROM RECORDS "<kind>" [IN "<folder>"]`, which
+// switches the row grain from one-row-per-page to one-row-per kiwi-data
+// record. The optional IN clause keeps the folder filter available, since
+// the plain FROM slot is taken by the kind.
+func parseFromRecords(s string, plan *QueryPlan) (string, error) {
+	rest := strings.TrimSpace(skipWord(s)) // skip "RECORDS"
+	if rest == "" {
+		return "", fmt.Errorf(`FROM RECORDS requires a record kind, e.g. FROM RECORDS "dataset-schema"`)
+	}
+
+	kind, rest, err := scanQuotedOrWord(rest)
+	if err != nil {
+		return "", fmt.Errorf("FROM RECORDS: %w", err)
+	}
+	if kind == "" {
+		return "", fmt.Errorf(`FROM RECORDS requires a record kind, e.g. FROM RECORDS "dataset-schema"`)
+	}
+
+	plan.Source = SourceRecords
+	plan.RecordKind = kind
+
+	if strings.EqualFold(firstWord(rest), "IN") {
+		rest = strings.TrimSpace(skipWord(rest))
+		folder, remaining, ferr := scanQuotedOrWord(rest)
+		if ferr != nil {
+			return "", fmt.Errorf("FROM RECORDS ... IN: %w", ferr)
+		}
+		if folder == "" {
+			return "", fmt.Errorf(`FROM RECORDS ... IN requires a folder, e.g. IN "datasets/"`)
+		}
+		plan.From = folder
+		rest = remaining
+	}
+
+	return strings.TrimSpace(rest), nil
+}
+
+// scanQuotedOrWord reads either a quoted string or a bare word, returning it
+// along with the unconsumed remainder.
+func scanQuotedOrWord(s string) (string, string, error) {
+	if s == "" {
+		return "", "", nil
+	}
+	if s[0] == '"' || s[0] == '\'' {
+		quote := s[0]
+		end := strings.IndexByte(s[1:], quote)
+		if end < 0 {
+			return "", "", fmt.Errorf("unterminated string")
+		}
+		return s[1 : end+1], strings.TrimSpace(s[end+2:]), nil
+	}
+	word := firstWord(s)
+	if isClauseKeyword(word) {
+		return "", s, nil
+	}
+	return word, strings.TrimSpace(s[len(word):]), nil
 }
 
 func parseFromTags(s string, plan *QueryPlan) (string, error) {

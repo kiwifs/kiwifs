@@ -1,5 +1,7 @@
 package dataview
 
+import "strings"
+
 // metaField describes an implicit metadata field that maps to a direct
 // column or expression rather than json_extract on frontmatter.
 type metaField struct {
@@ -24,6 +26,22 @@ var implicitFields = map[string]metaField{
 		SQL: "CASE WHEN instr(replace(file_meta.path, rtrim(file_meta.path, replace(file_meta.path, '/', '')), ''), '.') > 0 THEN substr(replace(file_meta.path, rtrim(file_meta.path, replace(file_meta.path, '/', '')), ''), instr(replace(file_meta.path, rtrim(file_meta.path, replace(file_meta.path, '/', '')), ''), '.')) ELSE '' END",
 	},
 }
+
+// recordImplicitFields overrides the page-grain implicit fields for
+// `FROM RECORDS` queries. Path-derived fields read page_records.path — the
+// driving table there — so they still resolve when a record's page has no
+// file_meta row; _updated still comes from the joined page. The three
+// record-only fields have no page-grain equivalent.
+var recordImplicitFields = func() map[string]metaField {
+	out := make(map[string]metaField, len(implicitFields)+3)
+	for name, mf := range implicitFields {
+		out[name] = metaField{SQL: strings.ReplaceAll(mf.SQL, "file_meta.path", "page_records.path")}
+	}
+	out["_kind"] = metaField{SQL: "page_records.kind"}
+	out["_block"] = metaField{SQL: "page_records.block_index"}
+	out["_record"] = metaField{SQL: "page_records.record_index"}
+	return out
+}()
 
 // resolveField returns the SQL expression for a field reference.
 // Implicit fields (_path, _name, etc.) resolve to direct column refs.

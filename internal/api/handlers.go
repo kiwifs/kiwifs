@@ -22,6 +22,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/rbac"
 	"github.com/kiwifs/kiwifs/internal/search"
+	"github.com/kiwifs/kiwifs/internal/similar"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
 	"github.com/kiwifs/kiwifs/internal/versioning"
@@ -42,6 +43,7 @@ type Handlers struct {
 	vectors      *vectorstore.Service
 	dv           *dataview.Executor
 	viewReg      *dataview.Registry
+	similar      *similar.Index
 	comments     *comments.Store
 	shares       *rbac.ShareStore
 	assets       config.AssetsConfig

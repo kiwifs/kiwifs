@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { KiwiChart } from "./KiwiChart";
+import { MockApiProvider } from "./__mocks__/apiMock";
 
 const meta: Meta<typeof KiwiChart> = {
   title: "Content/KiwiChart",
@@ -163,5 +164,46 @@ data:
 export const ErrorState: Story = {
   args: {
     source: "this is invalid config {{{",
+  },
+};
+
+// ── Query-driven charts ──────────────────────────────────────────────────────
+
+const QUERY_ROWS = [
+  { _path: "datasets/sales.md", title: "Sales", rows: 3200, columns: 12 },
+  { _path: "datasets/revenue.md", title: "Revenue", rows: 2750, columns: 9 },
+  { _path: "datasets/customers.md", title: "Customers", rows: 4100, columns: 15 },
+];
+
+function withQueryRows(rows: Record<string, unknown>[]) {
+  return (Story: () => React.ReactElement) => (
+    <MockApiProvider overrides={{ queryRows: rows }}>
+      <div className="max-w-2xl p-4 bg-background text-foreground">
+        <Story />
+      </div>
+    </MockApiProvider>
+  );
+}
+
+/** xKey and series are inferred: `title` is the only categorical column. */
+export const FromQuery: Story = {
+  decorators: [withQueryRows(QUERY_ROWS)],
+  args: {
+    source: `type: bar
+title: Rows by dataset
+grid: true
+legend: true
+query: |
+  TABLE title, rows, columns
+  FROM "datasets"
+  SORT rows DESC`,
+  },
+};
+
+export const FromQueryEmpty: Story = {
+  decorators: [withQueryRows([])],
+  args: {
+    source: `type: bar
+query: TABLE title, rows FROM "datasets" WHERE rows > 999999`,
   },
 };

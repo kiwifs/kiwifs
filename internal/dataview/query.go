@@ -1,5 +1,12 @@
 package dataview
 
+// Row grains a query can run over. SourceFiles is the default and is what
+// every query used before `FROM RECORDS` existed.
+const (
+	SourceFiles   = "files"
+	SourceRecords = "records"
+)
+
 // FieldSpec describes a single column in a TABLE/LIST/JSON query.
 type FieldSpec struct {
 	Expr   string // field path or expression text, e.g. "name", "days_since(last_active)"
@@ -16,19 +23,23 @@ type SortSpec struct {
 // QueryPlan is the parsed representation of a DQL statement, ready for
 // the SQL compiler to turn into a SQLite query.
 type QueryPlan struct {
-	Type      string      // "table" | "list" | "count" | "distinct" | "json" | "calendar"
-	From      string      // folder prefix filter (e.g. "concepts/")
-	FromTags  []TagFilter // tag-based FROM filter (#tag)
-	Fields    []FieldSpec // columns with optional aliases
-	WithoutID bool        // TABLE WITHOUT ID / LIST WITHOUT ID
-	Where     Expr        // parsed expression AST (or nil = no filter)
-	Sort      string      // sort field (single, legacy compat)
-	Order     string      // "asc" | "desc" (legacy compat)
-	Sorts     []SortSpec  // multi-sort chain; takes precedence over Sort/Order
-	GroupBy   string      // group field: "status"
-	Flatten   string      // array field to unnest: "tags"
-	Limit     int         // default 50, max 200
-	Offset    int
+	Type string // "table" | "list" | "count" | "distinct" | "json" | "calendar"
+	// Source selects the row grain: "" / "files" is one row per page
+	// (file_meta), "records" is one row per kiwi-data record (page_records).
+	Source     string
+	RecordKind string      // record kind when Source == "records"
+	From       string      // folder prefix filter (e.g. "concepts/")
+	FromTags   []TagFilter // tag-based FROM filter (#tag)
+	Fields     []FieldSpec // columns with optional aliases
+	WithoutID  bool        // TABLE WITHOUT ID / LIST WITHOUT ID
+	Where      Expr        // parsed expression AST (or nil = no filter)
+	Sort       string      // sort field (single, legacy compat)
+	Order      string      // "asc" | "desc" (legacy compat)
+	Sorts      []SortSpec  // multi-sort chain; takes precedence over Sort/Order
+	GroupBy    string      // group field: "status"
+	Flatten    string      // array field to unnest: "tags"
+	Limit      int         // default 50, max 200
+	Offset     int
 }
 
 // TagFilter is a tag-based FROM filter.

@@ -1,6 +1,7 @@
 package vectorstore
 
 import (
+	"context"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -111,10 +112,49 @@ type headingSection struct {
 	ancestry []string // parent heading hierarchy
 }
 
+// docContext carries the document-level facts a context template renders
+// against, plus the compiled builder. A nil *docContext means "default
+// template, no page metadata" — exactly the shape chunkMarkdown had before
+// context enrichment landed.
+type docContext struct {
+	ctx         context.Context
+	path        string
+	title       string
+	frontmatter map[string]any
+	builder     *contextBuilder
+}
+
+// prefix builds the context string prepended to one section's body.
+func (d *docContext) prefix(ancestry []string, body string) string {
+	parts := headingParts(ancestry)
+	cc := ChunkContext{
+		HeadingPath: parts,
+		Headings:    strings.Join(parts, " > "),
+	}
+	builder := defaultContextBuilder
+	var ctx context.Context
+	if d != nil {
+		cc.Path = d.path
+		cc.Title = d.title
+		cc.Frontmatter = d.frontmatter
+		if d.builder != nil {
+			builder = d.builder
+		}
+		ctx = d.ctx
+	}
+	return builder.prefix(ctx, cc, body)
+}
+
 // chunkMarkdown splits markdown text on headings (level ≤ 3), prefixing each
 // chunk with its heading hierarchy for embedding context. Falls back to the
 // paragraph-aware chunk() for sections that exceed maxSize.
 func chunkMarkdown(content string, maxSize, minSize int) []string {
+	return chunkMarkdownWithContext(content, maxSize, minSize, nil)
+}
+
+// chunkMarkdownWithContext is chunkMarkdown with page metadata available to
+// the configured context template.
+func chunkMarkdownWithContext(content string, maxSize, minSize int, dc *docContext) []string {
 	if maxSize <= 0 {
 		maxSize = defaultMaxChunkSize
 	}
@@ -193,16 +233,17 @@ func chunkMarkdown(content string, maxSize, minSize int) []string {
 	var out []string
 	for i := 0; i < len(sections); i++ {
 		s := sections[i]
-		prefix := buildHeadingPrefix(s.ancestry)
 		body := s.body.String()
+		prefix := dc.prefix(s.ancestry, body)
 		text := prefix + body
 
 		// Merge undersized sections with the next one
 		for len(text) < minSize && i+1 < len(sections) {
 			i++
 			next := sections[i]
-			nextPrefix := buildHeadingPrefix(next.ancestry)
-			text += "\n\n" + nextPrefix + next.body.String()
+			nextBody := next.body.String()
+			nextPrefix := dc.prefix(next.ancestry, nextBody)
+			text += "\n\n" + nextPrefix + nextBody
 		}
 
 		text = strings.TrimSpace(text)
@@ -219,17 +260,16 @@ func chunkMarkdown(content string, maxSize, minSize int) []string {
 	return out
 }
 
-func buildHeadingPrefix(ancestry []string) string {
+// headingParts drops the empty placeholder levels the ancestry tracker
+// inserts when a document skips a heading level (an h3 under an h1).
+func headingParts(ancestry []string) []string {
 	var parts []string
 	for _, h := range ancestry {
 		if h != "" {
 			parts = append(parts, h)
 		}
 	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.Join(parts, " > ") + "\n\n"
+	return parts
 }
 
 func extractNodeText(n ast.Node, src []byte) []byte {

@@ -28,11 +28,17 @@ func Build(root string, source storage.Storage, cfg config.VectorConfig) (*Servi
 	if err != nil {
 		return nil, fmt.Errorf("store: %w", err)
 	}
-	return NewService(root, source, embedder, store, Options{
-		ChunkSize:    cfg.Chunk.Size,
-		ChunkOverlap: cfg.Chunk.Overlap,
-		WorkerCount:  cfg.WorkerCount,
-	}), nil
+	svc, err := NewService(root, source, embedder, store, Options{
+		ChunkSize:       cfg.Chunk.Size,
+		ChunkOverlap:    cfg.Chunk.Overlap,
+		WorkerCount:     cfg.WorkerCount,
+		ContextTemplate: cfg.Chunk.ContextTemplate,
+		ContextHookURL:  cfg.Chunk.ContextHookURL,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("chunk context: %w", err)
+	}
+	return svc, nil
 }
 
 func buildEmbedder(ctx context.Context, cfg config.EmbedderConfig) (embed.Embedder, error) {

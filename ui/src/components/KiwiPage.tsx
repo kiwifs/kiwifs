@@ -28,6 +28,7 @@ import { KiwiChart } from "./KiwiChart";
 import { KiwiApp } from "./KiwiApp";
 import { KiwiDiff } from "./KiwiDiff";
 import { KiwiKanbanBlock } from "./KiwiKanbanBlock";
+import { KiwiDataBlock } from "./KiwiDataBlock";
 import { KiwiColor } from "./KiwiColor";
 import { KiwiProgress } from "./KiwiProgress";
 import { KiwiPlayground } from "./KiwiPlayground";
@@ -926,6 +927,12 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                       }
                       if (lang === "kiwi-kanban") {
                         return <KiwiKanbanBlock source={raw} />;
+                      }
+                      if (lang === "kiwi-data") {
+                        // Dispatched before the single-line guard below: a
+                        // one-record block is still data, not inline code.
+                        const dataMeta: string = node?.data?.meta || node?.properties?.metastring || "";
+                        return <KiwiDataBlock source={raw} meta={dataMeta} />;
                       }
                       if (!lang || !raw.includes("\n")) {
                         return <code className={className} {...rest}>{children}</code>;

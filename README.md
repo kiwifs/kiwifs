@@ -209,7 +209,7 @@ kiwifs connect my-workspace --write auto
 |---|---|---|---|---|---|
 | **What it is** | Markdown filesystem | DIY files + git | Relational database | Local markdown editor | Vector store (OSS) |
 | **Agents can write** | MCP, REST, `cat` | `echo` + manual commit | SQL inserts | Local files only | Upsert embeddings |
-| **MCP support** | Native (62 tools) | No | No | No | No |
+| **MCP support** | Native (69 tools) | No | No | No | No |
 | **Human-readable UI** | Built-in web UI | Raw files / GitHub | Needs custom UI | Desktop app | No |
 | **Search** | FTS (BM25) + vector | `grep` | SQL `LIKE` / pg_trgm | Plugins | Vector similarity |
 | **Structured queries** | DQL over frontmatter | No | SQL (full power) | Plugin (Dataview) | Metadata filters |

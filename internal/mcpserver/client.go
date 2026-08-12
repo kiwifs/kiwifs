@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/claims"
+	"github.com/kiwifs/kiwifs/internal/similar"
 )
 
 type RemoteBackend struct {
@@ -575,6 +576,25 @@ func (r *RemoteBackend) Suggestions(ctx context.Context, path string, limit int)
 		return nil, err
 	}
 	return result.Suggestions, nil
+}
+
+func (r *RemoteBackend) Similar(ctx context.Context, path, profile string, k int, vector map[string]any) (*similar.Result, error) {
+	q := fmt.Sprintf("%s/similar?path=%s&profile=%s", r.apiPrefix, url.QueryEscape(path), url.QueryEscape(profile))
+	if k > 0 {
+		q += fmt.Sprintf("&k=%d", k)
+	}
+	if len(vector) > 0 {
+		raw, err := json.Marshal(vector)
+		if err != nil {
+			return nil, fmt.Errorf("encode vector: %w", err)
+		}
+		q += "&vector=" + url.QueryEscape(string(raw))
+	}
+	var result similar.Result
+	if err := r.getJSON(ctx, q, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 func (r *RemoteBackend) Embeddings(ctx context.Context, path string) (*EmbeddingsResult, error) {
