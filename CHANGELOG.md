@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.51](https://github.com/kiwifs/kiwifs/compare/v0.19.50...v0.19.51) (2026-08-12)
+
+
+### Features
+
+* **ui:** add a calendar date field to widget scope ([#484](https://github.com/kiwifs/kiwifs/issues/484)) ([8cff9a8](https://github.com/kiwifs/kiwifs/commit/8cff9a837d567780a23175af8c0c900371b47e8e))
+
+
+### Bug Fixes
+
+* **schema:** validate nested frontmatter, add configurable discriminator ([#486](https://github.com/kiwifs/kiwifs/issues/486)) ([a235033](https://github.com/kiwifs/kiwifs/commit/a235033a38d8fd53eb5eb981bac41a546b45c243))
+
 ## [0.19.50](https://github.com/kiwifs/kiwifs/compare/v0.19.49...v0.19.50) (2026-08-04)
 
 
