@@ -228,19 +228,29 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 
 	var schemaReload func()
 	if cfg.Schema.Enforce {
-		sv := schema.NewValidator(root)
+		discriminator := cfg.Schema.DiscriminatorField()
+		warnOnly := cfg.Schema.IsWarnOnly()
+		sv := schema.NewValidatorWithDiscriminator(root, discriminator)
 		pipe.ValidateWrite = func(ctx context.Context, path string, content []byte, _ pipeline.WriteKind) error {
 			fm, ferr := markdown.Frontmatter(content)
 			if ferr != nil || fm == nil {
 				return nil
 			}
 			if verr := sv.Validate(fm); verr != nil {
+				if warnOnly {
+					log.Printf("%sschema: %s: %v", prefix, path, verr)
+					return nil
+				}
 				return verr
 			}
 			return nil
 		}
 		schemaReload = sv.Reload
-		log.Printf("%sschema validation enabled", prefix)
+		mode := "reject"
+		if warnOnly {
+			mode = "warn"
+		}
+		log.Printf("%sschema validation enabled (discriminator=%q, level=%s)", prefix, discriminator, mode)
 	}
 
 	if len(cfg.ValidateWriteRules) > 0 {
