@@ -21,9 +21,22 @@
  * legend: true
  * grid: true
  * ```
+ *
+ * Instead of inline `data`, a block may carry a `query:` holding DQL. The
+ * rows come back from /api/kiwi/query, the x axis is the first non-numeric
+ * column and every remaining numeric column becomes a series:
+ *
+ * ```kiwi-chart
+ * type: bar
+ * query: |
+ *   TABLE title, priority FROM "datasets" SORT priority DESC
+ * ```
+ *
+ * Parsing and row-shaping live in ../lib/chartBlock so they can be tested
+ * without a React render harness.
  */
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -49,270 +62,25 @@ import {
   Legend,
 } from "recharts";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-interface SeriesConfig {
-  key: string;
-  color?: string;
-  name?: string;
-  stackId?: string;
-}
-
-interface ChartConfig {
-  type: "bar" | "line" | "area" | "pie" | "radar" | "scatter";
-  title?: string;
-  data: Record<string, unknown>[];
-  xKey?: string;
-  yKey?: string;
-  series?: SeriesConfig[];
-  legend?: boolean;
-  grid?: boolean;
-  height?: number;
-  stacked?: boolean;
-  colors?: string[];
-}
-
-// ── Default color palette ────────────────────────────────────────────────────
-
-const DEFAULT_COLORS = [
-  "#3b82f6", // blue
-  "#ef4444", // red
-  "#22c55e", // green
-  "#f59e0b", // amber
-  "#8b5cf6", // violet
-  "#06b6d4", // cyan
-  "#f97316", // orange
-  "#ec4899", // pink
-  "#14b8a6", // teal
-  "#6366f1", // indigo
-];
-
-// ── YAML Parser (lightweight, no external dependency) ────────────────────────
-
-function parseYaml(source: string): unknown {
-  const lines = source.split("\n");
-  return parseYamlLines(lines, 0, 0).value;
-}
-
-interface ParseResult {
-  value: unknown;
-  endIndex: number;
-}
-
-function getIndent(line: string): number {
-  const match = line.match(/^(\s*)/);
-  return match ? match[1].length : 0;
-}
-
-function parseYamlLines(lines: string[], startIndex: number, baseIndent: number): ParseResult {
-  const result: Record<string, unknown> = {};
-  let i = startIndex;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Skip empty lines and comments
-    if (!line.trim() || line.trim().startsWith("#")) {
-      i++;
-      continue;
-    }
-
-    const indent = getIndent(line);
-    if (indent < baseIndent) break;
-    if (indent > baseIndent) break; // Unexpected deeper indent
-
-    const trimmed = line.trim();
-
-    // Key-value pair
-    const kvMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (kvMatch) {
-      const [, key, rawValue] = kvMatch;
-      const value = rawValue.trim();
-
-      if (value === "" || value === "|" || value === ">") {
-        // Check if next lines are a list or nested object
-        const nextNonEmpty = findNextNonEmpty(lines, i + 1);
-        if (nextNonEmpty !== -1) {
-          const nextIndent = getIndent(lines[nextNonEmpty]);
-          const nextTrimmed = lines[nextNonEmpty].trim();
-          if (nextIndent > indent && nextTrimmed.startsWith("- ")) {
-            // It's a list
-            const listResult = parseYamlList(lines, nextNonEmpty, nextIndent);
-            result[key] = listResult.value;
-            i = listResult.endIndex;
-            continue;
-          } else if (nextIndent > indent) {
-            // Nested object
-            const nested = parseYamlLines(lines, nextNonEmpty, nextIndent);
-            result[key] = nested.value;
-            i = nested.endIndex;
-            continue;
-          }
-        }
-        result[key] = value === "" ? null : value;
-      } else {
-        result[key] = parseYamlScalar(value);
-      }
-      i++;
-    } else if (trimmed.startsWith("- ")) {
-      // We're at the start of a list at this level
-      const listResult = parseYamlList(lines, i, baseIndent);
-      return { value: listResult.value, endIndex: listResult.endIndex };
-    } else {
-      i++;
-    }
-  }
-
-  return { value: result, endIndex: i };
-}
-
-function parseYamlList(lines: string[], startIndex: number, baseIndent: number): ParseResult {
-  const result: unknown[] = [];
-  let i = startIndex;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (!line.trim() || line.trim().startsWith("#")) {
-      i++;
-      continue;
-    }
-
-    const indent = getIndent(line);
-    if (indent < baseIndent) break;
-    if (indent > baseIndent && result.length > 0) {
-      // Continuation of previous list item (nested content)
-      i++;
-      continue;
-    }
-
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("- ")) break;
-
-    const itemContent = trimmed.slice(2).trim();
-
-    // Check if it's a single-line mapping: "- key: value key2: value2"
-    if (itemContent.includes(":")) {
-      // It could be an inline object (- month: Jan) or start of a multi-line object
-      const inlineObj: Record<string, unknown> = {};
-      const firstKvMatch = itemContent.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-      if (firstKvMatch) {
-        const [, fKey, fVal] = firstKvMatch;
-        inlineObj[fKey] = parseYamlScalar(fVal.trim());
-
-        // Check for additional keys on subsequent indented lines
-        let j = i + 1;
-        while (j < lines.length) {
-          const nextLine = lines[j];
-          if (!nextLine.trim() || nextLine.trim().startsWith("#")) {
-            j++;
-            continue;
-          }
-          const nextIndent = getIndent(nextLine);
-          if (nextIndent <= indent) break;
-          const nextTrimmed = nextLine.trim();
-          const nextKvMatch = nextTrimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-          if (nextKvMatch) {
-            const [, nKey, nVal] = nextKvMatch;
-            inlineObj[nKey] = parseYamlScalar(nVal.trim());
-          }
-          j++;
-        }
-        result.push(inlineObj);
-        i = j;
-        continue;
-      }
-    }
-
-    // Simple scalar list item
-    result.push(parseYamlScalar(itemContent));
-    i++;
-  }
-
-  return { value: result, endIndex: i };
-}
-
-function findNextNonEmpty(lines: string[], startIndex: number): number {
-  for (let i = startIndex; i < lines.length; i++) {
-    if (lines[i].trim() && !lines[i].trim().startsWith("#")) return i;
-  }
-  return -1;
-}
-
-function parseYamlScalar(value: string): unknown {
-  if (value === "true" || value === "True") return true;
-  if (value === "false" || value === "False") return false;
-  if (value === "null" || value === "~" || value === "") return null;
-  if (/^-?\d+$/.test(value)) return parseInt(value, 10);
-  if (/^-?\d+\.\d+$/.test(value)) return parseFloat(value);
-  // Inline array: [a, b, c]
-  if (value.startsWith("[") && value.endsWith("]")) {
-    return value
-      .slice(1, -1)
-      .split(",")
-      .map((s) => parseYamlScalar(s.trim()));
-  }
-  // Quoted string
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-    return value.slice(1, -1);
-  }
-  return value;
-}
-
-// ── Config parser ────────────────────────────────────────────────────────────
-
-function parseChartConfig(source: string): ChartConfig {
-  const trimmed = source.trim();
-
-  // Try JSON first
-  if (trimmed.startsWith("{")) {
-    return JSON.parse(trimmed) as ChartConfig;
-  }
-
-  // Parse as YAML
-  const parsed = parseYaml(trimmed) as Record<string, unknown>;
-
-  return {
-    type: (parsed.type as ChartConfig["type"]) || "bar",
-    title: parsed.title as string | undefined,
-    data: (parsed.data as Record<string, unknown>[]) || [],
-    xKey: parsed.xKey as string | undefined,
-    yKey: parsed.yKey as string | undefined,
-    series: parsed.series as SeriesConfig[] | undefined,
-    legend: parsed.legend as boolean | undefined,
-    grid: parsed.grid as boolean | undefined,
-    height: parsed.height as number | undefined,
-    stacked: parsed.stacked as boolean | undefined,
-    colors: parsed.colors as string[] | undefined,
-  };
-}
-
-// ── Infer series from data if not specified ──────────────────────────────────
-
-function inferSeries(config: ChartConfig): SeriesConfig[] {
-  if (config.series && config.series.length > 0) return config.series;
-
-  // Auto-detect numeric keys (excluding xKey)
-  const firstRow = config.data[0];
-  if (!firstRow) return [];
-
-  const numericKeys = Object.keys(firstRow).filter(
-    (k) => k !== config.xKey && typeof firstRow[k] === "number"
-  );
-
-  return numericKeys.map((key, i) => ({
-    key,
-    color: config.colors?.[i] || DEFAULT_COLORS[i % DEFAULT_COLORS.length],
-  }));
-}
+import { api } from "../lib/api";
+import type { QueryResponse } from "../lib/api";
+import {
+  DEFAULT_COLORS,
+  inferSeries,
+  parseChartConfig,
+  queryRowsToChartData,
+} from "../lib/chartBlock";
+import type { ChartConfig, SeriesConfig } from "../lib/chartBlock";
 
 // ── Chart Component ──────────────────────────────────────────────────────────
 
 export function KiwiChart({ source }: { source: string }) {
-  const { config, error } = useMemo(() => {
+  const { config, error: parseError } = useMemo(() => {
     try {
       const cfg = parseChartConfig(source);
-      if (!cfg.data || !Array.isArray(cfg.data) || cfg.data.length === 0) {
+      // A query supplies the data, so an empty inline `data` is only an
+      // error for blocks that have no query.
+      if (!cfg.query && (!cfg.data || !Array.isArray(cfg.data) || cfg.data.length === 0)) {
         return { config: null, error: "No data provided or data is not an array" };
       }
       return { config: cfg, error: null };
@@ -321,6 +89,44 @@ export function KiwiChart({ source }: { source: string }) {
     }
   }, [source]);
 
+  const dql = config?.query;
+  const [result, setResult] = useState<QueryResponse | null>(null);
+  const [queryError, setQueryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!dql) {
+      setResult(null);
+      setQueryError(null);
+      return;
+    }
+    let cancelled = false;
+    setResult(null);
+    setQueryError(null);
+    api
+      .query(dql)
+      .then((resp) => {
+        if (!cancelled) setResult(resp);
+      })
+      .catch((e) => {
+        if (!cancelled) setQueryError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dql]);
+
+  // Resolve the rows the chart actually renders. Inline `data` stays the
+  // fallback so a block that carries both keeps working offline.
+  const resolved = useMemo(() => {
+    if (!config) return null;
+    if (!config.query) {
+      return { data: config.data, xKey: config.xKey, series: inferSeries(config) };
+    }
+    if (!result) return null;
+    return queryRowsToChartData(result.rows, result.columns, config);
+  }, [config, result]);
+
+  const error = parseError ?? queryError;
   if (error || !config) {
     return (
       <div className="kiwi-chart-error rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
@@ -329,8 +135,25 @@ export function KiwiChart({ source }: { source: string }) {
     );
   }
 
-  const series = inferSeries(config);
   const chartHeight = config.height || 300;
+
+  if (!resolved) {
+    return (
+      <div className="kiwi-chart-loading text-muted-foreground text-sm" style={{ minHeight: chartHeight }}>
+        Loading chart…
+      </div>
+    );
+  }
+
+  if (resolved.data.length === 0) {
+    return (
+      <div className="kiwi-chart-empty rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
+        No rows matched this query.
+      </div>
+    );
+  }
+
+  const chartConfig: ChartConfig = { ...config, data: resolved.data, xKey: resolved.xKey };
 
   return (
     <figure className="kiwi-chart not-prose my-4">
@@ -341,7 +164,7 @@ export function KiwiChart({ source }: { source: string }) {
       )}
       <div className="rounded-md border border-border bg-card p-4">
         <ResponsiveContainer width="100%" height={chartHeight}>
-          {renderChart(config, series)}
+          {renderChart(chartConfig, resolved.series)}
         </ResponsiveContainer>
       </div>
     </figure>

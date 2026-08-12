@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { KiwiKanbanBlock } from "./KiwiKanbanBlock";
+import { MockApiProvider } from "./__mocks__/apiMock";
 
 const meta: Meta<typeof KiwiKanbanBlock> = {
   title: "Blocks/KiwiKanbanBlock",
@@ -171,5 +172,37 @@ columns:
 export const ErrorState: Story = {
   args: {
     source: "this is not valid kanban config at all {{{",
+  },
+};
+
+// ── Query-driven board ───────────────────────────────────────────────────────
+
+const BOARD_ROWS = [
+  { _path: "datasets/sales.md", title: "Sales", status: "verified", priority: "high" },
+  { _path: "datasets/revenue.md", title: "Revenue", status: "draft", tags: "tabular, timeseries" },
+  { _path: "datasets/customers.md", title: "Customers", status: "draft", assignee: "ana" },
+];
+
+export const FromQuery: Story = {
+  decorators: [
+    (Story) => (
+      <MockApiProvider overrides={{ queryRows: BOARD_ROWS }}>
+        <div className="max-w-5xl p-4 bg-background text-foreground">
+          <Story />
+        </div>
+      </MockApiProvider>
+    ),
+  ],
+  args: {
+    source: `title: Datasets by status
+query: |
+  TABLE title, status, priority, assignee, tags
+  FROM "datasets"
+groupBy: status
+columns:
+  - name: draft
+    color: "#f59e0b"
+  - name: verified
+    color: "#22c55e"`,
   },
 };
