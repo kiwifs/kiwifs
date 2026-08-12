@@ -31,11 +31,27 @@ const RelationSupersededBy = "superseded_by"
 
 // validTypedFieldNameRe limits typed-link field names to safe frontmatter keys.
 // Values are bound as SQL parameters; this guards config against odd keys.
-var validTypedFieldNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
+// Hyphens are allowed because kebab-case frontmatter keys (related-notes,
+// depends-on) are as common as snake_case ones.
+var validTypedFieldNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 
 // ValidTypedFieldName reports whether name is a safe typed-link frontmatter key.
 func ValidTypedFieldName(name string) bool {
 	return validTypedFieldNameRe.MatchString(name)
+}
+
+// InvalidTypedFieldNames returns the configured names SanitizeTypedLinkFields
+// will drop. A dropped field indexes no links and makes every query over that
+// relation return empty, so callers should surface these rather than let the
+// misconfiguration look like missing content.
+func InvalidTypedFieldNames(fields []string) []string {
+	var out []string
+	for _, field := range fields {
+		if !ValidTypedFieldName(field) {
+			out = append(out, field)
+		}
+	}
+	return out
 }
 
 // SanitizeTypedLinkFields drops invalid configured field names.

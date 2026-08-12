@@ -728,13 +728,17 @@ See [[foo]].
 
 func TestValidTypedFieldName(t *testing.T) {
 	t.Parallel()
-	valid := []string{"cites", "supersedes", "superseded_by", "variant_of", "extends", "services", "contradicts"}
+	valid := []string{
+		"cites", "supersedes", "superseded_by", "variant_of", "extends", "services", "contradicts",
+		// kebab-case is as common as snake_case in frontmatter
+		"field-name", "related-notes", "depends-on", "a-b-c",
+	}
 	for _, name := range valid {
 		if !ValidTypedFieldName(name) {
 			t.Fatalf("%q should be valid", name)
 		}
 	}
-	invalid := []string{"", "cites; DROP TABLE links", "field.name", "field-name", "123", "a b"}
+	invalid := []string{"", "cites; DROP TABLE links", "field.name", "123", "a b", "-leading", "_leading"}
 	for _, name := range invalid {
 		if ValidTypedFieldName(name) {
 			t.Fatalf("%q should be invalid", name)
@@ -744,9 +748,21 @@ func TestValidTypedFieldName(t *testing.T) {
 
 func TestSanitizeTypedLinkFields(t *testing.T) {
 	t.Parallel()
-	got := SanitizeTypedLinkFields([]string{"cites", "bad;injection", "extends", ""})
-	want := []string{"cites", "extends"}
+	got := SanitizeTypedLinkFields([]string{"cites", "bad;injection", "extends", "", "related-notes"})
+	want := []string{"cites", "extends", "related-notes"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v want %v", got, want)
+	}
+}
+
+func TestInvalidTypedFieldNames(t *testing.T) {
+	t.Parallel()
+	got := InvalidTypedFieldNames([]string{"cites", "bad;injection", "related-notes", "field.name"})
+	want := []string{"bad;injection", "field.name"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	if names := InvalidTypedFieldNames([]string{"cites", "related-notes"}); names != nil {
+		t.Fatalf("expected nil for an all-valid list, got %v", names)
 	}
 }

@@ -593,6 +593,10 @@ func buildVersioner(prefix, root string, cfg *config.Config) versioning.Versione
 func buildSearcher(prefix, root string, store storage.Storage, cfg *config.Config) search.Searcher {
 	switch cfg.Search.Engine {
 	case "sqlite", "fts5":
+		if dropped := links.InvalidTypedFieldNames(cfg.Links.TypedFields); len(dropped) > 0 {
+			log.Printf("%s[links] typed_fields: ignoring invalid name(s) %s — no links will be indexed for them",
+				prefix, strings.Join(dropped, ", "))
+		}
 		sq, err := search.NewSQLiteWithTypedFields(root, store, cfg.Links.TypedLinkFields(), cfg.Dataview.CustomFields)
 		if err != nil {
 			log.Printf("%ssqlite search unavailable (%v) — falling back to grep", prefix, err)
