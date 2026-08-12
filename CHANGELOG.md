@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.52](https://github.com/kiwifs/kiwifs/compare/v0.19.51...v0.19.52) (2026-08-12)
+
+
+### Features
+
+* structured records, similarity search, contextual chunks, query-driven blocks ([#487](https://github.com/kiwifs/kiwifs/issues/487)) ([24197a3](https://github.com/kiwifs/kiwifs/commit/24197a3610532aac6655c00fab6ca88f77b38e41))
+
 ## [0.19.51](https://github.com/kiwifs/kiwifs/compare/v0.19.50...v0.19.51) (2026-08-12)
 
 
