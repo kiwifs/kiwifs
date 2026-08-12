@@ -23,6 +23,7 @@ import rehypeAutolinkHeadings from "rehype-autolink-headings";
 
 import { remarkMark, remarkInlineTags, rehypeCodeMeta } from "./remarkPlugins";
 import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "./remarkDirectives";
+import { withDataAttributeAliasesForSchema } from "./sanitizeAttributes";
 import { remarkWikiLinks, type LinkResolver } from "./wikiLinks";
 
 export { stripObsidianComments } from "./remarkPlugins";
@@ -46,7 +47,7 @@ export const kiwiSanitizeSchema = {
     ...defaultSchema.protocols,
     href: ["http", "https", "irc", "ircs", "mailto", "xmpp", "kiwi", "kiwi-missing"],
   },
-  attributes: {
+  attributes: withDataAttributeAliasesForSchema({
     ...defaultSchema.attributes,
     "*": [...(defaultSchema.attributes?.["*"] || []), "className", "style", "role", "id",
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
@@ -105,7 +106,7 @@ export const kiwiSanitizeSchema = {
     feComposite: ["in", "in2", "operator", "k1", "k2", "k3", "k4", "result"],
     feFlood: ["floodColor", "floodOpacity", "result"],
     feMorphology: ["in", "operator", "radius", "result"],
-  },
+  }),
 };
 
 /**

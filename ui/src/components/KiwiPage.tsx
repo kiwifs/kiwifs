@@ -53,6 +53,7 @@ import { buildResolver, remarkWikiLinks } from "@kw/lib/wikiLinks";
 import { remarkMark, stripObsidianComments, remarkInlineTags, rehypeCodeMeta } from "@kw/lib/remarkPlugins";
 import remarkDirective from "remark-directive";
 import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "@kw/lib/remarkDirectives";
+import { withDataAttributeAliasesForSchema } from "@kw/lib/sanitizeAttributes";
 type Props = {
   /** Page path in the KiwiFS tree. Used for API fetching in connected mode. */
   path?: string;
@@ -116,7 +117,7 @@ const sanitizeSchema = {
     ...defaultSchema.protocols,
     href: ["http", "https", "irc", "ircs", "mailto", "xmpp", "kiwi", "kiwi-missing"],
   },
-  attributes: {
+  attributes: withDataAttributeAliasesForSchema({
     ...defaultSchema.attributes,
     "*": [...(defaultSchema.attributes?.["*"] || []), "className", "style", "role", "id",
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
@@ -178,7 +179,7 @@ const sanitizeSchema = {
     feComposite: ["in", "in2", "operator", "k1", "k2", "k3", "k4", "result"],
     feFlood: ["floodColor", "floodOpacity", "result"],
     feMorphology: ["in", "operator", "radius", "result"],
-  },
+  }),
 };
 
 function findEntry(node: TreeEntry | null | undefined, target: string): TreeEntry | null {
