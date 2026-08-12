@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.53](https://github.com/kiwifs/kiwifs/compare/v0.19.52...v0.19.53) (2026-08-12)
+
+
+### Features
+
+* retrieval evaluation, hybrid search, context packs, Croissant import, claim provenance ([#489](https://github.com/kiwifs/kiwifs/issues/489)) ([f269bd2](https://github.com/kiwifs/kiwifs/commit/f269bd2dde387461ad8105af0f5ee0eda50573fe))
+
 ## [0.19.52](https://github.com/kiwifs/kiwifs/compare/v0.19.51...v0.19.52) (2026-08-12)
 
 
