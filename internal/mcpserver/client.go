@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kiwifs/kiwifs/internal/brief"
 	"github.com/kiwifs/kiwifs/internal/claims"
 	"github.com/kiwifs/kiwifs/internal/similar"
 )
@@ -299,6 +300,27 @@ func (r *RemoteBackend) searchFull(ctx context.Context, query string, limit, off
 
 func (r *RemoteBackend) SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	return r.SearchSemanticScoped(ctx, query, limit, "")
+}
+
+func (r *RemoteBackend) Brief(ctx context.Context, req BriefRequest) (*brief.Pack, error) {
+	body := map[string]any{"query": req.Query}
+	if req.BudgetTokens != 0 {
+		body["budget_tokens"] = req.BudgetTokens
+	}
+	if req.MaxPages > 0 {
+		body["max_pages"] = req.MaxPages
+	}
+	if req.PathPrefix != "" {
+		body["path_prefix"] = req.PathPrefix
+	}
+	if req.Encoding != "" {
+		body["encoding"] = req.Encoding
+	}
+	var pack brief.Pack
+	if err := r.postJSON(ctx, r.apiPrefix+"/brief", body, &pack); err != nil {
+		return nil, err
+	}
+	return &pack, nil
 }
 
 func (r *RemoteBackend) SearchHybrid(ctx context.Context, query string, limit int, pathPrefix string) ([]HybridSearchResult, error) {

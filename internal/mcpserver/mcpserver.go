@@ -366,6 +366,18 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 			Handler: handleSearchHybrid(b),
 		},
 		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_brief",
+				mcp.WithDescription("Assemble everything relevant to a question into one token-budgeted pack, replacing a dozen search-then-read round trips. Runs hybrid retrieval, includes each page whole when it fits and its best-matching sections when it doesn't, and stops at the budget. Content is never summarised: whatever did not fit is listed with its token cost so you can ask for it by name or raise the budget."),
+				mcp.WithString("query", mcp.Required(), mcp.Description("The question to assemble context for")),
+				mcp.WithNumber("budget_tokens", mcp.Description("Token ceiling for the assembled content (default 4000)")),
+				mcp.WithNumber("max_pages", mcp.Description("How many retrieved pages to consider (default 20)")),
+				mcp.WithString("path_prefix", mcp.Description("Restrict retrieval to paths under this prefix")),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleBrief(b),
+		},
+		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_backlinks",
 				mcp.WithDescription("List all pages that link to a given page via [[wiki links]]. Useful for understanding page connections and impact of changes."),
 				mcp.WithString("path", pathOpts...),
@@ -1719,6 +1731,63 @@ func handleAppend(b Backend) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("Append failed: %v", err)), nil
 		}
 		return mcp.NewToolResultText(fmt.Sprintf("Appended to %s (ETag: %s)", path, etag)), nil
+	}
+}
+
+func handleBrief(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		query, _ := args["query"].(string)
+		if query == "" {
+			return mcp.NewToolResultError("query is required"), nil
+		}
+		pathPrefix, err := optionalReadOnlyPathArg(args, "path_prefix")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		breq := BriefRequest{Query: query, PathPrefix: pathPrefix}
+		if v, ok := args["budget_tokens"].(float64); ok {
+			breq.BudgetTokens = int(v)
+		}
+		if v, ok := args["max_pages"].(float64); ok && v > 0 {
+			breq.MaxPages = int(v)
+		}
+
+		pack, err := b.Brief(ctx, breq)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Brief failed: %v", err)), nil
+		}
+
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "# Context pack: %s\n\n", pack.Query)
+		fmt.Fprintf(&sb, "%d/%d tokens used (counted with %s), %d of %d candidate pages included.\n",
+			pack.UsedTokens, pack.BudgetTokens, pack.Tokenizer, len(pack.Items), pack.Candidates)
+
+		for _, item := range pack.Items {
+			sb.WriteString("\n---\n\n")
+			if item.Heading != "" {
+				fmt.Fprintf(&sb, "## %s — %s (%s, %d tokens)\n\n", item.Title, item.Heading, item.Path, item.Tokens)
+			} else {
+				fmt.Fprintf(&sb, "## %s (%s, %d tokens)\n\n", item.Title, item.Path, item.Tokens)
+			}
+			sb.WriteString(item.Content)
+			sb.WriteString("\n")
+		}
+
+		// The manifest is the feature: an agent that knows exactly what was
+		// withheld can ask for it, where one handed a summary cannot.
+		if len(pack.Dropped) > 0 {
+			fmt.Fprintf(&sb, "\n---\n\n## Not included (%d)\n\n", len(pack.Dropped))
+			for _, d := range pack.Dropped {
+				label := d.Path
+				if d.Heading != "" {
+					label += " § " + d.Heading
+				}
+				fmt.Fprintf(&sb, "- %s — %s (%d tokens)\n", label, d.Reason, d.Tokens)
+			}
+			sb.WriteString("\nRead any of these with kiwi_read, or re-run with a larger budget_tokens.\n")
+		}
+		return mcp.NewToolResultText(sb.String()), nil
 	}
 }
 

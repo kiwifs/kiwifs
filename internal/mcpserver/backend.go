@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kiwifs/kiwifs/internal/brief"
 	"github.com/kiwifs/kiwifs/internal/claims"
 	"github.com/kiwifs/kiwifs/internal/similar"
 )
@@ -21,6 +22,15 @@ type SearchResult struct {
 	Path    string  `json:"path"`
 	Snippet string  `json:"snippet,omitempty"`
 	Score   float64 `json:"score,omitempty"`
+}
+
+// BriefRequest asks for a token-budgeted answer pack.
+type BriefRequest struct {
+	Query        string `json:"query"`
+	BudgetTokens int    `json:"budget_tokens,omitempty"`
+	MaxPages     int    `json:"max_pages,omitempty"`
+	PathPrefix   string `json:"path_prefix,omitempty"`
+	Encoding     string `json:"encoding,omitempty"`
 }
 
 // HybridSearchResult is one RRF-fused hit. The per-engine ranks travel with
@@ -156,6 +166,7 @@ type Backend interface {
 	Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]SearchResult, error)
 	SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error)
 	SearchHybrid(ctx context.Context, query string, limit int, pathPrefix string) ([]HybridSearchResult, error)
+	Brief(ctx context.Context, req BriefRequest) (*brief.Pack, error)
 	QueryMeta(ctx context.Context, filters []string, sort, order string, limit, offset int) ([]MetaResult, error)
 	QueryMetaOr(ctx context.Context, andFilters, orFilters []string, sort, order string, limit, offset int, paths ...string) ([]MetaResult, error)
 	QueryDQL(ctx context.Context, dql string, limit, offset int) (*QueryResult, error)

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/bootstrap"
+	"github.com/kiwifs/kiwifs/internal/brief"
 	"github.com/kiwifs/kiwifs/internal/claims"
 	"github.com/kiwifs/kiwifs/internal/clipper"
 	"github.com/kiwifs/kiwifs/internal/config"
@@ -414,6 +415,20 @@ func stripMarkTags(s string) string {
 
 func (b *LocalBackend) SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	return b.SearchSemanticScoped(ctx, query, limit, "")
+}
+
+// Brief assembles a token-budgeted answer pack.
+func (b *LocalBackend) Brief(ctx context.Context, req BriefRequest) (*brief.Pack, error) {
+	if err := b.init(); err != nil {
+		return nil, err
+	}
+	return brief.Assemble(ctx, b.stack.Searcher, b.stack.Vectors, b.stack.Store, brief.Request{
+		Query:        req.Query,
+		BudgetTokens: req.BudgetTokens,
+		MaxPages:     req.MaxPages,
+		PathPrefix:   req.PathPrefix,
+		Encoding:     req.Encoding,
+	})
 }
 
 // SearchHybrid fuses the lexical and vector rankings with RRF. Unlike
