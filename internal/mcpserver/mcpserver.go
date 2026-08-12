@@ -355,6 +355,17 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 			Handler: handleSearchSemantic(b),
 		},
 		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_search_hybrid",
+				mcp.WithDescription("Search with both keyword (BM25) and semantic (vector) retrieval, fused by Reciprocal Rank Fusion. Prefer this over kiwi_search or kiwi_search_semantic when you don't know whether the answer uses the same words as your query: keyword search finds exact terms, semantic search finds paraphrases, and fusion surfaces pages both agree on. Each result reports its rank in each engine. Falls back to keyword-only when no vector index is configured."),
+				mcp.WithString("query", mcp.Required(), mcp.Description("Search query")),
+				mcp.WithNumber("limit", mcp.Description("Max results (default 15)")),
+				mcp.WithString("path_prefix", mcp.Description("Restrict results to paths under this prefix")),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleSearchHybrid(b),
+		},
+		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_backlinks",
 				mcp.WithDescription("List all pages that link to a given page via [[wiki links]]. Useful for understanding page connections and impact of changes."),
 				mcp.WithString("path", pathOpts...),
@@ -1708,6 +1719,56 @@ func handleAppend(b Backend) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(fmt.Sprintf("Append failed: %v", err)), nil
 		}
 		return mcp.NewToolResultText(fmt.Sprintf("Appended to %s (ETag: %s)", path, etag)), nil
+	}
+}
+
+func handleSearchHybrid(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		query, _ := args["query"].(string)
+		if query == "" {
+			return mcp.NewToolResultError("query is required"), nil
+		}
+		limit := intArg(args, "limit", 15)
+		if limit > 50 {
+			limit = 50
+		}
+		pathPrefix, err := optionalReadOnlyPathArg(args, "path_prefix")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		results, err := b.SearchHybrid(ctx, query, limit, pathPrefix)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Hybrid search failed: %v", err)), nil
+		}
+		if len(results) == 0 {
+			return mcp.NewToolResultText("No results found."), nil
+		}
+
+		var sb strings.Builder
+		for i, r := range results {
+			// Naming the contributing engines is the point: a keyword-only hit
+			// matched your literal terms, a semantic-only hit did not.
+			fmt.Fprintf(&sb, "%d. %s (%s)\n", i+1, r.Path, describeHybridRanks(r))
+			if r.Snippet != "" {
+				fmt.Fprintf(&sb, "   %s\n", r.Snippet)
+			}
+		}
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+}
+
+func describeHybridRanks(r HybridSearchResult) string {
+	switch {
+	case r.FTSRank > 0 && r.SemanticRank > 0:
+		return fmt.Sprintf("both: keyword #%d, semantic #%d", r.FTSRank, r.SemanticRank)
+	case r.FTSRank > 0:
+		return fmt.Sprintf("keyword only, #%d", r.FTSRank)
+	case r.SemanticRank > 0:
+		return fmt.Sprintf("semantic only, #%d", r.SemanticRank)
+	default:
+		return "unranked"
 	}
 }
 

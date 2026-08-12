@@ -3,6 +3,7 @@ package eval
 import (
 	"context"
 
+	"github.com/kiwifs/kiwifs/internal/hybrid"
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
 )
@@ -15,13 +16,20 @@ const (
 	EngineHybrid   = "hybrid"
 )
 
-// DefaultEngines is the standard pair under test: the FTS5 index, plus the
-// vector index when one is configured. Both the REST handler and the MCP
-// backend use it so a run means the same thing whichever door you came in.
+// DefaultEngines is the standard set under test: the FTS5 index, plus — when a
+// vector index is configured — the vector index and their RRF fusion. Both the
+// REST handler and the MCP backend use it so a run means the same thing
+// whichever door you came in.
+//
+// Hybrid is omitted without a vector index because it would be a second,
+// identically-scoring copy of the lexical row.
 func DefaultEngines(searcher search.Searcher, vectors *vectorstore.Service) []Engine {
 	engines := []Engine{LexicalEngine{Searcher: searcher, Boost: true}}
 	if vectors != nil {
-		engines = append(engines, SemanticEngine{Vectors: vectors})
+		engines = append(engines,
+			SemanticEngine{Vectors: vectors},
+			HybridEngine{Searcher: searcher, Vectors: vectors},
+		)
 	}
 	return engines
 }
@@ -59,8 +67,12 @@ func SearchExcluding(ctx context.Context, s search.Searcher, query string, topK 
 	if topK <= 0 {
 		topK = DefaultTopK
 	}
+	sopts := search.SearchOptions{ExcludePrefixes: exclude}
+	if bos, ok := s.(search.BoostedOptionsSearcher); ok && boost {
+		return bos.SearchBoostedWithOptions(ctx, query, topK, 0, "", sopts)
+	}
 	if os, ok := s.(search.OptionsSearcher); ok {
-		return os.SearchWithOptions(ctx, query, topK, 0, "", search.SearchOptions{ExcludePrefixes: exclude})
+		return os.SearchWithOptions(ctx, query, topK, 0, "", sopts)
 	}
 	if len(exclude) == 0 {
 		if ts, ok := s.(search.TrustSearcher); ok && boost {
@@ -110,6 +122,31 @@ func (e SemanticEngine) Rank(ctx context.Context, question string, topK int, exc
 		paths = append(paths, r.Path)
 	}
 	return paths, nil
+}
+
+// HybridEngine evaluates RRF fusion of the two indexes. It calls the same
+// hybrid.Search that GET /api/kiwi/search?mode=hybrid and kiwi_search_hybrid
+// call, so the measured ranking is the shipped ranking.
+type HybridEngine struct {
+	Searcher search.Searcher
+	Vectors  *vectorstore.Service
+	// K is the RRF rank constant. Zero uses search.DefaultRRFK.
+	K float64
+}
+
+func (e HybridEngine) Name() string { return EngineHybrid }
+
+func (e HybridEngine) Rank(ctx context.Context, question string, topK int, exclude []string) ([]string, error) {
+	results, err := hybrid.Search(ctx, e.Searcher, e.Vectors, question, hybrid.Options{
+		TopK:            topK,
+		K:               e.K,
+		ExcludePrefixes: exclude,
+		Boost:           true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return hybrid.Paths(results), nil
 }
 
 // FuncEngine adapts a plain function to Engine, for strategies that are

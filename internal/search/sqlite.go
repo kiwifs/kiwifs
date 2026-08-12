@@ -1768,7 +1768,15 @@ func (s *SQLite) FilterByScope(ctx context.Context, paths []string, scope string
 // multipliers so verified/source-of-truth pages dominate the ranking
 // while deprecated pages drop near the bottom.
 func (s *SQLite) SearchBoosted(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error) {
-	return s.searchTrust(ctx, query, limit, offset, pathPrefix, softTrustBoost)
+	return s.searchTrust(ctx, query, limit, offset, pathPrefix, SearchOptions{}, softTrustBoost)
+}
+
+// SearchBoostedWithOptions is SearchBoosted with the SearchWithOptions tuning
+// applied to the candidate query. Hybrid retrieval and held-out evaluation
+// both need trust boosting *and* prefix exclusion at once; running one without
+// the other would measure a ranker nobody uses.
+func (s *SQLite) SearchBoostedWithOptions(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions) ([]Result, error) {
+	return s.searchTrust(ctx, query, limit, offset, pathPrefix, opts, softTrustBoost)
 }
 
 // SearchVerified runs a normal FTS5 search and then aggressively re-ranks
@@ -1777,7 +1785,7 @@ func (s *SQLite) SearchBoosted(ctx context.Context, query string, limit, offset 
 // are pushed to 0.1x — effectively burying them. Note: this re-ranks
 // the full result set rather than filtering; all BM25 hits are retained.
 func (s *SQLite) SearchVerified(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]Result, error) {
-	return s.searchTrust(ctx, query, limit, offset, pathPrefix, hardTrustBoost)
+	return s.searchTrust(ctx, query, limit, offset, pathPrefix, SearchOptions{}, hardTrustBoost)
 }
 
 // searchTrust is the shared re-ranking path for SearchVerified (hard
@@ -1787,13 +1795,13 @@ func (s *SQLite) SearchVerified(ctx context.Context, query string, limit, offset
 // otherwise uses the same BM25 candidates, frontmatter lookup, and
 // paging logic to keep trust-ranked results comparable to the plain
 // /search list.
-func (s *SQLite) searchTrust(ctx context.Context, query string, limit, offset int, pathPrefix string, boostFn func(map[string]any) float64) ([]Result, error) {
+func (s *SQLite) searchTrust(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions, boostFn func(map[string]any) float64) ([]Result, error) {
 	// Over-fetch so we have enough candidates after re-ranking and slicing.
 	fetchLimit := limit * 3
 	if fetchLimit < 60 {
 		fetchLimit = 60
 	}
-	results, err := s.Search(ctx, query, fetchLimit, 0, pathPrefix)
+	results, err := s.SearchWithOptions(ctx, query, fetchLimit, 0, pathPrefix, opts)
 	if err != nil {
 		return nil, err
 	}

@@ -71,6 +71,9 @@ type evalQueryResult struct {
 	SemanticHits []string `json:"semantic_hits" example:"/docs/install.md"`
 	FTSNDCG      float64  `json:"fts_ndcg" example:"1"`
 	SemanticNDCG float64  `json:"semantic_ndcg" example:"0.63"`
+	HybridRank   int      `json:"hybrid_rank" example:"1"`
+	HybridHits   []string `json:"hybrid_hits"`
+	HybridNDCG   float64  `json:"hybrid_ndcg" example:"1"`
 	Relevant     []string `json:"relevant"`
 }
 
@@ -80,13 +83,16 @@ type evalSkipped struct {
 }
 
 type evalResponse struct {
-	TopK          int               `json:"top_k" example:"5"`
-	ExcludePrefix []string          `json:"exclude_prefix,omitempty"`
-	FTS           evalMetrics       `json:"fts"`
-	Semantic      evalMetrics       `json:"semantic"`
-	PerQuery      []evalQueryResult `json:"per_query"`
-	Skipped       []evalSkipped     `json:"skipped,omitempty"`
-	Errors        int               `json:"errors" example:"0"`
+	TopK          int         `json:"top_k" example:"5"`
+	ExcludePrefix []string    `json:"exclude_prefix,omitempty"`
+	FTS           evalMetrics `json:"fts"`
+	Semantic      evalMetrics `json:"semantic"`
+	// Hybrid is the RRF fusion of the two. It only runs when a vector index
+	// is configured — without one it would duplicate the FTS row.
+	Hybrid   evalMetrics       `json:"hybrid"`
+	PerQuery []evalQueryResult `json:"per_query"`
+	Skipped  []evalSkipped     `json:"skipped,omitempty"`
+	Errors   int               `json:"errors" example:"0"`
 }
 
 // Eval godoc
@@ -151,12 +157,14 @@ func buildEvalResponse(report *eval.Report) evalResponse {
 		ExcludePrefix: report.ExcludePrefixes,
 		FTS:           toEvalMetrics(report.Metrics(eval.EngineFTS)),
 		Semantic:      toEvalMetrics(report.Metrics(eval.EngineSemantic)),
+		Hybrid:        toEvalMetrics(report.Metrics(eval.EngineHybrid)),
 		PerQuery:      make([]evalQueryResult, 0, len(report.Queries)),
 		Errors:        report.Errors,
 	}
 	for _, q := range report.Queries {
 		fts := q.Scores[eval.EngineFTS]
 		sem := q.Scores[eval.EngineSemantic]
+		hyb := q.Scores[eval.EngineHybrid]
 		resp.PerQuery = append(resp.PerQuery, evalQueryResult{
 			Question:     q.Question,
 			Relevant:     q.Relevant,
@@ -166,6 +174,9 @@ func buildEvalResponse(report *eval.Report) evalResponse {
 			SemanticHits: orEmpty(sem.Hits),
 			FTSNDCG:      fts.NDCG,
 			SemanticNDCG: sem.NDCG,
+			HybridRank:   hyb.Rank,
+			HybridHits:   orEmpty(hyb.Hits),
+			HybridNDCG:   hyb.NDCG,
 		})
 	}
 	for _, s := range report.Skipped {

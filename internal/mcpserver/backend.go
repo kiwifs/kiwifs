@@ -23,6 +23,17 @@ type SearchResult struct {
 	Score   float64 `json:"score,omitempty"`
 }
 
+// HybridSearchResult is one RRF-fused hit. The per-engine ranks travel with
+// the result because "this page was found only by semantic search" changes how
+// much an agent should trust the snippet.
+type HybridSearchResult struct {
+	Path         string  `json:"path"`
+	Snippet      string  `json:"snippet,omitempty"`
+	Score        float64 `json:"score"`
+	FTSRank      int     `json:"fts_rank"`
+	SemanticRank int     `json:"semantic_rank"`
+}
+
 type MetaResult struct {
 	Path        string          `json:"path"`
 	Frontmatter json.RawMessage `json:"frontmatter"`
@@ -144,6 +155,7 @@ type Backend interface {
 	Tree(ctx context.Context, path string) (json.RawMessage, error)
 	Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]SearchResult, error)
 	SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error)
+	SearchHybrid(ctx context.Context, query string, limit int, pathPrefix string) ([]HybridSearchResult, error)
 	QueryMeta(ctx context.Context, filters []string, sort, order string, limit, offset int) ([]MetaResult, error)
 	QueryMetaOr(ctx context.Context, andFilters, orFilters []string, sort, order string, limit, offset int, paths ...string) ([]MetaResult, error)
 	QueryDQL(ctx context.Context, dql string, limit, offset int) (*QueryResult, error)
@@ -332,6 +344,7 @@ type EvalResult struct {
 	ExcludePrefix []string          `json:"exclude_prefix,omitempty"`
 	FTS           EvalMetrics       `json:"fts"`
 	Semantic      EvalMetrics       `json:"semantic"`
+	Hybrid        EvalMetrics       `json:"hybrid"`
 	PerQuery      []EvalQueryResult `json:"per_query"`
 	Skipped       []EvalSkipped     `json:"skipped,omitempty"`
 	Errors        int               `json:"errors"`
@@ -354,6 +367,9 @@ type EvalQueryResult struct {
 	SemanticHits []string `json:"semantic_hits"`
 	FTSNDCG      float64  `json:"fts_ndcg"`
 	SemanticNDCG float64  `json:"semantic_ndcg"`
+	HybridRank   int      `json:"hybrid_rank"`
+	HybridHits   []string `json:"hybrid_hits"`
+	HybridNDCG   float64  `json:"hybrid_ndcg"`
 }
 
 type EvalSkipped struct {

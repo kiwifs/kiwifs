@@ -105,6 +105,15 @@ type OptionsSearcher interface {
 	SearchWithOptions(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions) ([]Result, error)
 }
 
+// BoostedOptionsSearcher applies trust boosting and SearchOptions together.
+// Hybrid retrieval and held-out evaluation need both at once: boosting alone
+// cannot hide a held-out subtree, and exclusion alone would rank differently
+// from the endpoint people actually call.
+type BoostedOptionsSearcher interface {
+	Searcher
+	SearchBoostedWithOptions(ctx context.Context, query string, limit, offset int, pathPrefix string, opts SearchOptions) ([]Result, error)
+}
+
 // Searcher searches across all knowledge files and (for index-backed engines)
 // keeps the index in sync with filesystem writes.
 //

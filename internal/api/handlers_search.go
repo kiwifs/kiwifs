@@ -45,6 +45,8 @@ type searchResponse struct {
 //	@Param			q				query		string	true	"Search query string"
 //	@Param			limit			query		int		false	"Maximum number of search results to return (default: 15, max: 200)"
 //	@Param			offset			query		int		false	"Number of search results to skip (offset) (default: 0)"
+//	@Param			mode				query		string	false	"Retrieval mode: 'fts' (default, BM25 only) or 'hybrid' (BM25 fused with vector search via Reciprocal Rank Fusion). Hybrid degrades to FTS-only when no vector index is configured."
+//	@Param			rrf_k				query		number	false	"RRF rank constant for mode=hybrid (default 60). Smaller values let a single engine's top hit dominate."
 //	@Param			boost				query		string	false	"Set to 'none' or 'off' to disable trust boosting in search results"
 //	@Param			include_superseded	query		bool	false	"Include pages with memory_status: superseded (excluded by default)"
 //	@Param			recency_weight		query		number	false	"Blend recency into ranking, from 0.0 relevance-only to 1.0 recency-only"
@@ -71,6 +73,14 @@ func (h *Handlers) Search(c echo.Context) error {
 	recencyWeight, perr := parseRecencyWeight(c)
 	if perr != nil {
 		return perr
+	}
+	switch mode := c.QueryParam("mode"); mode {
+	case "", "fts", "lexical":
+		// fall through to the lexical path below
+	case "hybrid":
+		return h.hybridSearch(c, q, limit, offset, pathPrefix)
+	default:
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid mode: expected fts or hybrid")
 	}
 	var (
 		results []search.Result

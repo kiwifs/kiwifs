@@ -24,6 +24,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/draft"
 	"github.com/kiwifs/kiwifs/internal/eval"
 	"github.com/kiwifs/kiwifs/internal/graphutil"
+	"github.com/kiwifs/kiwifs/internal/hybrid"
 	"github.com/kiwifs/kiwifs/internal/janitor"
 	"github.com/kiwifs/kiwifs/internal/links"
 	"github.com/kiwifs/kiwifs/internal/markdown"
@@ -413,6 +414,35 @@ func stripMarkTags(s string) string {
 
 func (b *LocalBackend) SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	return b.SearchSemanticScoped(ctx, query, limit, "")
+}
+
+// SearchHybrid fuses the lexical and vector rankings with RRF. Unlike
+// SearchSemantic it does not error when no vector index is configured — it
+// returns the lexical ranking, which is what "give me the best results you
+// have" should do.
+func (b *LocalBackend) SearchHybrid(ctx context.Context, query string, limit int, pathPrefix string) ([]HybridSearchResult, error) {
+	if err := b.init(); err != nil {
+		return nil, err
+	}
+	results, err := hybrid.Search(ctx, b.stack.Searcher, b.stack.Vectors, query, hybrid.Options{
+		TopK:       limit,
+		PathPrefix: pathPrefix,
+		Boost:      true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]HybridSearchResult, len(results))
+	for i, r := range results {
+		out[i] = HybridSearchResult{
+			Path:         r.Path,
+			Snippet:      r.Snippet,
+			Score:        r.Score,
+			FTSRank:      r.FTSRank,
+			SemanticRank: r.SemanticRank,
+		}
+	}
+	return out, nil
 }
 
 func (b *LocalBackend) SearchSemanticScoped(ctx context.Context, query string, limit int, scope string) ([]SearchResult, error) {
@@ -1973,12 +2003,14 @@ func evalReportToResult(report *eval.Report) *EvalResult {
 		ExcludePrefix: report.ExcludePrefixes,
 		FTS:           toMCPEvalMetrics(report.Metrics(eval.EngineFTS)),
 		Semantic:      toMCPEvalMetrics(report.Metrics(eval.EngineSemantic)),
+		Hybrid:        toMCPEvalMetrics(report.Metrics(eval.EngineHybrid)),
 		PerQuery:      make([]EvalQueryResult, 0, len(report.Queries)),
 		Errors:        report.Errors,
 	}
 	for _, q := range report.Queries {
 		fts := q.Scores[eval.EngineFTS]
 		sem := q.Scores[eval.EngineSemantic]
+		hyb := q.Scores[eval.EngineHybrid]
 		res.PerQuery = append(res.PerQuery, EvalQueryResult{
 			Question:     q.Question,
 			Relevant:     q.Relevant,
@@ -1988,6 +2020,9 @@ func evalReportToResult(report *eval.Report) *EvalResult {
 			SemanticHits: emptyIfNil(sem.Hits),
 			FTSNDCG:      fts.NDCG,
 			SemanticNDCG: sem.NDCG,
+			HybridRank:   hyb.Rank,
+			HybridHits:   emptyIfNil(hyb.Hits),
+			HybridNDCG:   hyb.NDCG,
 		})
 	}
 	for _, s := range report.Skipped {

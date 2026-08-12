@@ -301,6 +301,20 @@ func (r *RemoteBackend) SearchSemantic(ctx context.Context, query string, limit 
 	return r.SearchSemanticScoped(ctx, query, limit, "")
 }
 
+func (r *RemoteBackend) SearchHybrid(ctx context.Context, query string, limit int, pathPrefix string) ([]HybridSearchResult, error) {
+	q := fmt.Sprintf("%s/search?mode=hybrid&q=%s&limit=%d", r.apiPrefix, url.QueryEscape(query), limit)
+	if pathPrefix != "" {
+		q += "&pathPrefix=" + url.QueryEscape(pathPrefix)
+	}
+	var result struct {
+		Results []HybridSearchResult `json:"results"`
+	}
+	if err := r.getJSON(ctx, q, &result); err != nil {
+		return nil, err
+	}
+	return result.Results, nil
+}
+
 func (r *RemoteBackend) SearchSemanticScoped(ctx context.Context, query string, limit int, scope string) ([]SearchResult, error) {
 	var result struct {
 		Results []struct {
