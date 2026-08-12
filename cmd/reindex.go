@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/config"
+	"github.com/kiwifs/kiwifs/internal/links"
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
@@ -44,7 +46,23 @@ func runReindex(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("open storage: %w", err)
 	}
-	sq, err := search.NewSQLite(root, store)
+
+	// Load config before building the index, not just for the vector phase
+	// below: typed link fields and custom computed fields come from it, and
+	// building without them writes a thinner file_meta/links than the server
+	// would for the same files.
+	cfg, cerr := config.Load(root)
+	if cerr != nil {
+		if wantVector {
+			return fmt.Errorf("load config: %w", cerr)
+		}
+		cfg = &config.Config{}
+	}
+	if dropped := links.InvalidTypedFieldNames(cfg.Links.TypedFields); len(dropped) > 0 {
+		log.Printf("[links] typed_fields: ignoring invalid name(s) %s", strings.Join(dropped, ", "))
+	}
+
+	sq, err := search.NewSQLiteWithTypedFields(root, store, cfg.Links.TypedLinkFields(), cfg.Dataview.CustomFields)
 	if err != nil {
 		return fmt.Errorf("open sqlite index: %w", err)
 	}
@@ -65,14 +83,9 @@ func runReindex(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Load config to see whether vector search is wired up. --vector
-	// forces the attempt even if disabled, so the user gets a clear
-	// error instead of silent skip when they intended to rebuild it.
-	cfg, cerr := config.Load(root)
+	// A config that failed to load cannot describe a vector store; --vector
+	// already errored out above in that case.
 	if cerr != nil {
-		if wantVector {
-			return fmt.Errorf("load config: %w", cerr)
-		}
 		return nil
 	}
 	if !cfg.Search.Vector.Enabled {
