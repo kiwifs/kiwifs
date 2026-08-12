@@ -59,6 +59,7 @@ var BuiltinSources = map[string]bool{
 	"excel":     true,
 	"yaml":      true,
 	"bibtex":    true,
+	"croissant": true,
 	"sqlite":    true,
 	// Native network sources (Go driver, no Airbyte)
 	"postgres":  true,

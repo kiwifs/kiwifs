@@ -1,0 +1,77 @@
+{
+  "_comment": "Hand-built fixture. Same dataset shape as a real Croissant file, but every term is aliased to a different label and both namespaces use their alternate spelling (https for mlcommons, http for schema.org). Any parser that reads JSON keys literally sees nothing here; a JSON-LD parser sees the same graph as titanic.json.",
+  "@context": {
+    "@language": "en",
+    "@vocab": "http://schema.org/",
+    "cro": "https://mlcommons.org/croissant/",
+    "identifier": "@id",
+    "kind": "@type",
+    "label": "http://schema.org/name",
+    "blurb": "http://schema.org/description",
+    "tables": "cro:recordSet",
+    "columns": "cro:field",
+    "kindOf": { "@id": "cro:dataType", "@type": "@vocab" },
+    "pointsAt": "cro:references",
+    "colRef": "cro:field",
+    "origin": "cro:source",
+    "pull": "cro:extract",
+    "fromColumn": "cro:column",
+    "inFile": "cro:fileObject",
+    "files": "http://schema.org/distribution",
+    "attribution": "cro:citeAs",
+    "many": "cro:repeated"
+  },
+  "kind": "Dataset",
+  "label": "Aliased Sample Dataset",
+  "blurb": "A dataset whose Croissant terms are all aliased.",
+  "url": "https://example.org/aliased",
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "version": "2.1.0",
+  "attribution": "Aliased et al. (2024)",
+  "keywords": ["tabular", "regression"],
+  "files": [
+    {
+      "kind": "cro:FileObject",
+      "identifier": "train.csv",
+      "label": "train.csv",
+      "encodingFormat": "text/csv",
+      "contentUrl": "data/train.csv",
+      "contentSize": "2048 B",
+      "sha256": "ab12"
+    }
+  ],
+  "tables": [
+    {
+      "kind": "cro:RecordSet",
+      "identifier": "rows",
+      "label": "rows",
+      "blurb": "The training rows.",
+      "columns": [
+        {
+          "kind": "cro:Field",
+          "identifier": "rows/target",
+          "label": "rows/target",
+          "blurb": "Regression target.",
+          "kindOf": "Float",
+          "origin": {
+            "inFile": { "identifier": "train.csv" },
+            "pull": { "fromColumn": "target" }
+          }
+        },
+        {
+          "kind": "cro:Field",
+          "identifier": "rows/group",
+          "label": "rows/group",
+          "blurb": "Group id.",
+          "kindOf": ["Text", "name"],
+          "many": true,
+          "pointsAt": { "colRef": { "identifier": "groups/id" } },
+          "origin": {
+            "inFile": { "identifier": "train.csv" },
+            "pull": { "fromColumn": "group_id" }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -276,16 +276,31 @@ Obsidian vaults also work by simply copying the `.md` files into your knowledge 
 
 ### What data sources can I import from?
 
-KiwiFS supports 19 import sources across four categories:
+KiwiFS supports 21 import sources across four categories:
 
 | Category | Sources |
 |---|---|
 | **Databases** | PostgreSQL, MySQL, SQLite, MongoDB, DynamoDB, Redis, Elasticsearch |
-| **Files** | CSV, JSON, JSONL, YAML, Excel |
+| **Files** | CSV, JSON, JSONL, YAML, Excel, BibTeX, Croissant |
 | **SaaS** | Notion, Airtable, Google Sheets, Confluence |
 | **Knowledge** | Markdown, Obsidian vaults, Firebase/Firestore |
 
 Each row becomes a markdown file with structured frontmatter. Use `--dry-run` to preview before importing.
+
+Croissant is the exception to "each row becomes a file". [MLCommons Croissant](https://mlcommons.org/croissant/) is dataset *metadata*, not rows, so one document produces one page: the dataset description lands in frontmatter and the column schema lands in `kiwi-data` blocks, which makes it queryable with DQL rather than only readable:
+
+```bash
+kiwifs import --from croissant --url https://www.kaggle.com/datasets/OWNER/NAME/croissant/download
+kiwifs import --from croissant --file croissant.json
+```
+
+```sql
+TABLE name, dtype, column, source-file
+FROM RECORDS "dataset-schema"
+WHERE dtype = "float"
+```
+
+Croissant is JSON-LD, so the importer expands the document to absolute IRIs before reading it — two emitters can describe the same dataset with entirely different property names and both are correct. Contexts are resolved offline: an inline `@context` (what Kaggle and Hugging Face emit) and the well-known MLCommons context URL both work with no network, and any other remote context is refused rather than fetched.
 
 ### Is import idempotent?
 

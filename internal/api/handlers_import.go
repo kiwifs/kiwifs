@@ -16,28 +16,29 @@ import (
 )
 
 type importRequest struct {
-	From        string          `json:"from"`
-	DSN         string          `json:"dsn"`
-	URI         string          `json:"uri"`
-	DB          string          `json:"db"`
-	File        string          `json:"file"`
-	Path        string          `json:"path"` // Directory path (markdown, obsidian, confluence)
-	Table       string          `json:"table"`
-	Collection  string          `json:"collection"`
-	Database    string          `json:"database"`
-	DatabaseID  string          `json:"database_id"`
-	BaseID      string          `json:"base_id"`
-	TableID     string          `json:"table_id"`
-	Project     string          `json:"project"`
-	Query       string          `json:"query"`
-	Columns        []string               `json:"columns"`
-	FieldMappings  []importer.FieldMapping `json:"field_mappings,omitempty"`
-	IDColumn       string                 `json:"id_column"`
-	Prefix      string          `json:"prefix"`
-	DryRun      bool            `json:"dry_run"`
-	Limit       int             `json:"limit"`
-	Credentials json.RawMessage `json:"credentials,omitempty" swaggertype:"object"` // Service account JSON (Firestore)
-	APIKey      string          `json:"api_key,omitempty"`                          // API key (Notion, Airtable)
+	From          string                  `json:"from"`
+	DSN           string                  `json:"dsn"`
+	URI           string                  `json:"uri"`
+	DB            string                  `json:"db"`
+	File          string                  `json:"file"`
+	Path          string                  `json:"path"` // Directory path (markdown, obsidian, confluence)
+	URL           string                  `json:"url"`  // Metadata URL (croissant)
+	Table         string                  `json:"table"`
+	Collection    string                  `json:"collection"`
+	Database      string                  `json:"database"`
+	DatabaseID    string                  `json:"database_id"`
+	BaseID        string                  `json:"base_id"`
+	TableID       string                  `json:"table_id"`
+	Project       string                  `json:"project"`
+	Query         string                  `json:"query"`
+	Columns       []string                `json:"columns"`
+	FieldMappings []importer.FieldMapping `json:"field_mappings,omitempty"`
+	IDColumn      string                  `json:"id_column"`
+	Prefix        string                  `json:"prefix"`
+	DryRun        bool                    `json:"dry_run"`
+	Limit         int                     `json:"limit"`
+	Credentials   json.RawMessage         `json:"credentials,omitempty" swaggertype:"object"` // Service account JSON (Firestore)
+	APIKey        string                  `json:"api_key,omitempty"`                          // API key (Notion, Airtable)
 
 	// Airbyte-specific fields
 	AirbyteConfig map[string]any `json:"airbyte_config,omitempty"` // Raw Airbyte connector config
@@ -120,9 +121,9 @@ func (h *Handlers) Import(c echo.Context) error {
 		Columns:       columns,
 		FieldMappings: req.FieldMappings,
 		DryRun:        req.DryRun,
-		Limit:    req.Limit,
-		Actor:    actor,
-		FullSync: !req.DryRun && req.Limit == 0 && importer.IsSyncable(req.From),
+		Limit:         req.Limit,
+		Actor:         actor,
+		FullSync:      !req.DryRun && req.Limit == 0 && importer.IsSyncable(req.From),
 	}
 
 	ctx := c.Request().Context()
@@ -394,6 +395,14 @@ func buildBuiltinSource(req importRequest) (importer.Source, error) {
 			return nil, fmt.Errorf("file is required for bibtex")
 		}
 		return importer.NewBibTeX(req.File)
+	case "croissant":
+		if req.File == "" && req.URL == "" {
+			return nil, fmt.Errorf("file or url is required for croissant")
+		}
+		if req.File != "" {
+			return importer.NewCroissant(req.File)
+		}
+		return importer.NewCroissantFromURL(req.URL)
 	case "notion":
 		apiKey := req.APIKey
 		if apiKey == "" {
@@ -433,7 +442,7 @@ func buildBuiltinSource(req importRequest) (importer.Source, error) {
 				})
 			}
 		}
-		supported := strings.Join([]string{"markdown", "postgres", "mysql", "firestore", "sqlite", "mongodb", "csv", "json", "jsonl", "notion", "airtable"}, ", ")
+		supported := strings.Join([]string{"markdown", "postgres", "mysql", "firestore", "sqlite", "mongodb", "csv", "json", "jsonl", "bibtex", "croissant", "notion", "airtable"}, ", ")
 		return nil, fmt.Errorf("unknown source type %q (supported: %s). For Airbyte connectors, provide airbyte_config", req.From, supported)
 	}
 }
@@ -578,24 +587,26 @@ func browseMongoDB(ctx context.Context, req browseRequest) ([]importer.BrowseTab
 // --- Preview ---
 
 type previewRequest struct {
-	From        string          `json:"from"`
-	DSN         string          `json:"dsn"`
-	URI         string          `json:"uri"`
-	DB          string          `json:"db"`
-	Table       string          `json:"table"`
-	Collection  string          `json:"collection"`
-	Database    string          `json:"database"`
-	DatabaseID  string          `json:"database_id"`
-	BaseID      string          `json:"base_id"`
-	TableID     string          `json:"table_id"`
-	Project     string          `json:"project"`
-	Credentials json.RawMessage `json:"credentials,omitempty" swaggertype:"object"`
-	APIKey      string          `json:"api_key,omitempty"`
-	Prefix      string          `json:"prefix,omitempty"`
-	IDColumn    string          `json:"id_column,omitempty"`
-	Columns     []string        `json:"columns,omitempty"`
+	From          string                  `json:"from"`
+	DSN           string                  `json:"dsn"`
+	URI           string                  `json:"uri"`
+	DB            string                  `json:"db"`
+	File          string                  `json:"file"`
+	URL           string                  `json:"url"`
+	Table         string                  `json:"table"`
+	Collection    string                  `json:"collection"`
+	Database      string                  `json:"database"`
+	DatabaseID    string                  `json:"database_id"`
+	BaseID        string                  `json:"base_id"`
+	TableID       string                  `json:"table_id"`
+	Project       string                  `json:"project"`
+	Credentials   json.RawMessage         `json:"credentials,omitempty" swaggertype:"object"`
+	APIKey        string                  `json:"api_key,omitempty"`
+	Prefix        string                  `json:"prefix,omitempty"`
+	IDColumn      string                  `json:"id_column,omitempty"`
+	Columns       []string                `json:"columns,omitempty"`
 	FieldMappings []importer.FieldMapping `json:"field_mappings,omitempty"`
-	Limit       int             `json:"limit"`
+	Limit         int                     `json:"limit"`
 
 	AirbyteConfig map[string]any `json:"airbyte_config,omitempty"`
 	AirbyteImage  string         `json:"airbyte_image,omitempty"`
@@ -706,6 +717,8 @@ func previewToImportRequest(req previewRequest) importRequest {
 		DSN:           req.DSN,
 		URI:           req.URI,
 		DB:            req.DB,
+		File:          req.File,
+		URL:           req.URL,
 		Table:         req.Table,
 		Collection:    req.Collection,
 		Database:      req.Database,
@@ -1591,7 +1604,7 @@ func (h *Handlers) ImportUpload(c echo.Context) error {
 		IDColumn:      ir.IDColumn,
 		FieldMappings: ir.FieldMappings,
 		Actor:         actor,
-		Limit:    ir.Limit,
+		Limit:         ir.Limit,
 	}
 
 	ctx := c.Request().Context()

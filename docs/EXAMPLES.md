@@ -234,7 +234,7 @@ Functions: `count`, `avg`, `sum`, `min`, `max`. Optional `--where` filters and `
 
 ## Data Import
 
-Bulk-import from 19 sources. Each row becomes a markdown file with structured frontmatter:
+Bulk-import from 21 sources. Each row becomes a markdown file with structured frontmatter:
 
 ```bash
 # From another markdown folder
@@ -251,12 +251,16 @@ kiwifs import --from notion --api-key $NOTION_KEY --database-id $DB_ID --root ./
 
 # From an Obsidian vault
 kiwifs import --from obsidian --path ~/my-vault --root ./knowledge
+
+# From an ML dataset's Croissant metadata — the column schema becomes
+# kiwi-data records you can query with `FROM RECORDS "dataset-schema"`
+kiwifs import --from croissant --url https://www.kaggle.com/datasets/OWNER/NAME/croissant/download --root ./knowledge
 ```
 
 | Category | Sources |
 |---|---|
 | **Databases** | PostgreSQL, MySQL, SQLite, MongoDB, DynamoDB, Redis, Elasticsearch |
-| **Files** | CSV, JSON, JSONL, YAML, Excel |
+| **Files** | CSV, JSON, JSONL, YAML, Excel, BibTeX, Croissant |
 | **SaaS** | Notion, Airtable, Google Sheets, Confluence |
 | **Knowledge** | Markdown, Obsidian vaults, Firebase/Firestore |
 
