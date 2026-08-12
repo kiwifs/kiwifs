@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/embed"
+	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/storage"
 )
 
@@ -30,6 +31,7 @@ type Service struct {
 	chunkSize    int
 	chunkOverlap int
 	workerCount  int
+	chunkContext *contextBuilder
 
 	queue  chan job
 	wg     sync.WaitGroup
@@ -71,6 +73,12 @@ type Options struct {
 	// bound and easily handle 5× concurrency, which turns a serial 500ms
 	// per chunk into a ~100ms tail for a burst of writes.
 	WorkerCount int
+	// ContextTemplate is the per-chunk context prefix template. Empty uses
+	// DefaultContextTemplate. Compiled by NewService so a malformed template
+	// is a startup error, not a per-file log line at index time.
+	ContextTemplate string
+	// ContextHookURL optionally overrides the template per chunk over HTTP.
+	ContextHookURL string
 }
 
 // ErrDisabled is returned by endpoints that need a Service when none was
@@ -82,7 +90,11 @@ var ErrDisabled = errors.New("semantic search is not enabled")
 // used only by Reindex to walk the knowledge base — passing nil keeps the
 // indexer active but disables reindexing (useful for tests with inline
 // Enqueue calls).
-func NewService(root string, source storage.Storage, embedder embed.Embedder, store Store, opts Options) *Service {
+//
+// Returns an error only for a malformed Options.ContextTemplate: it is
+// compiled here so a typo surfaces at startup instead of silently stripping
+// context from every chunk indexed thereafter.
+func NewService(root string, source storage.Storage, embedder embed.Embedder, store Store, opts Options) (*Service, error) {
 	if opts.ChunkSize <= 0 {
 		opts.ChunkSize = 1500
 	}
@@ -98,6 +110,10 @@ func NewService(root string, source storage.Storage, embedder embed.Embedder, st
 	if opts.WorkerCount <= 0 {
 		opts.WorkerCount = defaultWorkerCount
 	}
+	builder, err := newContextBuilder(opts.ContextTemplate, opts.ContextHookURL)
+	if err != nil {
+		return nil, err
+	}
 	s := &Service{
 		root:         root,
 		source:       source,
@@ -106,6 +122,7 @@ func NewService(root string, source storage.Storage, embedder embed.Embedder, st
 		chunkSize:    opts.ChunkSize,
 		chunkOverlap: opts.ChunkOverlap,
 		workerCount:  opts.WorkerCount,
+		chunkContext: builder,
 		queue:        make(chan job, opts.QueueSize),
 		stopCh:       make(chan struct{}),
 	}
@@ -113,7 +130,7 @@ func NewService(root string, source storage.Storage, embedder embed.Embedder, st
 		s.wg.Add(1)
 		go s.worker()
 	}
-	return s
+	return s, nil
 }
 
 // Close flushes pending work and releases resources. After the worker
@@ -224,7 +241,23 @@ func (s *Service) Index(ctx context.Context, path string, content []byte) error 
 	}
 	var parts []string
 	if isMarkdown(path) {
-		parts = chunkMarkdown(string(content), s.chunkSize, defaultMinChunkSize)
+		// Frontmatter is stripped before chunking. Left in, goldmark reads
+		// the closing `---` as a setext underline, which turns the last
+		// metadata line into a heading and emits the whole YAML block as its
+		// own embedded chunk. Page metadata reaches the embedding through the
+		// context template instead, where it belongs.
+		body := markdown.BodyAfterFrontmatter(content)
+		fm, err := markdown.Frontmatter(content)
+		if err != nil {
+			fm = nil
+		}
+		parts = chunkMarkdownWithContext(body, s.chunkSize, defaultMinChunkSize, &docContext{
+			ctx:         ctx,
+			path:        path,
+			title:       pageTitle(fm, body, path),
+			frontmatter: fm,
+			builder:     s.chunkContext,
+		})
 	} else {
 		parts = chunk(string(content), s.chunkSize, s.chunkOverlap)
 	}
@@ -349,4 +382,28 @@ func (s *Service) Count(ctx context.Context) (int, error) {
 func isMarkdown(path string) bool {
 	lower := strings.ToLower(path)
 	return strings.HasSuffix(lower, ".md") || strings.HasSuffix(lower, ".mdx")
+}
+
+// pageTitle resolves the .Title a context template sees: frontmatter `title`,
+// else the first level-1 heading, else the filename without its extension.
+// Falling back to the filename rather than "" means a template built around
+// .Title still produces something useful on an untitled page.
+func pageTitle(fm map[string]any, body, path string) string {
+	if t, ok := fm["title"].(string); ok && strings.TrimSpace(t) != "" {
+		return strings.TrimSpace(t)
+	}
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "# "))
+		}
+	}
+	base := path
+	if idx := strings.LastIndex(base, "/"); idx >= 0 {
+		base = base[idx+1:]
+	}
+	if idx := strings.LastIndex(base, "."); idx > 0 {
+		base = base[:idx]
+	}
+	return base
 }
