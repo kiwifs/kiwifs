@@ -1,4 +1,6 @@
 import { alpha } from "./colors";
+import { WidgetText } from "./WidgetText";
+import { headerGutterPx } from "./widgetLabel";
 
 export interface MatrixViewProps {
   /** 2D array of cell values. Rows can have different lengths (ragged/triangular). */
@@ -87,9 +89,9 @@ export function MatrixView({
 
   const hasRowHeaders = !!rowHeaders && !isRagged;
   const hasColHeaders = !!colHeaders && !isRagged;
-  const rowHeaderW = 34;
+  const rowHeaderW = hasRowHeaders ? headerGutterPx(rowHeaders) : 0;
   const indexGutter = showIndices && !isRagged ? 28 : 0;
-  const leftGutter = (hasRowHeaders ? rowHeaderW : 0) + indexGutter;
+  const leftGutter = rowHeaderW + indexGutter;
 
   return (
     <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
@@ -123,7 +125,7 @@ export function MatrixView({
                 fontFamily: "ui-monospace, SFMono-Regular, monospace",
                 paddingBottom: 2,
               }}>
-                {colHeaders?.[c] ?? ""}
+                <WidgetText text={colHeaders?.[c]} />
               </div>
             ))}
           </div>
@@ -152,7 +154,7 @@ export function MatrixView({
           const rptrs = rowPtrMap.get(r);
           const rowLen = isRagged ? row.length : cols;
           return (
-            <div key={r} style={{ display: "flex", alignItems: "center", justifyContent: raggedAlign }}>
+            <div key={r} style={{ display: "flex", alignItems: "stretch", justifyContent: raggedAlign }}>
               {/* Row header caption */}
               {hasRowHeaders && (
                 <div style={{
@@ -162,10 +164,13 @@ export function MatrixView({
                   fontWeight: 700,
                   color: DEFAULTS.text,
                   fontFamily: "ui-monospace, SFMono-Regular, monospace",
-                  paddingRight: 6,
+                  paddingRight: 8,
                   flexShrink: 0,
+                  whiteSpace: "nowrap",
+                  lineHeight: 1.2,
+                  alignSelf: "center",
                 }}>
-                  {rowHeaders?.[r] ?? ""}
+                  <WidgetText text={rowHeaders?.[r]} />
                 </div>
               )}
 
@@ -179,6 +184,7 @@ export function MatrixView({
                   fontVariantNumeric: "tabular-nums",
                   marginRight: 4,
                   flexShrink: 0,
+                  alignSelf: "center",
                 }}>
                   {r}
                 </div>
@@ -214,7 +220,7 @@ export function MatrixView({
                     key={c}
                     style={{
                       width: cellSize,
-                      height: cellSize,
+                      minHeight: cellSize,
                       border: `1.5px solid ${border}`,
                       borderRadius: roundCells ? "50%" : 0,
                       background: bg,
@@ -228,9 +234,11 @@ export function MatrixView({
                       fontVariantNumeric: "tabular-nums",
                       transition: "all 0.2s ease",
                       margin: roundCells ? 1 : -0.5,
+                      padding: 4,
+                      boxSizing: "border-box",
                     }}
                   >
-                    {val}
+                    <WidgetText text={val} />
                   </div>
                 );
               })}

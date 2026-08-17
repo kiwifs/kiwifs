@@ -273,6 +273,20 @@ function Gallery() {
         />
       </Section>
 
+      <Section name="MatrixView — long headers and math">
+        <MatrixView
+          values={[
+            ["$n^k$", "stars & bars"],
+            ["$n^{\\underline{k}}$", "$\\binom{n}{k}$"],
+          ]}
+          rowHeaders={["replace", "no replace"]}
+          colHeaders={["ordered", "unordered"]}
+          showIndices={false}
+          activeCell={[1, 1]}
+          cellSize={110}
+        />
+      </Section>
+
       <Section name="TreeView">
         <TreeView
           root={TREE}

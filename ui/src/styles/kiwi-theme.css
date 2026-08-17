@@ -201,3 +201,9 @@
   --kiwi-graph-palette-8: #60c4f0;
   --kiwi-graph-palette-9: #98b850;
 }
+
+/* Widget math inherits the cell color (active fill vs body text). */
+.kw-widget-math .katex {
+  color: inherit;
+  font-size: 1em;
+}
