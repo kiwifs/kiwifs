@@ -1,4 +1,11 @@
+import { useId } from "react";
 import { alpha } from "./colors";
+import {
+  collectEdges,
+  flattenTree,
+  layoutForest,
+  positionsByKey,
+} from "./treeLayout";
 
 export interface TreeNode {
   value: string | number;
@@ -33,10 +40,28 @@ export interface TreeViewProps {
   /** Node keys the search abandoned — drawn dashed and faded, with a dashed
    *  edge from the parent. */
   prunedNodes?: Set<string | number>;
+  /**
+   * Child keys (or `"parent->child"` strings) whose incoming edge should light
+   * up. Edges whose two ends are both in `highlightNodes` also light, so a
+   * highlighted root-to-leaf walk draws as a path without extra bookkeeping.
+   */
+  highlightEdges?: Set<string | number>;
+  /**
+   * Same-level links — next-right pointers, threaded nodes. Drawn as a
+   * horizontal arrow from `from` to `to` (node keys).
+   */
+  nextLinks?: { from: string | number; to: string | number }[];
   /** Labels to show next to specific nodes (e.g. "curr", "parent"). */
   pointers?: { value?: string | number; id?: string | number; label: string; color?: string }[];
   /** Show the label on each edge, when nodes carry `edgeLabel`. Default true. */
   showEdgeLabels?: boolean;
+  /**
+   * For a binary node with exactly one child, draw a dashed empty slot on the
+   * missing side so a right-only stick cannot be mistaken for a straight line.
+   * Leaves (both children missing) stay clean. N-ary `children` trees ignore
+   * this. Default true.
+   */
+  showNulls?: boolean;
   activeColor?: string;
   highlightColor?: string;
   /** Horizontal gap between sibling subtrees in px. */
@@ -57,138 +82,6 @@ const DEFAULTS = {
   nodeSize: 40,
 };
 
-interface LayoutNode {
-  value: string | number;
-  key: string | number;
-  badge?: string | number;
-  edgeLabel?: string | number;
-  x: number;
-  y: number;
-  children: LayoutNode[];
-}
-
-interface LayoutEdge {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  label?: string | number;
-  childKey: string | number;
-}
-
-function nodeKey(node: TreeNode): string | number {
-  return node.id ?? node.value;
-}
-
-function layoutTree(
-  node: TreeNode | null | undefined,
-  depth: number,
-  hGap: number,
-  vGap: number,
-  nodeSize: number,
-): LayoutNode | null {
-  if (!node) return null;
-
-  const base = {
-    value: node.value,
-    key: nodeKey(node),
-    badge: node.badge,
-    edgeLabel: node.edgeLabel,
-    y: depth * vGap,
-  };
-
-  const isBinary = node.children === undefined;
-  const kids: (TreeNode | null)[] = isBinary
-    ? [node.left ?? null, node.right ?? null]
-    : (node.children ?? []);
-
-  const childLayouts: (LayoutNode | null)[] = kids.map((c) =>
-    c ? layoutTree(c, depth + 1, hGap, vGap, nodeSize) : null
-  );
-
-  if (isBinary && childLayouts.every((c) => c === null) && (node.left === undefined && node.right === undefined)) {
-    return { ...base, x: 0, children: [] };
-  }
-
-  const nonNull = childLayouts.filter((c): c is LayoutNode => c !== null);
-
-  if (nonNull.length === 0) {
-    return { ...base, x: 0, children: [] };
-  }
-
-  let offset = 0;
-  const positioned: LayoutNode[] = [];
-  for (const child of nonNull) {
-    const bounds = getTreeBounds(child);
-    const shift = offset - bounds.minX;
-    shiftTree(child, shift);
-    offset = getTreeBounds(child).maxX + hGap + nodeSize;
-    positioned.push(child);
-  }
-
-  const firstX = positioned[0]!.x;
-  const lastX = positioned[positioned.length - 1]!.x;
-
-  return { ...base, x: (firstX + lastX) / 2, children: positioned };
-}
-
-/** Lay each tree out independently, then push it clear of the previous one. */
-function layoutForest(
-  roots: (TreeNode | null | undefined)[],
-  hGap: number,
-  vGap: number,
-  nodeSize: number,
-): LayoutNode[] {
-  const layouts: LayoutNode[] = [];
-  let offset = 0;
-  for (const root of roots) {
-    const layout = layoutTree(root, 0, hGap, vGap, nodeSize);
-    if (!layout) continue;
-    shiftTree(layout, offset - getTreeBounds(layout).minX);
-    offset = getTreeBounds(layout).maxX + nodeSize + hGap * 2;
-    layouts.push(layout);
-  }
-  return layouts;
-}
-
-function getTreeBounds(node: LayoutNode): { minX: number; maxX: number } {
-  let minX = node.x;
-  let maxX = node.x;
-  for (const child of node.children) {
-    const cb = getTreeBounds(child);
-    if (cb.minX < minX) minX = cb.minX;
-    if (cb.maxX > maxX) maxX = cb.maxX;
-  }
-  return { minX, maxX };
-}
-
-function shiftTree(node: LayoutNode, dx: number): void {
-  node.x += dx;
-  for (const child of node.children) shiftTree(child, dx);
-}
-
-function flattenTree(node: LayoutNode): LayoutNode[] {
-  const result: LayoutNode[] = [node];
-  for (const child of node.children) result.push(...flattenTree(child));
-  return result;
-}
-
-function collectEdges(node: LayoutNode): LayoutEdge[] {
-  const edges: LayoutEdge[] = [];
-  for (const child of node.children) {
-    edges.push({
-      x1: node.x,
-      y1: node.y,
-      x2: child.x,
-      y2: child.y,
-      label: child.edgeLabel,
-      childKey: child.key,
-    });
-    edges.push(...collectEdges(child));
-  }
-  return edges;
-}
-
 export function TreeView({
   root,
   roots,
@@ -196,16 +89,20 @@ export function TreeView({
   highlightNodes,
   dimNodes,
   prunedNodes,
+  highlightEdges,
+  nextLinks = [],
   pointers = [],
   showEdgeLabels = true,
+  showNulls = true,
   activeColor = DEFAULTS.activeColor,
   highlightColor = DEFAULTS.highlightColor,
   hGap = DEFAULTS.hGap,
   vGap = DEFAULTS.vGap,
   nodeSize = DEFAULTS.nodeSize,
 }: TreeViewProps) {
+  const markerId = `kw-tree-next-${useId().replace(/:/g, "")}`;
   const allRoots = [...(root ? [root] : []), ...(roots ?? [])];
-  const layouts = layoutForest(allRoots, hGap, vGap, nodeSize);
+  const layouts = layoutForest(allRoots, { hGap, vGap, nodeSize, showNulls });
 
   if (layouts.length === 0) {
     return (
@@ -242,12 +139,36 @@ export function TreeView({
   }
 
   const r = nodeSize / 2;
+  const pos = new Map<string | number, { x: number; y: number }>();
+  for (const layout of layouts) {
+    for (const [k, p] of positionsByKey(layout)) pos.set(k, p);
+  }
+
+  function edgeIsLit(e: { childKey: string | number; parentKey: string | number }): boolean {
+    if (highlightEdges?.has(e.childKey)) return true;
+    if (highlightEdges?.has(`${e.parentKey}->${e.childKey}`)) return true;
+    return Boolean(highlightNodes?.has(e.childKey) && highlightNodes?.has(e.parentKey));
+  }
 
   return (
     <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
       <svg width={width} height={height} style={{ display: "block" }}>
+        <defs>
+          <marker
+            id={markerId}
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--kw-widget-accent-amber, #f59e0b)" />
+          </marker>
+        </defs>
         {edges.map((e, i) => {
           const toPruned = prunedNodes?.has(e.childKey) ?? false;
+          const lit = !e.ghost && edgeIsLit(e);
           const hasLabel = showEdgeLabels && e.label != null && e.label !== "";
           return (
             <g key={i} style={{ transition: "all 0.25s ease" }}>
@@ -256,10 +177,10 @@ export function TreeView({
                 y1={e.y1 + oy}
                 x2={e.x2 + ox}
                 y2={e.y2 + oy}
-                stroke={DEFAULTS.border}
-                strokeWidth={2}
-                strokeDasharray={toPruned ? "4 3" : undefined}
-                opacity={toPruned ? 0.5 : 1}
+                stroke={lit ? highlightColor : DEFAULTS.border}
+                strokeWidth={lit ? 2.5 : 2}
+                strokeDasharray={e.ghost || toPruned ? "4 3" : undefined}
+                opacity={e.ghost ? 0.4 : toPruned ? 0.5 : 1}
               />
               {hasLabel && (
                 // Sit nearer the parent than the child, to stay clear of the
@@ -281,12 +202,33 @@ export function TreeView({
             </g>
           );
         })}
+        {nextLinks.map((link, i) => {
+          const a = pos.get(link.from);
+          const b = pos.get(link.to);
+          if (!a || !b) return null;
+          const x1 = a.x + ox + (b.x >= a.x ? r : -r);
+          const x2 = b.x + ox + (b.x >= a.x ? -r : r);
+          const y = a.y + oy;
+          const lift = Math.min(18, Math.abs(x2 - x1) * 0.2);
+          const mid = (x1 + x2) / 2;
+          return (
+            <path
+              key={`next-${i}`}
+              d={`M ${x1} ${y} Q ${mid} ${y - lift} ${x2} ${y}`}
+              fill="none"
+              stroke="var(--kw-widget-accent-amber, #f59e0b)"
+              strokeWidth={1.75}
+              markerEnd={`url(#${markerId})`}
+            />
+          );
+        })}
         {nodes.map((n, i) => {
-          const isActive = activeNodes?.has(n.key) ?? false;
-          const isHighlight = highlightNodes?.has(n.key) ?? false;
+          const isGhost = n.ghost === true;
+          const isActive = !isGhost && (activeNodes?.has(n.key) ?? false);
+          const isHighlight = !isGhost && (highlightNodes?.has(n.key) ?? false);
           const isDim = dimNodes?.has(n.key) ?? false;
           const isPruned = prunedNodes?.has(n.key) ?? false;
-          const ptrs = pointerMap.get(n.key);
+          const ptrs = isGhost ? undefined : pointerMap.get(n.key);
 
           let fill = "transparent";
           let stroke = DEFAULTS.border;
@@ -294,7 +236,12 @@ export function TreeView({
           let opacity = 1;
           let dash: string | undefined;
 
-          if (isPruned) {
+          if (isGhost) {
+            stroke = DEFAULTS.dimColor;
+            textColor = DEFAULTS.dimColor;
+            opacity = 0.45;
+            dash = "4 3";
+          } else if (isPruned) {
             stroke = DEFAULTS.dimColor;
             textColor = DEFAULTS.dimColor;
             opacity = 0.45;
@@ -313,14 +260,15 @@ export function TreeView({
 
           const cx = n.x + ox;
           const cy = n.y + oy;
-          const hasBadge = n.badge != null && n.badge !== "";
+          const hasBadge = !isGhost && n.badge != null && n.badge !== "";
+          const radius = isGhost ? r * 0.72 : r;
 
           return (
             <g key={i} style={{ transition: "all 0.25s ease", opacity }}>
               <circle
                 cx={cx}
                 cy={cy}
-                r={r}
+                r={radius}
                 fill={fill}
                 stroke={stroke}
                 strokeWidth={2}
@@ -332,12 +280,12 @@ export function TreeView({
                 textAnchor="middle"
                 dominantBaseline="central"
                 fill={textColor}
-                fontSize={nodeSize > 36 ? 14 : 12}
+                fontSize={isGhost ? 11 : nodeSize > 36 ? 14 : 12}
                 fontWeight={700}
                 fontFamily="ui-monospace, SFMono-Regular, monospace"
                 style={isPruned ? { textDecoration: "line-through" } : undefined}
               >
-                {n.value}
+                {isGhost ? "∅" : n.value}
               </text>
               {hasBadge && (
                 <>
