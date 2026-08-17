@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.55](https://github.com/kiwifs/kiwifs/compare/v0.19.54...v0.19.55) (2026-08-17)
+
+
+### Features
+
+* **ui:** add PlotView for curves, area, and scatter ([#493](https://github.com/kiwifs/kiwifs/issues/493)) ([45e21d4](https://github.com/kiwifs/kiwifs/commit/45e21d4cfcb23ffa8f42f7abbddf07f18d25211d))
+
 ## [0.19.54](https://github.com/kiwifs/kiwifs/compare/v0.19.53...v0.19.54) (2026-08-17)
 
 
