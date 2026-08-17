@@ -95,7 +95,7 @@ function parseInlineMarkdown(text: string): (string | ReactNode)[] {
 export interface SvgLabelProps {
   x: number;
   y: number;
-  text: string | number;
+  text: string | number | null | undefined;
   fill?: string;
   fontSize?: number;
   fontWeight?: number | string;
@@ -124,6 +124,7 @@ export function SvgLabel({
   halo,
   style,
 }: SvgLabelProps) {
+  if (text == null) return null;
   const raw = String(text);
   if (!hasMath(raw)) {
     return (
@@ -157,7 +158,6 @@ export function SvgLabel({
   return (
     <foreignObject x={ox} y={oy} width={w} height={h} style={{ overflow: "visible" }}>
       <div
-        xmlns="http://www.w3.org/1999/xhtml"
         style={{
           color: fill,
           fontSize,

@@ -110,8 +110,7 @@ function mergeGlued(segs: LabelSegment[]): LabelSegment[] {
       continue;
     }
     if (last?.kind === "text" && isGlue(last.value) && seg.kind === "math") {
-      last.kind = "math";
-      last.value += seg.value;
+      merged[merged.length - 1] = { kind: "math", value: last.value + seg.value };
       continue;
     }
     merged.push({ ...seg });
