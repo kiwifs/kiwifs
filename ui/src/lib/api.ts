@@ -1,6 +1,8 @@
 // Typed client for the KiwiFS REST API. All calls share one fetch wrapper so
 // error handling and actor attribution stay consistent.
 
+import type { UIFeatureKey } from "./uiFeatures";
+
 export type TreeEntry = {
   path: string;
   name: string;
@@ -628,10 +630,7 @@ export const api = {
       welcomeTitle?: string;
       welcomeMessage?: string;
     };
-    features?: Partial<Record<
-      "graph" | "kanban" | "canvas" | "whiteboard" | "timeline" | "bases" | "data_sources",
-      boolean
-    >>;
+    features?: Partial<Record<UIFeatureKey, boolean>>;
     toolbarViews?: string[] | null;
   }> {
     return request(`${kiwiBase()}/ui-config`);
