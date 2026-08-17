@@ -248,6 +248,27 @@ function Gallery() {
         <TreeView roots={FOREST} activeNodes={new Set([0, 1])} nodeSize={32} />
       </Section>
 
+      <Section name="TreeView — one-sided binary (right stick + left stick)">
+        <div style={{ display: "flex", gap: 32, flexWrap: "wrap", justifyContent: "center" }}>
+          <TreeView
+            root={{ value: 1, right: { value: 2, right: { value: 3 } } }}
+            highlightNodes={new Set([1, 2, 3])}
+            pointers={[{ value: 3, label: "leaf" }]}
+          />
+          <TreeView
+            root={{ value: 1, left: { value: 2, left: { value: 3 } } }}
+            highlightNodes={new Set([1, 2, 3])}
+          />
+        </div>
+      </Section>
+
+      <Section name="TreeView — next-right links">
+        <TreeView
+          root={TREE}
+          nextLinks={[{ from: 3, to: 10 }, { from: 6, to: 14 }]}
+        />
+      </Section>
+
       <Section name="GraphView — explicit positions">
         <GraphView
           nodes={GRAPH_NODES}
