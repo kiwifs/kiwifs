@@ -1,4 +1,5 @@
 import { alpha } from "./colors";
+import { WidgetText } from "./WidgetText";
 
 export interface StateInspectorProps {
   /** Key-value pairs to display. Values can be primitives, arrays, or objects. */
@@ -69,7 +70,7 @@ export function StateInspector({ state, changedKeys, title }: StateInspectorProp
           background: alpha(DEFAULTS.border, 20),
           fontFamily: "system-ui, sans-serif",
         }}>
-          {title}
+          <WidgetText text={title} />
         </div>
       )}
       <div style={{ padding: "4px 0" }}>

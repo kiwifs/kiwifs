@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
 import { alpha } from "./colors";
+import { hasMath } from "./widgetLabel";
+import { WidgetText } from "./WidgetText";
 
 export interface AnnotationBarProps {
-  /** Step explanation. Supports inline markdown: **bold**, *italic*, `code`. */
+  /** Step explanation. Supports inline math and markdown: **bold**, *italic*, `code`. */
   text: string;
   /** Optional label prefix (e.g. step number). */
   label?: string;
@@ -25,45 +26,6 @@ const VARIANT_STYLES = {
   },
 };
 
-/** Parse inline markdown (**bold**, *italic*, `code`) into React elements. */
-function parseInlineMarkdown(text: string): (string | ReactNode)[] {
-  const parts: (string | ReactNode)[] = [];
-  const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-    if (match[2]) {
-      parts.push(<strong key={key++}>{match[2]}</strong>);
-    } else if (match[3]) {
-      parts.push(<em key={key++}>{match[3]}</em>);
-    } else if (match[4]) {
-      parts.push(
-        <code key={key++} style={{
-          background: alpha("var(--kw-widget-dim, #94a3b8)", 18),
-          padding: "1px 5px",
-          borderRadius: 4,
-          fontSize: "0.8em",
-          fontFamily: "ui-monospace, SFMono-Regular, monospace",
-        }}>
-          {match[4]}
-        </code>
-      );
-    }
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
-  return parts.length > 0 ? parts : [text];
-}
-
 export function AnnotationBar({ text, label, variant = "info" }: AnnotationBarProps) {
   const style = VARIANT_STYLES[variant];
 
@@ -84,13 +46,13 @@ export function AnnotationBar({ text, label, variant = "info" }: AnnotationBarPr
           color: style.border,
           marginRight: 8,
           fontSize: "0.75rem",
-          textTransform: "uppercase",
+          textTransform: hasMath(label) ? "none" : "uppercase",
           letterSpacing: "0.04em",
         }}>
-          {label}
+          <WidgetText text={label} />
         </span>
       )}
-      {parseInlineMarkdown(text)}
+      <WidgetText text={text} markdown />
     </div>
   );
 }

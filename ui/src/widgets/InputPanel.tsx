@@ -1,4 +1,6 @@
 import { alpha } from "./colors";
+import { hasMath } from "./widgetLabel";
+import { WidgetText } from "./WidgetText";
 
 export interface InputField {
   key: string;
@@ -52,11 +54,11 @@ export function InputPanel({
           fontSize: "0.7rem",
           fontWeight: 600,
           color: DEFAULTS.dimColor,
-          textTransform: "uppercase",
+          textTransform: hasMath(title) ? "none" : "uppercase",
           letterSpacing: "0.05em",
           marginBottom: 6,
         }}>
-          {title}
+          <WidgetText text={title} />
         </div>
       )}
       <div style={{
@@ -81,7 +83,7 @@ export function InputPanel({
                 color: DEFAULTS.dimColor,
                 whiteSpace: "nowrap",
               }}>
-                {field.label}
+                <WidgetText text={field.label} />
               </label>
 
               {field.type === "number" && (

@@ -1,4 +1,5 @@
 import { alpha } from "./colors";
+import { SvgLabel } from "./WidgetText";
 
 export interface TimelineInterval {
   start: number;
@@ -160,16 +161,15 @@ export function TimelineView({
               opacity={0.7}
             />
             {m.label && (
-              <text
+              <SvgLabel
                 x={scale(m.at)} y={PAD_TOP - 6}
-                textAnchor="middle"
+                text={m.label}
+                anchor="middle"
                 fill={m.color ?? DEFAULTS.dimColor}
                 fontSize={9}
                 fontWeight={600}
                 fontFamily="system-ui, sans-serif"
-              >
-                {m.label}
-              </text>
+              />
             )}
           </g>
         ))}
@@ -212,16 +212,16 @@ export function TimelineView({
             <g key={`iv${i}`} style={{ transition: "all 0.25s ease", opacity }}>
               <rect x={x1} y={y} width={w} height={h} rx={4} fill={fill} stroke={stroke} strokeWidth={1.5} />
               {fits && (
-                <text
+                <SvgLabel
                   x={x1 + w / 2} y={y + h / 2}
-                  textAnchor="middle" dominantBaseline="central"
+                  text={caption}
+                  anchor="middle"
+                  dominantBaseline="central"
                   fill={textColor}
                   fontSize={10}
                   fontWeight={600}
                   fontFamily="ui-monospace, SFMono-Regular, monospace"
-                >
-                  {caption}
-                </text>
+                />
               )}
             </g>
           );
@@ -238,16 +238,15 @@ export function TimelineView({
             />
             <circle cx={scale(sweep)} cy={PAD_TOP - 6} r={3} fill={activeColor} />
             {sweepLabel && (
-              <text
+              <SvgLabel
                 x={scale(sweep) + 6} y={PAD_TOP - 4}
+                text={sweepLabel}
                 fill={activeColor}
                 fontSize={10}
                 fontWeight={700}
                 fontFamily="ui-monospace, SFMono-Regular, monospace"
-                style={{ paintOrder: "stroke", stroke: DEFAULTS.surface, strokeWidth: 4 }}
-              >
-                {sweepLabel}
-              </text>
+                halo={DEFAULTS.surface}
+              />
             )}
           </g>
         )}

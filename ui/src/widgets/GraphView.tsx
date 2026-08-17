@@ -1,5 +1,6 @@
 import { alpha } from "./colors";
 import { layoutGraph, type GraphLayout } from "./graphLayout";
+import { SvgLabel } from "./WidgetText";
 
 export interface GraphNode {
   id: string | number;
@@ -159,16 +160,15 @@ export function GraphView({
                   style={{ transition: "all 0.25s ease" }}
                 />
                 {(e.weight !== undefined || e.label) && (
-                  <text
+                  <SvgLabel
                     x={from.x} y={from.y - r - loop - 4}
-                    textAnchor="middle"
+                    text={e.weight !== undefined ? e.weight : e.label!}
+                    anchor="middle"
                     fill={isActive ? activeColor : DEFAULTS.dimColor}
                     fontSize={10}
                     fontWeight={600}
                     fontFamily="ui-monospace, monospace"
-                  >
-                    {e.weight !== undefined ? e.weight : e.label}
-                  </text>
+                  />
                 )}
               </g>
             );
@@ -197,16 +197,15 @@ export function GraphView({
                 style={{ transition: "all 0.25s ease" }}
               />
               {(e.weight !== undefined || e.label) && (
-                <text
+                <SvgLabel
                   x={mx} y={my - 6}
-                  textAnchor="middle"
+                  text={e.weight !== undefined ? e.weight : e.label!}
+                  anchor="middle"
                   fill={isActive ? activeColor : DEFAULTS.dimColor}
                   fontSize={10}
                   fontWeight={600}
                   fontFamily="ui-monospace, monospace"
-                >
-                  {e.weight !== undefined ? e.weight : e.label}
-                </text>
+                />
               )}
             </g>
           );
@@ -243,30 +242,28 @@ export function GraphView({
                 stroke={stroke}
                 strokeWidth={2}
               />
-              <text
+              <SvgLabel
                 x={n.x} y={n.y}
-                textAnchor="middle"
+                text={n.label ?? n.id}
+                anchor="middle"
                 dominantBaseline="central"
                 fill={textColor}
                 fontSize={nodeSize > 32 ? 13 : 11}
                 fontWeight={700}
                 fontFamily="ui-monospace, SFMono-Regular, monospace"
-              >
-                {n.label ?? n.id}
-              </text>
+              />
               {ptrs?.map((p, j) => (
-                <text
+                <SvgLabel
                   key={j}
                   x={n.x}
                   y={n.y - r - 8 - j * 14}
-                  textAnchor="middle"
+                  text={p.label}
+                  anchor="middle"
                   fill={p.color ?? activeColor}
                   fontSize={10}
                   fontWeight={600}
                   fontFamily="system-ui, sans-serif"
-                >
-                  {p.label}
-                </text>
+                />
               ))}
             </g>
           );

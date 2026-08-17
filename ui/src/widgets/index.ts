@@ -20,8 +20,14 @@ export { PropertyBar, type PropertyBarProps, type PropertyEntry } from "./Proper
 export { CodeHighlight, type CodeHighlightProps } from "./CodeHighlight";
 export { TreeView, type TreeViewProps, type TreeNode } from "./TreeView";
 export { MatrixView, type MatrixViewProps } from "./MatrixView";
-export { WidgetText, type WidgetTextProps } from "./WidgetText";
-export { headerGutterPx, mathSource } from "./widgetLabel";
+export { WidgetText, SvgLabel, type WidgetTextProps, type SvgLabelProps } from "./WidgetText";
+export {
+  headerGutterPx,
+  mathSource,
+  labelSegments,
+  hasMath,
+  type LabelSegment,
+} from "./widgetLabel";
 export { ActivityGrid, type ActivityGridProps } from "./ActivityGrid";
 export {
   BarView,

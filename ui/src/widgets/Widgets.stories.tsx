@@ -194,6 +194,8 @@ function Gallery() {
               ]}
               shades={[{ from: -1, to: 1, series: "pdf", label: "68%" }]}
               guides={[{ x: 0, label: "μ" }]}
+              xLabel="z"
+              yLabel="\\varphi(z)"
               xMin={-3}
               xMax={3}
               yMin={0}
@@ -522,6 +524,17 @@ function Gallery() {
           />
           <AnnotationBar variant="success" text="Found a pair — *return immediately*." />
           <AnnotationBar variant="warning" text="No pair exists; the loop falls through to `return []`." />
+          <AnnotationBar
+            variant="info"
+            text="M(t) = E(e^{tX}) is a curve in t. For Z ~ N(0,1) it is e^{t^2/2}."
+          />
+          <PropertyBar
+            entries={[
+              { label: "M(0)", value: "1" },
+              { label: "M'(0)", value: "E(X)" },
+              { label: "M''(0)", value: "E(X^2)" },
+            ]}
+          />
         </div>
       </Section>
 

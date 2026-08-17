@@ -1,4 +1,5 @@
 import { alpha } from "./colors";
+import { WidgetText } from "./WidgetText";
 
 interface CellStyle {
   border: string;
@@ -126,7 +127,7 @@ export function ArrayView({
             {/* Pointer labels above */}
             <div style={{ height: 18, display: "flex", gap: 4, fontSize: "0.7rem", fontWeight: 600 }}>
               {ptrs?.map((p, j) => (
-                <span key={j} style={{ color: p.color ?? activeColor }}>{p.label}</span>
+                <span key={j} style={{ color: p.color ?? activeColor }}><WidgetText text={p.label} /></span>
               )) ?? <span style={{ visibility: "hidden" }}>_</span>}
             </div>
 
@@ -151,7 +152,7 @@ export function ArrayView({
                 gap: 0,
               }}
             >
-              <span>{val}</span>
+              <span><WidgetText text={val} /></span>
               {hasSub && (
                 <span style={{
                   fontSize: "0.55rem",
@@ -159,7 +160,7 @@ export function ArrayView({
                   opacity: 0.6,
                   lineHeight: 1,
                 }}>
-                  {sub}
+                  <WidgetText text={sub} />
                 </span>
               )}
             </div>

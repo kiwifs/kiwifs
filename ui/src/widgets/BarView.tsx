@@ -1,4 +1,5 @@
 import { alpha } from "./colors";
+import { SvgLabel } from "./WidgetText";
 
 export interface BarPointer {
   /** Column index the pointer sits above. */
@@ -219,9 +220,7 @@ export function BarView({
                 opacity={0.8}
               />
               {g.label && (
-                <text x={sidePad + chartWidth} y={gy - 3} textAnchor="end" fontSize={10} fill={color}>
-                  {g.label}
-                </text>
+                <SvgLabel x={sidePad + chartWidth} y={gy - 3} text={g.label} anchor="end" fontSize={10} fill={color} />
               )}
             </g>
           );
@@ -250,16 +249,15 @@ export function BarView({
                 rx={2}
               />
               {o.label && oh > 12 && (
-                <text
+                <SvgLabel
                   x={(x + x2) / 2}
                   y={(yTop + yBot) / 2 + 4}
-                  textAnchor="middle"
+                  text={o.label}
+                  anchor="middle"
                   fontSize={11}
                   fontWeight={600}
                   fill={color}
-                >
-                  {o.label}
-                </text>
+                />
               )}
             </g>
           );
@@ -295,16 +293,15 @@ export function BarView({
                 rx={3}
               />
               {label != null && (
-                <text
+                <SvgLabel
                   x={x + barWidth / 2}
                   y={labelY}
-                  textAnchor="middle"
+                  text={label}
+                  anchor="middle"
                   fontSize={11}
                   fontWeight={600}
                   fill={DEFAULTS.text}
-                >
-                  {label}
-                </text>
+                />
               )}
             </g>
           );
@@ -313,17 +310,16 @@ export function BarView({
         {/* Pointers above their column */}
         {Array.from(pointerBuckets.entries()).map(([idx, ptrs]) =>
           ptrs.map((p, j) => (
-            <text
+            <SvgLabel
               key={`ptr-${idx}-${j}`}
               x={xFor(idx) + barWidth / 2}
               y={plotTop - 6 - valueLabelPad - j * 16}
-              textAnchor="middle"
+              text={p.label}
+              anchor="middle"
               fontSize={12}
               fontWeight={700}
               fill={p.color ?? activeColor}
-            >
-              {p.label}
-            </text>
+            />
           )),
         )}
 
@@ -332,16 +328,15 @@ export function BarView({
           const lbl = labels ? labels[i] : i;
           if (lbl == null) return null;
           return (
-            <text
+            <SvgLabel
               key={`idx-${i}`}
               x={xFor(i) + barWidth / 2}
               y={svgHeight - 8}
-              textAnchor="middle"
+              text={lbl}
+              anchor="middle"
               fontSize={10}
               fill={DEFAULTS.dimColor}
-            >
-              {lbl}
-            </text>
+            />
           );
         })}
       </svg>

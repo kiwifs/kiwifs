@@ -104,7 +104,7 @@ export function MatrixView({
               return (
                 <div key={c} style={{ width: cellSize, textAlign: "center", fontSize: "0.65rem", fontWeight: 600, height: 16 }}>
                   {ptrs?.map((p, j) => (
-                    <span key={j} style={{ color: p.color ?? activeColor }}>{p.label} </span>
+                    <span key={j} style={{ color: p.color ?? activeColor }}><WidgetText text={p.label} /> </span>
                   ))}
                 </div>
               );
@@ -247,7 +247,7 @@ export function MatrixView({
               {rptrs && (
                 <div style={{ marginLeft: 6, fontSize: "0.65rem", fontWeight: 600 }}>
                   {rptrs.map((p, j) => (
-                    <span key={j} style={{ color: p.color ?? activeColor }}>{p.label} </span>
+                    <span key={j} style={{ color: p.color ?? activeColor }}><WidgetText text={p.label} /> </span>
                   ))}
                 </div>
               )}
