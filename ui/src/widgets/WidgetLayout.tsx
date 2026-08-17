@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+import { hasMath } from "./widgetLabel";
+import { WidgetText } from "./WidgetText";
+
 export interface WidgetLayoutProps {
   /** Layout direction. Default "row". */
   direction?: "row" | "column";
@@ -41,11 +44,11 @@ export function WidgetPanel({ flex = "1 1 0", minWidth, title, children }: Widge
           fontSize: "0.7rem",
           fontWeight: 600,
           color: "var(--kw-widget-dim, #94a3b8)",
-          textTransform: "uppercase",
+          textTransform: hasMath(title) ? "none" : "uppercase",
           letterSpacing: "0.05em",
           marginBottom: 6,
         }}>
-          {title}
+          <WidgetText text={title} />
         </div>
       )}
       {children}

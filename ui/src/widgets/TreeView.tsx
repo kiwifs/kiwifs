@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { alpha } from "./colors";
+import { SvgLabel } from "./WidgetText";
 import {
   collectEdges,
   flattenTree,
@@ -185,19 +186,18 @@ export function TreeView({
               {hasLabel && (
                 // Sit nearer the parent than the child, to stay clear of the
                 // pointer labels that hang above each node.
-                <text
+                <SvgLabel
                   x={e.x1 + (e.x2 - e.x1) * 0.38 + ox}
                   y={e.y1 + (e.y2 - e.y1) * 0.38 + oy}
-                  textAnchor="middle"
+                  text={e.label}
+                  anchor="middle"
                   dominantBaseline="central"
                   fill={DEFAULTS.dimColor}
                   fontSize={10}
                   fontWeight={600}
                   fontFamily="ui-monospace, SFMono-Regular, monospace"
-                  style={{ paintOrder: "stroke", stroke: "var(--kw-widget-surface, #18181b)", strokeWidth: 4 }}
-                >
-                  {e.label}
-                </text>
+                  halo="var(--kw-widget-surface, #18181b)"
+                />
               )}
             </g>
           );
@@ -274,19 +274,18 @@ export function TreeView({
                 strokeWidth={2}
                 strokeDasharray={dash}
               />
-              <text
+              <SvgLabel
                 x={cx}
                 y={cy}
-                textAnchor="middle"
+                text={isGhost ? "∅" : n.value}
+                anchor="middle"
                 dominantBaseline="central"
                 fill={textColor}
                 fontSize={isGhost ? 11 : nodeSize > 36 ? 14 : 12}
                 fontWeight={700}
                 fontFamily="ui-monospace, SFMono-Regular, monospace"
                 style={isPruned ? { textDecoration: "line-through" } : undefined}
-              >
-                {isGhost ? "∅" : n.value}
-              </text>
+              />
               {hasBadge && (
                 <>
                   <circle
@@ -297,33 +296,31 @@ export function TreeView({
                     stroke={isActive ? activeColor : DEFAULTS.border}
                     strokeWidth={1.5}
                   />
-                  <text
+                  <SvgLabel
                     x={cx + r * 0.78}
                     y={cy - r * 0.78}
-                    textAnchor="middle"
+                    text={n.badge}
+                    anchor="middle"
                     dominantBaseline="central"
                     fill={DEFAULTS.text}
                     fontSize={9}
                     fontWeight={700}
                     fontFamily="ui-monospace, SFMono-Regular, monospace"
-                  >
-                    {n.badge}
-                  </text>
+                  />
                 </>
               )}
               {ptrs?.map((p, j) => (
-                <text
+                <SvgLabel
                   key={j}
                   x={cx}
                   y={cy - r - 8 - j * 14}
-                  textAnchor="middle"
+                  text={p.label}
+                  anchor="middle"
                   fill={p.color ?? activeColor}
                   fontSize={10}
                   fontWeight={600}
                   fontFamily="system-ui, sans-serif"
-                >
-                  {p.label}
-                </text>
+                />
               ))}
             </g>
           );

@@ -1,4 +1,6 @@
 import { alpha } from "./colors";
+import { hasMath } from "./widgetLabel";
+import { WidgetText } from "./WidgetText";
 
 export interface StackPointer {
   index: number;
@@ -100,7 +102,7 @@ export function StackView({
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0.5rem 0" }}>
       {title && (
         <div style={{ fontSize: "0.7rem", fontWeight: 700, color: DEFAULTS.dimColor, letterSpacing: "0.04em", marginBottom: 4 }}>
-          {title.toUpperCase()}
+          {hasMath(title) ? <WidgetText text={title} /> : title.toUpperCase()}
         </div>
       )}
 
@@ -181,11 +183,11 @@ export function StackView({
                     transition: "all 0.2s ease",
                   }}
                 >
-                  {value}
+                  <WidgetText text={value} />
                 </div>
                 <span style={{ fontSize: "0.65rem", fontWeight: 600, display: "flex", gap: 4 }}>
                   {ptrs?.map((p, j) => (
-                    <span key={j} style={{ color: p.color ?? activeColor }}>{p.label}</span>
+                    <span key={j} style={{ color: p.color ?? activeColor }}><WidgetText text={p.label} /></span>
                   ))}
                 </span>
               </div>

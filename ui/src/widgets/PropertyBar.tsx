@@ -1,4 +1,6 @@
 import { alpha } from "./colors";
+import { hasMath } from "./widgetLabel";
+import { WidgetText } from "./WidgetText";
 
 export interface PropertyEntry {
   label: string;
@@ -33,7 +35,7 @@ export function PropertyBar({ entries, title }: PropertyBarProps) {
           borderBottom: "1px solid var(--kw-widget-border, #3f3f46)",
           background: alpha("var(--kw-widget-border, #3f3f46)", 20),
         }}>
-          {title}
+          <WidgetText text={title} />
         </div>
       )}
       <div style={{ display: "flex" }}>
@@ -54,10 +56,10 @@ export function PropertyBar({ entries, title }: PropertyBarProps) {
               fontSize: "0.65rem",
               fontWeight: 600,
               color: "var(--kw-widget-dim, #94a3b8)",
-              textTransform: "uppercase",
+              textTransform: hasMath(entry.label) ? "none" : "uppercase",
               letterSpacing: "0.05em",
             }}>
-              {entry.label}
+              <WidgetText text={entry.label} />
             </span>
             <span style={{
               fontWeight: 700,
@@ -66,7 +68,7 @@ export function PropertyBar({ entries, title }: PropertyBarProps) {
                 : "var(--kw-widget-text, #e5e7eb)",
               marginTop: 2,
             }}>
-              {String(entry.value)}
+              <WidgetText text={String(entry.value)} />
             </span>
           </div>
         ))}

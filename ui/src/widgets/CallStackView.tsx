@@ -1,4 +1,6 @@
 import { alpha } from "./colors";
+import { hasMath } from "./widgetLabel";
+import { WidgetText } from "./WidgetText";
 
 export interface CallFrame {
   /** How the call was made, e.g. `dfs(node=3, depth=2)`. */
@@ -111,7 +113,7 @@ function FrameRow({ frame, depth, active, faded, activeColor, highlightColor }: 
               color: DEFAULTS.text,
             }}
           >
-            {frame.label}
+            <WidgetText text={frame.label} />
           </span>
           {frame.line !== undefined && (
             <span
@@ -136,7 +138,7 @@ function FrameRow({ frame, depth, active, faded, activeColor, highlightColor }: 
                 color: highlightColor,
               }}
             >
-              → {renderValue(frame.returns)}
+              → <WidgetText text={renderValue(frame.returns)} />
             </span>
           )}
         </div>
@@ -154,7 +156,7 @@ function FrameRow({ frame, depth, active, faded, activeColor, highlightColor }: 
               >
                 {key}
                 <span style={{ opacity: 0.6 }}>=</span>
-                <span style={{ color: DEFAULTS.text }}>{renderValue(value)}</span>
+                <span style={{ color: DEFAULTS.text }}><WidgetText text={renderValue(value)} /></span>
               </span>
             ))}
           </div>
@@ -206,7 +208,7 @@ export function CallStackView({
         }}
       >
         <span style={{ fontSize: "0.7rem", fontWeight: 700, color: DEFAULTS.dimColor, letterSpacing: "0.04em" }}>
-          {(title ?? "CALL STACK").toUpperCase()}
+          {title && hasMath(title) ? <WidgetText text={title} /> : (title ?? "CALL STACK").toUpperCase()}
         </span>
         <span style={{ fontSize: "0.65rem", color: DEFAULTS.dimColor, fontVariantNumeric: "tabular-nums" }}>
           depth {frames.length}

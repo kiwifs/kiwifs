@@ -1,4 +1,5 @@
 import { alpha } from "./colors";
+import { SvgLabel } from "./WidgetText";
 
 export interface LLNode {
   value: string | number;
@@ -210,19 +211,18 @@ export function LinkedListView({
                 markerEnd={`url(#${ARROW})`}
               />
               {a.label && (
-                <text
+                <SvgLabel
                   x={midX}
                   y={midY + dir * 6}
-                  textAnchor="middle"
+                  text={a.label}
+                  anchor="middle"
                   dominantBaseline="central"
                   fill={stroke}
                   fontSize={10}
                   fontWeight={600}
                   fontFamily="ui-monospace, SFMono-Regular, monospace"
-                  style={{ paintOrder: "stroke", stroke: DEFAULTS.surface, strokeWidth: 4 }}
-                >
-                  {a.label}
-                </text>
+                  halo={DEFAULTS.surface}
+                />
               )}
             </g>
           );
@@ -246,14 +246,16 @@ export function LinkedListView({
                 x1={nextCellX} y1={boxTop} x2={nextCellX} y2={boxTop + BOX_H}
                 stroke={s.border} strokeWidth={1.5}
               />
-              <text
+              <SvgLabel
                 x={x + nodeWidth / 2} y={centerY}
-                textAnchor="middle" dominantBaseline="central"
-                fill={s.text} fontSize={13} fontWeight={700}
+                text={node.value}
+                anchor="middle"
+                dominantBaseline="central"
+                fill={s.text}
+                fontSize={13}
+                fontWeight={700}
                 fontFamily="ui-monospace, SFMono-Regular, monospace"
-              >
-                {node.value}
-              </text>
+              />
               <text
                 x={nextCellX + NEXT_W / 2} y={centerY}
                 textAnchor="middle" dominantBaseline="central"
@@ -263,18 +265,17 @@ export function LinkedListView({
                 {terminates ? "∅" : "•"}
               </text>
               {ptrs?.map((p, j) => (
-                <text
+                <SvgLabel
                   key={j}
                   x={x + boxW / 2}
                   y={LABEL_BAND - 4 - j * 13}
-                  textAnchor="middle"
+                  text={p.label}
+                  anchor="middle"
                   fill={p.color ?? activeColor}
                   fontSize={10}
                   fontWeight={600}
                   fontFamily="system-ui, sans-serif"
-                >
-                  {p.label}
-                </text>
+                />
               ))}
             </g>
           );

@@ -203,7 +203,13 @@
 }
 
 /* Widget math inherits the cell color (active fill vs body text). */
+.kw-widget-math {
+  display: inline;
+}
 .kw-widget-math .katex {
   color: inherit;
   font-size: 1em;
+}
+.kw-widget-math .katex-html {
+  white-space: nowrap;
 }

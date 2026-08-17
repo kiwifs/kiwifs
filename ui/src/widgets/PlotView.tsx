@@ -5,6 +5,7 @@ import {
   slicePoints,
   type PlotPoint,
 } from "./plotLayout";
+import { SvgLabel, WidgetText } from "./WidgetText";
 
 export type { PlotPoint } from "./plotLayout";
 
@@ -248,29 +249,28 @@ export function PlotView({
           ))}
 
         {xLabel && (
-          <text
+          <SvgLabel
             x={PAD.left + plotW / 2}
             y={height - 4}
-            textAnchor="middle"
+            text={xLabel}
+            anchor="middle"
             fill={DEFAULTS.dimColor}
             fontSize={10}
             fontWeight={600}
-          >
-            {xLabel}
-          </text>
+          />
         )}
         {yLabel && (
-          <text
-            x={12}
-            y={PAD.top + plotH / 2}
-            textAnchor="middle"
-            fill={DEFAULTS.dimColor}
-            fontSize={10}
-            fontWeight={600}
-            transform={`rotate(-90 12 ${PAD.top + plotH / 2})`}
-          >
-            {yLabel}
-          </text>
+          <g transform={`rotate(-90 12 ${PAD.top + plotH / 2})`}>
+            <SvgLabel
+              x={12}
+              y={PAD.top + plotH / 2}
+              text={yLabel}
+              anchor="middle"
+              fill={DEFAULTS.dimColor}
+              fontSize={10}
+              fontWeight={600}
+            />
+          </g>
         )}
 
         {/* Shaded regions — behind series */}
@@ -297,16 +297,15 @@ export function PlotView({
             <g key={`sh${i}`}>
               <path d={d} fill={color} opacity={sh.opacity ?? 0.22} />
               {sh.label && (
-                <text
+                <SvgLabel
                   x={(sx(lo) + sx(hi)) / 2}
                   y={sy((sh.toY ?? domain.yMax * 0.15) * 0.5)}
-                  textAnchor="middle"
+                  text={sh.label}
+                  anchor="middle"
                   fill={color}
                   fontSize={10}
                   fontWeight={700}
-                >
-                  {sh.label}
-                </text>
+                />
               )}
             </g>
           );
@@ -342,16 +341,15 @@ export function PlotView({
                 />
               )}
               {g.label && (
-                <text
+                <SvgLabel
                   x={g.x != null ? sx(g.x) + 4 : PAD.left + 4}
                   y={g.y != null ? sy(g.y) - 4 : PAD.top + 12}
+                  text={g.label}
                   fill={color}
                   fontSize={10}
                   fontWeight={600}
-                  style={{ paintOrder: "stroke", stroke: DEFAULTS.surface, strokeWidth: 3 }}
-                >
-                  {g.label}
-                </text>
+                  halo={DEFAULTS.surface}
+                />
               )}
             </g>
           );
@@ -414,17 +412,16 @@ export function PlotView({
             <g key={`m${i}`}>
               <circle cx={sx(m.x)} cy={sy(y)} r={3.5} fill={color} />
               {m.label && (
-                <text
+                <SvgLabel
                   x={sx(m.x)}
                   y={sy(y) - 8}
-                  textAnchor="middle"
+                  text={m.label}
+                  anchor="middle"
                   fill={color}
                   fontSize={10}
                   fontWeight={700}
-                  style={{ paintOrder: "stroke", stroke: DEFAULTS.surface, strokeWidth: 3 }}
-                >
-                  {m.label}
-                </text>
+                  halo={DEFAULTS.surface}
+                />
               )}
             </g>
           );
@@ -462,7 +459,7 @@ export function PlotView({
                     display: "inline-block",
                   }}
                 />
-                {s.label}
+                <WidgetText text={s.label} />
               </span>
             );
           })}
