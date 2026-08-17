@@ -48,7 +48,7 @@ describe("uiConfigStore", () => {
     vi.spyOn(api, "getUIConfig").mockResolvedValue({
       themeLocked: false,
       startPage: "welcome",
-      features: { kanban: false, graph: true },
+      features: { kanban: false, graph: true, edit: false, history: false, publish: false },
     });
 
     await useUIConfigStore.getState().load();
@@ -56,6 +56,9 @@ describe("uiConfigStore", () => {
     expect(useUIConfigStore.getState().features.kanban).toBe(false);
     expect(useUIConfigStore.getState().features.graph).toBe(true);
     expect(useUIConfigStore.getState().features.canvas).toBe(true);
+    expect(useUIConfigStore.getState().features.edit).toBe(false);
+    expect(useUIConfigStore.getState().features.history).toBe(false);
+    expect(useUIConfigStore.getState().features.publish).toBe(false);
   });
 
   it("falls back to defaults when ui-config fetch fails", async () => {

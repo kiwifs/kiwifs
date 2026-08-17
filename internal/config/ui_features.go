@@ -1,6 +1,6 @@
 package config
 
-// UIFeaturesConfig toggles header view buttons via [ui.features] in config.toml.
+// UIFeaturesConfig toggles chrome via [ui.features] in config.toml.
 // Unset fields default to true for backward compatibility.
 type UIFeaturesConfig struct {
 	Graph       *bool `toml:"graph"`
@@ -10,6 +10,9 @@ type UIFeaturesConfig struct {
 	Timeline    *bool `toml:"timeline"`
 	Bases       *bool `toml:"bases"`
 	DataSources *bool `toml:"data_sources"`
+	Edit        *bool `toml:"edit"`
+	History     *bool `toml:"history"`
+	Publish     *bool `toml:"publish"`
 }
 
 func featureEnabled(v *bool) bool {
@@ -26,6 +29,9 @@ func (f UIFeaturesConfig) Resolved() map[string]bool {
 		"timeline":     featureEnabled(f.Timeline),
 		"bases":        featureEnabled(f.Bases),
 		"data_sources": featureEnabled(f.DataSources),
+		"edit":         featureEnabled(f.Edit),
+		"history":      featureEnabled(f.History),
+		"publish":      featureEnabled(f.Publish),
 	}
 }
 

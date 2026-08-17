@@ -67,6 +67,22 @@ type = "none"
 # save = "Ctrl+S"
 # toggle_sidebar = "Ctrl+B"
 # shortcuts_help = "Ctrl+/"
+#
+# Hide authoring chrome and header views for a public reader.
+# [ui.features]
+# graph = false
+# kanban = false
+# canvas = false
+# whiteboard = false
+# timeline = false
+# bases = false
+# data_sources = false
+# edit = false
+# history = false
+# publish = false
+#
+# [ui.toolbar]
+# views = []
 
 # Validate frontmatter against .kiwi/schemas/{value}.json on write.
 # [schema]
