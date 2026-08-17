@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.58](https://github.com/kiwifs/kiwifs/compare/v0.19.57...v0.19.58) (2026-08-17)
+
+
+### Features
+
+* **ui:** render math in every widget label ([#499](https://github.com/kiwifs/kiwifs/issues/499)) ([9c29086](https://github.com/kiwifs/kiwifs/commit/9c29086f99aa2337593bd6c2330d091d26930aaf))
+
 ## [0.19.57](https://github.com/kiwifs/kiwifs/compare/v0.19.56...v0.19.57) (2026-08-17)
 
 
