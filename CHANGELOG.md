@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.54](https://github.com/kiwifs/kiwifs/compare/v0.19.53...v0.19.54) (2026-08-17)
+
+
+### Features
+
+* **ui:** keep binary TreeView children on their left/right slots ([#491](https://github.com/kiwifs/kiwifs/issues/491)) ([06bfc63](https://github.com/kiwifs/kiwifs/commit/06bfc6331733ce0d6c9ed200eb0eb320fe9dd88e))
+
 ## [0.19.53](https://github.com/kiwifs/kiwifs/compare/v0.19.52...v0.19.53) (2026-08-12)
 
 
