@@ -89,7 +89,7 @@ describe("labelSegments", () => {
 
   it("finds math islands inside a sentence", () => {
     expect(kinds("M(t) = E(e^{tX}) is a curve in t. For Z ~ N(0,1) it is e^{t^2/2}.")).toBe(
-      "[M(t) = E(e^{tX})] is a curve in t. For [Z ~ N(0,1)] it is [e^{t^2/2}].",
+      "[M(t) = E(e^{tX})] is a curve in t. For [Z \\sim N(0,1)] it is [e^{t^2/2}].",
     );
   });
 

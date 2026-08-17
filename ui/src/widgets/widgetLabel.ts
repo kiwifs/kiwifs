@@ -56,7 +56,9 @@ export function mathSource(text: string): string | null {
 export function labelSegments(text: string): LabelSegment[] {
   if (!text) return [];
   const raw = scanIslands(text);
-  return mergeGlued(collapse(raw));
+  return mergeGlued(collapse(raw)).map((s) =>
+    s.kind === "math" ? { kind: "math", value: texifyAscii(s.value) } : s,
+  );
 }
 
 function collapse(segs: LabelSegment[]): LabelSegment[] {
@@ -137,6 +139,11 @@ function peelLeadingAtom(text: string): { glue: string; atom: string; tail: stri
   const m = /^(\s*[=∼~≈]\s*)(-?\d+(?:\.\d+)?|[A-Za-z]['′]{0,2})(.*)$/.exec(text);
   if (!m) return null;
   return { glue: m[1]!, atom: m[2]!, tail: m[3]! };
+}
+
+/** ASCII `~` is a TeX non-breaking space; writers mean "distributed as". */
+function texifyAscii(src: string): string {
+  return src.replace(/[~∼]/g, "\\sim");
 }
 
 function scanIslands(text: string): LabelSegment[] {
