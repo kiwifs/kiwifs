@@ -28,6 +28,17 @@ export {
   type BarOverlay,
   type BarGuide,
 } from "./BarView";
+export {
+  PlotView,
+  type PlotViewProps,
+  type PlotSeries,
+  type PlotSeriesKind,
+  type PlotPoint,
+  type PlotGuide,
+  type PlotShade,
+  type PlotMark,
+} from "./PlotView";
+export { type PlotDomain } from "./plotLayout";
 export { GraphView, type GraphViewProps, type GraphNode, type GraphEdge } from "./GraphView";
 export { type GraphLayout } from "./graphLayout";
 export {

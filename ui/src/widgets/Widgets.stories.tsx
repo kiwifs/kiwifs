@@ -5,6 +5,7 @@ import { ActivityGrid } from "./ActivityGrid";
 import { AnnotationBar } from "./AnnotationBar";
 import { ArrayView } from "./ArrayView";
 import { BarView } from "./BarView";
+import { PlotView } from "./PlotView";
 import { CallStackView } from "./CallStackView";
 import { CodeHighlight } from "./CodeHighlight";
 import { DateField } from "./DateField";
@@ -174,6 +175,55 @@ function Gallery() {
           pointers={[{ index: 3, label: "max" }]}
           guides={[{ value: 6, label: "threshold" }]}
         />
+      </Section>
+
+      <Section name="PlotView — density, shade, scatter">
+        <WidgetLayout>
+          <WidgetPanel title="line + area shade" minWidth={280}>
+            <PlotView
+              series={[
+                {
+                  id: "pdf",
+                  label: "N(0,1)",
+                  kind: "area",
+                  points: Array.from({ length: 61 }, (_, i) => {
+                    const x = -3 + i * 0.1;
+                    return { x, y: Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI) };
+                  }),
+                },
+              ]}
+              shades={[{ from: -1, to: 1, series: "pdf", label: "68%" }]}
+              guides={[{ x: 0, label: "μ" }]}
+              xMin={-3}
+              xMax={3}
+              yMin={0}
+              width={320}
+              height={220}
+            />
+          </WidgetPanel>
+          <WidgetPanel title="scatter" minWidth={280}>
+            <PlotView
+              series={[
+                {
+                  id: "cloud",
+                  label: "pairs",
+                  kind: "scatter",
+                  points: [
+                    { x: 1, y: 1.2 }, { x: 1.4, y: 1.8 }, { x: 2, y: 2.1 },
+                    { x: 2.3, y: 2.9 }, { x: 3, y: 2.7 }, { x: 3.4, y: 3.6 },
+                  ],
+                },
+                {
+                  id: "fit",
+                  label: "fit",
+                  points: [{ x: 1, y: 1.1 }, { x: 3.4, y: 3.5 }],
+                },
+              ]}
+              width={320}
+              height={220}
+            />
+          </WidgetPanel>
+        </WidgetLayout>
       </Section>
 
       <Section name="ArrayView — aligned rows (offset)">

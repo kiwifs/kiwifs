@@ -13,6 +13,7 @@ import { TreeView } from "@kw/widgets/TreeView";
 import { MatrixView } from "@kw/widgets/MatrixView";
 import { ActivityGrid } from "@kw/widgets/ActivityGrid";
 import { BarView } from "@kw/widgets/BarView";
+import { PlotView } from "@kw/widgets/PlotView";
 import { GraphView } from "@kw/widgets/GraphView";
 import { LinkedListView } from "@kw/widgets/LinkedListView";
 import { CallStackView } from "@kw/widgets/CallStackView";
@@ -42,6 +43,7 @@ const liveScope = {
   MatrixView,
   ActivityGrid,
   BarView,
+  PlotView,
   GraphView,
   LinkedListView,
   CallStackView,
