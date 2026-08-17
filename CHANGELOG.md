@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.56](https://github.com/kiwifs/kiwifs/compare/v0.19.55...v0.19.56) (2026-08-17)
+
+
+### Features
+
+* **ui:** size MatrixView row headers and render cell math ([#495](https://github.com/kiwifs/kiwifs/issues/495)) ([68f78ff](https://github.com/kiwifs/kiwifs/commit/68f78ff7b69316eda30068de1a1d77741a4a6292))
+
 ## [0.19.55](https://github.com/kiwifs/kiwifs/compare/v0.19.54...v0.19.55) (2026-08-17)
 
 
