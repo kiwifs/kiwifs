@@ -14,6 +14,8 @@ describe("uiFeatures", () => {
   it("merges partial overrides", () => {
     expect(resolveUIFeatures({ kanban: false, graph: false }).kanban).toBe(false);
     expect(resolveUIFeatures({ kanban: false }).graph).toBe(true);
+    expect(resolveUIFeatures({ edit: false, history: false, publish: false }).edit).toBe(false);
+    expect(resolveUIFeatures({ edit: false }).publish).toBe(true);
   });
 
   it("maps view routes to feature keys", () => {

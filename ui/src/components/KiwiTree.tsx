@@ -12,6 +12,7 @@ import {
 import { Tree, NodeApi, type NodeRendererProps } from "react-arborist";
 import { useDraggable } from "@dnd-kit/core";
 import { getCurrentSpace } from "../lib/api";
+import { useUIConfigStore } from "../lib/uiConfigStore";
 import { TreeSkeleton } from "./TreeSkeleton";
 import { TreeRowShell, TREE_INDENT } from "./tree/TreeRow";
 import {
@@ -984,6 +985,7 @@ function TreeNode({
   publishedPaths,
   onPublishedChanged,
 }: TreeNodeProps) {
+  const canPublish = useUIConfigStore((s) => s.features.publish);
   const path = node.id;
   const isActive = activePath === path;
   const isKiwi = isKiwiConfig(node.data.name);
@@ -1150,6 +1152,8 @@ function TreeNode({
             <File className="h-3.5 w-3.5" />
             {isVirtual ? "Open" : "Open folder"}
           </ContextMenuItem>
+          {canPublish && (
+            <>
           <ContextMenuSeparator />
           {isVirtual ? (
             isPublished ? (
@@ -1216,6 +1220,8 @@ function TreeNode({
                 <Rss className="h-3.5 w-3.5" />
                 Unpublish folder ({folderPublishedCount})
               </ContextMenuItem>
+            </>
+          )}
             </>
           )}
           <ContextMenuSeparator />
@@ -1561,6 +1567,8 @@ function TreeNode({
           <File className="h-3.5 w-3.5" />
           Open
         </ContextMenuItem>
+        {canPublish && (
+          <>
         <ContextMenuSeparator />
         {isPublished ? (
           <>
@@ -1601,6 +1609,8 @@ function TreeNode({
             <Rss className="h-3.5 w-3.5" />
             Publish
           </ContextMenuItem>
+        )}
+          </>
         )}
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => openDupDialog(path)}>

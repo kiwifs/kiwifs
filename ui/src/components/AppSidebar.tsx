@@ -30,6 +30,7 @@ import {
   type SidebarConfig,
 } from "../lib/sidebarStructure";
 import { api, type TreeEntry } from "../lib/api";
+import { useUIConfigStore } from "../lib/uiConfigStore";
 
 type RecentPage = { path: string };
 
@@ -88,6 +89,7 @@ export function AppSidebar({
   onActivePathChange,
   onTreeRefresh,
 }: AppSidebarProps) {
+  const features = useUIConfigStore((state) => state.features);
   const publishedPages = usePublishedPagesStore((state) => state.pages);
   const showPublishedList = usePublishedPagesStore((state) => state.showList);
   const toggleShowPublishedList = usePublishedPagesStore((state) => state.toggleShowList);
@@ -256,7 +258,7 @@ export function AppSidebar({
                     includePrefixes={section.paths}
                     treeRoot={usesStructuredSidebar ? sharedTreeRoot : undefined}
                     autoReveal={false}
-                    onCreateChild={onCreatePage}
+                    onCreateChild={features.edit ? onCreatePage : undefined}
                     onDeleted={() => {
                       onActivePathChange(null);
                       onTreeRefresh();
@@ -284,9 +286,12 @@ export function AppSidebar({
             expandSignal={treeRevealRequest?.nonce}
             headerActions={
               <>
+                {features.edit && (
                 <SidebarIconButton label="New page" onClick={() => onCreatePage()}>
                   <Plus className="h-3.5 w-3.5" />
                 </SidebarIconButton>
+                )}
+                {features.publish && (
                 <SidebarIconButton
                   label={showPublishedList ? "Hide published list" : "Show published list"}
                   active={showPublishedList}
@@ -294,6 +299,7 @@ export function AppSidebar({
                 >
                   <Rss className="h-3.5 w-3.5" />
                 </SidebarIconButton>
+                )}
                 <SidebarIconButton label="Collapse all folders" onClick={() => treeRef.current?.collapseAll()}>
                   <ChevronsDownUp className="h-3.5 w-3.5" />
                 </SidebarIconButton>
@@ -340,7 +346,7 @@ export function AppSidebar({
               excludePrefixes={sectionPrefixes}
               excludePaths={sidebarConfig.pinned}
               treeRoot={usesStructuredSidebar ? sharedTreeRoot : undefined}
-              onCreateChild={onCreatePage}
+              onCreateChild={features.edit ? onCreatePage : undefined}
               onDeleted={() => {
                 onActivePathChange(null);
                 onTreeRefresh();

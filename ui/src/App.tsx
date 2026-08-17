@@ -322,11 +322,13 @@ export default function App() {
           setSearchOpen((v) => !v);
           break;
         case "new_page":
+          if (!features.edit) return;
           e.preventDefault();
           setNewFolder(undefined);
           setNewOpen(true);
           break;
         case "toggle_editor": {
+          if (!features.edit) return;
           const { activePath, graphOpen, historyOpen, dataOpen } = state;
           if (!activePath || graphOpen || historyOpen || dataOpen) return;
           e.preventDefault();
@@ -348,6 +350,7 @@ export default function App() {
           toggleSidebar(!sidebarOpen);
           break;
         case "graph": {
+          if (!features.graph) return;
           e.preventDefault();
           const next = !state.graphOpen;
           closeAllViews();
@@ -355,6 +358,7 @@ export default function App() {
           break;
         }
         case "toggle_bases": {
+          if (!features.bases) return;
           e.preventDefault();
           const next = !state.basesOpen;
           closeAllViews();
@@ -362,6 +366,7 @@ export default function App() {
           break;
         }
         case "toggle_timeline": {
+          if (!features.timeline) return;
           e.preventDefault();
           const next = !state.timelineOpen;
           closeAllViews();
@@ -369,6 +374,7 @@ export default function App() {
           break;
         }
         case "toggle_kanban": {
+          if (!features.kanban) return;
           e.preventDefault();
           const next = !state.kanbanOpen;
           closeAllViews();
@@ -438,7 +444,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [bindings, closeAllViews, sidebarOpen, toggleSidebar]);
+  }, [bindings, closeAllViews, features, sidebarOpen, toggleSidebar]);
 
 const handleSpaceSwitch = useCallback(() => {
     setActivePath(null);
@@ -691,9 +697,11 @@ const handleSpaceSwitch = useCallback(() => {
 
           {/* Right zone: actions */}
           <div className="flex items-center gap-0.5">
+            {features.edit && (
             <ToolbarButton onClick={() => { setNewFolder(undefined); setNewOpen(true); }} label={`New page (${formatChordDisplay(bindings.new_page)})`}>
               <Plus className="h-4 w-4" />
             </ToolbarButton>
+            )}
             <BuiltinToolbarViews
               views={toolbarViews}
               onToggle={(id) => {
@@ -879,8 +887,8 @@ const handleSpaceSwitch = useCallback(() => {
                 path={activePath}
                 tree={tree}
                 onNavigate={navigate}
-                onEdit={() => setEditing(true)}
-                onHistory={() => setHistoryOpen(true)}
+                onEdit={features.edit ? () => setEditing(true) : undefined}
+                onHistory={features.history ? () => setHistoryOpen(true) : undefined}
                 onRevealInTree={revealActivePageInTree}
                 onToggleStar={() => toggleStar(activePath)}
                 isStarred={isStarred(activePath)}
@@ -921,12 +929,12 @@ const handleSpaceSwitch = useCallback(() => {
               <WelcomeScreen
                 branding={branding}
                 bindings={bindings}
-                onNewPage={() => { setNewFolder(undefined); setNewOpen(true); }}
+                onNewPage={features.edit ? () => { setNewFolder(undefined); setNewOpen(true); } : undefined}
                 onSearch={() => setSearchOpen(true)}
                 onGraph={features.graph ? () => setGraphOpen(true) : undefined}
                 onData={features.data_sources ? () => setDataOpen(true) : undefined}
                 onBases={features.bases ? () => setBasesOpen(true) : undefined}
-                onTimeline={() => setTimelineOpen(true)}
+                onTimeline={features.timeline ? () => setTimelineOpen(true) : undefined}
               />
             ) : (
               <div className="flex h-full items-center justify-center">
@@ -981,7 +989,7 @@ function WelcomeScreen({
 }: {
   branding: { name: string; logoUrl: string; welcomeTitle: string; welcomeMessage: string; hasCustomLogo: boolean };
   bindings: Record<KeybindingAction, string>;
-  onNewPage: () => void;
+  onNewPage?: () => void;
   onSearch: () => void;
   onGraph?: () => void;
   onData?: () => void;
@@ -1003,10 +1011,12 @@ function WelcomeScreen({
           {branding.welcomeMessage}
         </div>
         <div className="flex flex-col gap-2 items-center">
+          {onNewPage && (
           <Button onClick={onNewPage} className="gap-2">
             <Plus className="h-4 w-4" />
             Create your first page
           </Button>
+          )}
           <Button variant="outline" onClick={onSearch} className="gap-2">
             <SearchIcon className="h-4 w-4" />
             Search pages

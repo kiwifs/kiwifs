@@ -5,7 +5,10 @@ export type UIFeatureKey =
   | "whiteboard"
   | "timeline"
   | "bases"
-  | "data_sources";
+  | "data_sources"
+  | "edit"
+  | "history"
+  | "publish";
 
 export const DEFAULT_UI_FEATURES: Record<UIFeatureKey, boolean> = {
   graph: true,
@@ -15,6 +18,9 @@ export const DEFAULT_UI_FEATURES: Record<UIFeatureKey, boolean> = {
   timeline: true,
   bases: true,
   data_sources: true,
+  edit: true,
+  history: true,
+  publish: true,
 };
 
 /** Maps /view/{name} path segments to feature keys. */
