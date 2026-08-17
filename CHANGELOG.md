@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.57](https://github.com/kiwifs/kiwifs/compare/v0.19.56...v0.19.57) (2026-08-17)
+
+
+### Features
+
+* **ui:** hide edit, history, and publish via [ui.features] ([#497](https://github.com/kiwifs/kiwifs/issues/497)) ([73cd948](https://github.com/kiwifs/kiwifs/commit/73cd948d02f08a34c697d453d6c4aadd870ef4d4))
+
 ## [0.19.56](https://github.com/kiwifs/kiwifs/compare/v0.19.55...v0.19.56) (2026-08-17)
 
 
