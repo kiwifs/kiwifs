@@ -914,7 +914,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                         return <CodeRunner source={raw} lang={codeLang} />;
                       }
                       if (lang === "widget:tracker") {
-                        return <PageTracker onNavigate={nav} stateName={raw.trim() || "progress"} />;
+                        return <PageTracker onNavigate={nav} source={raw} />;
                       }
                       if (lang?.startsWith("widget:")) {
                         return <KiwiWidget name={lang.slice("widget:".length)} source={raw} />;

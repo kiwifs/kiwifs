@@ -3,6 +3,12 @@ import { api, type TreeEntry } from "@kw/lib/api";
 import { titleize } from "@kw/lib/paths";
 import { Badge } from "@kw/components/ui/badge";
 import { CheckCircle2, Circle, ChevronDown, ChevronRight, Calendar as CalendarIcon, Bookmark } from "lucide-react";
+import {
+  chipsForMeta,
+  parseTrackerConfig,
+  parseTrackerPageMeta,
+  type TrackerPageMeta,
+} from "./pageTrackerConfig";
 
 type ProgressEntry = {
   done: boolean;
@@ -12,11 +18,7 @@ type ProgressEntry = {
 
 type ProgressState = Record<string, ProgressEntry>;
 
-type PageMeta = {
-  title?: string;
-  difficulty?: string;
-  tags?: string[];
-};
+type PageMeta = TrackerPageMeta;
 
 type PageItem = {
   path: string;
@@ -96,14 +98,7 @@ function deriveGroups(tree: TreeEntry | null): FolderGroup[] {
 }
 
 function parsePageMeta(fm: Record<string, unknown>): PageMeta {
-  const meta: PageMeta = {};
-  if (typeof fm.title === "string") meta.title = fm.title;
-  if (typeof fm.difficulty === "string") meta.difficulty = fm.difficulty;
-  const raw = fm.tags;
-  const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
-  const tags = list.map((t) => String(t).trim()).filter(Boolean);
-  if (tags.length > 0) meta.tags = tags;
-  return meta;
+  return parseTrackerPageMeta(fm);
 }
 
 /** Meta API caps each request at 200 rows — paginate to load every page. */
@@ -163,13 +158,6 @@ function assignColors(tags: string[]): Record<string, string> {
   return colors;
 }
 
-/** Every label a page can be filtered by, difficulty included. */
-function pageTags(meta?: PageMeta): string[] {
-  const tags = new Set(meta?.tags ?? []);
-  if (meta?.difficulty) tags.add(meta.difficulty.toLowerCase());
-  return [...tags];
-}
-
 /** Tags that merely restate the difficulty would double every row's badges. */
 function extraTags(meta?: PageMeta): string[] {
   if (!meta?.tags) return [];
@@ -177,24 +165,90 @@ function extraTags(meta?: PageMeta): string[] {
   return meta.tags.filter((t) => t.toLowerCase() !== difficulty);
 }
 
-function PageTags({ meta, colors }: { meta?: PageMeta; colors: Record<string, string> }) {
-  const extra = extraTags(meta);
-  if (!meta?.difficulty && extra.length === 0) return null;
+function PageTags({
+  meta,
+  colors,
+  fields,
+}: {
+  meta?: PageMeta;
+  colors: Record<string, string>;
+  fields: string[];
+}) {
+  const useOriginal = fields.includes("tags");
+  if (useOriginal) {
+    const extra = extraTags(meta);
+    if (!meta?.difficulty && extra.length === 0) return null;
+    return (
+      <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+        {meta?.difficulty && (
+          <Badge variant="outline" className={"text-[10px] px-1.5 py-0 h-5 " + difficultyClass(meta.difficulty)}>
+            {meta.difficulty}
+          </Badge>
+        )}
+        {extra.map((tag) => (
+          <Badge
+            key={tag}
+            variant="outline"
+            className={"text-[10px] px-1.5 py-0 h-5 " + (colors[tag] ?? "text-muted-foreground")}
+          >
+            {tag}
+          </Badge>
+        ))}
+      </div>
+    );
+  }
 
+  const badges: { key: string; label: string; className: string }[] = [];
+  if (fields.includes("difficulty") && meta?.difficulty) {
+    badges.push({
+      key: "difficulty",
+      label: meta.difficulty,
+      className: difficultyClass(meta.difficulty),
+    });
+  }
+  if (fields.includes("premium") && meta?.premium) {
+    badges.push({
+      key: "premium",
+      label: "premium",
+      className: colors.premium ?? "text-muted-foreground",
+    });
+  }
+  if (fields.includes("freq") && meta?.freq != null) {
+    badges.push({
+      key: "freq",
+      label: `freq ${meta.freq}`,
+      className: colors[`freq ${meta.freq}`] ?? "text-muted-foreground",
+    });
+  }
+  if (fields.includes("companies")) {
+    for (const company of meta?.companies ?? []) {
+      badges.push({
+        key: company.slug,
+        label: company.hits > 0 ? `${company.slug} ${company.hits}` : company.slug,
+        className: colors[company.slug] ?? "text-muted-foreground",
+      });
+    }
+  }
+  for (const field of fields) {
+    if (["tags", "difficulty", "premium", "freq", "companies"].includes(field)) continue;
+    for (const item of meta?.extras?.[field] ?? []) {
+      badges.push({
+        key: `${field}:${item}`,
+        label: item,
+        className: colors[item] ?? "text-muted-foreground",
+      });
+    }
+  }
+  if (badges.length === 0) return null;
   return (
     <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-      {meta?.difficulty && (
-        <Badge variant="outline" className={"text-[10px] px-1.5 py-0 h-5 " + difficultyClass(meta.difficulty)}>
-          {meta.difficulty}
-        </Badge>
-      )}
-      {extra.map((tag) => (
+      {badges.map((badge) => (
         <Badge
-          key={tag}
+          key={badge.key}
           variant="outline"
-          className={"text-[10px] px-1.5 py-0 h-5 " + (colors[tag] ?? "text-muted-foreground")}
+          className={"text-[10px] px-1.5 py-0 h-5 " + badge.className}
         >
-          {tag}
+          {badge.label}
         </Badge>
       ))}
     </div>
@@ -220,9 +274,18 @@ const STATUS_LABELS: Record<StatusFilter, string> = {
 type Props = {
   onNavigate?: (path: string) => void;
   stateName?: string;
+  /** Raw `widget:tracker` fence. A bare name is the state document; YAML can add modes. */
+  source?: string;
 };
 
-export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
+const CORE_CHIPS = new Set(["easy", "medium", "hard", "premium"]);
+
+export function PageTracker({ onNavigate, stateName, source }: Props) {
+  const config = useMemo(
+    () => parseTrackerConfig(source ?? stateName ?? "progress"),
+    [source, stateName],
+  );
+  const [modeId, setModeId] = useState(config.modes[0]?.id ?? "tags");
   const [tree, setTree] = useState<TreeEntry | null>(null);
   const [progress, setProgress] = useState<ProgressState>({});
   const [metaByPath, setMetaByPath] = useState<Record<string, PageMeta>>({});
@@ -231,11 +294,15 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [loading, setLoading] = useState(true);
 
+  const activeMode = config.modes.find((mode) => mode.id === modeId) ?? config.modes[0];
+  const fields = activeMode?.fields ?? ["tags"];
+  const showModeToggle = config.modes.length > 1;
+
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       api.tree(),
-      api.getLocalState<ProgressState>(stateName),
+      api.getLocalState<ProgressState>(config.stateName),
       fetchAllMeta(),
     ]).then(([t, p, map]) => {
       if (cancelled) return;
@@ -245,7 +312,7 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [stateName]);
+  }, [config.stateName]);
 
   const groups = useMemo(() => {
     const base = deriveGroups(tree);
@@ -263,15 +330,23 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
     const counts = new Map<string, number>();
     for (const group of groups) {
       for (const page of group.pages) {
-        for (const tag of pageTags(page.meta)) {
+        for (const tag of chipsForMeta(page.meta, fields)) {
           counts.set(tag, (counts.get(tag) ?? 0) + 1);
         }
       }
     }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1] || naturalCompare(a[0], b[0]))
-      .map(([tag, count]) => ({ tag, count }));
-  }, [groups]);
+    const rows = [...counts.entries()].map(([tag, count]) => ({ tag, count }));
+    const prioritizeCore = !fields.includes("tags");
+    rows.sort((a, b) => {
+      if (prioritizeCore) {
+        const aCore = CORE_CHIPS.has(a.tag) ? 0 : 1;
+        const bCore = CORE_CHIPS.has(b.tag) ? 0 : 1;
+        if (aCore !== bCore) return aCore - bCore;
+      }
+      return b.count - a.count || naturalCompare(a.tag, b.tag);
+    });
+    return rows;
+  }, [groups, fields]);
 
   const tagColors = useMemo(
     () => assignColors(tagUniverse.map((t) => t.tag)),
@@ -291,12 +366,12 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
           const done = progress[page.path]?.done ?? false;
           if (statusFilter === "todo" && done) return false;
           if (statusFilter === "done" && !done) return false;
-          const tags = new Set(pageTags(page.meta));
+          const tags = new Set(chipsForMeta(page.meta, fields));
           return required.every((t) => tags.has(t)) && !excluded.some((t) => tags.has(t));
         }),
       }))
       .filter((group) => group.pages.length > 0);
-  }, [groups, tagFilter, statusFilter, progress]);
+  }, [groups, tagFilter, statusFilter, progress, fields]);
 
   const cycleTag = useCallback((tag: string) => {
     setTagFilter((prev) => {
@@ -317,10 +392,10 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
       } else {
         next[pagePath] = { done: true, doneAt: new Date().toISOString().slice(0, 10) };
       }
-      persist(stateName, next);
+      persist(config.stateName, next);
       return next;
     });
-  }, [stateName]);
+  }, [config.stateName]);
 
   const toggleBookmark = useCallback((pagePath: string) => {
     setProgress((prev) => {
@@ -328,10 +403,10 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
       if (!entry?.done) return prev;
       const next = { ...prev };
       next[pagePath] = { ...entry, bookmarked: !entry.bookmarked };
-      persist(stateName, next);
+      persist(config.stateName, next);
       return next;
     });
-  }, [stateName]);
+  }, [config.stateName]);
 
   const toggleGroup = useCallback((folder: string) => {
     setCollapsedGroups((prev) => {
@@ -372,8 +447,31 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
 
   return (
     <div className="kiwi-page-tracker space-y-4">
-      {tagUniverse.length > 0 && (
+      {(tagUniverse.length > 0 || showModeToggle) && (
         <div className="flex flex-wrap items-center gap-1">
+          {showModeToggle && (
+            <>
+              {config.modes.map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => {
+                    setModeId(mode.id);
+                    setTagFilter({});
+                  }}
+                  className={
+                    "text-[11px] px-2 py-0.5 rounded-full border transition-colors " +
+                    (mode.id === activeMode?.id
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border text-muted-foreground hover:bg-muted/50")
+                  }
+                >
+                  {mode.label}
+                </button>
+              ))}
+              <span className="w-px h-4 bg-border mx-1" />
+            </>
+          )}
           {(Object.keys(STATUS_LABELS) as StatusFilter[]).map((status) => (
             <button
               key={status}
@@ -520,7 +618,7 @@ export function PageTracker({ onNavigate, stateName = "progress" }: Props) {
                         >
                           {page.title}
                         </button>
-                        <PageTags meta={page.meta} colors={tagColors} />
+                        <PageTags meta={page.meta} colors={tagColors} fields={fields} />
                         {entry?.doneAt && (
                           <span className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5">
                             <CalendarIcon className="h-2.5 w-2.5" />
