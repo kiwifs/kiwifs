@@ -20,8 +20,8 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created || steps.release_retry.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name || steps.release_retry.outputs.tag_name }}
+      release_created: ${{ steps.release.outputs.release_created || steps.release_retry.outputs.release_created || steps.release_retry2.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name || steps.release_retry.outputs.tag_name || steps.release_retry2.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -30,15 +30,31 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      - name: wait before retry
+        if: steps.release.outcome == 'failure'
+        run: sleep 30
+
       - uses: googleapis/release-please-action@v4
         id: release_retry
         if: steps.release.outcome == 'failure'
+        continue-on-error: true
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: wait before second retry
+        if: steps.release.outcome == 'failure' && steps.release_retry.outcome == 'failure'
+        run: sleep 60
+
+      - uses: googleapis/release-please-action@v4
+        id: release_retry2
+        if: steps.release.outcome == 'failure' && steps.release_retry.outcome == 'failure'
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
       - name: Require release-please success
-        if: steps.release.outcome == 'failure' && steps.release_retry.outcome == 'failure'
+        if: steps.release.outcome == 'failure' && steps.release_retry.outcome == 'failure' && steps.release_retry2.outcome == 'failure'
         run: exit 1
 
   # ── Phase A: CI on the release-please PR ──────────────────────────
