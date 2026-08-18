@@ -648,3 +648,243 @@
   position: relative;
   z-index: 1;
 }
+
+/* ─── Figures: widths, captions, sticky ─── */
+.kiwi-prose {
+  overflow: visible;
+}
+.kiwi-figure {
+  @apply my-6 w-full max-w-full;
+}
+/* Stay inside the article column — never under the ToC. */
+.kiwi-figure-wide,
+.kiwi-figure-full {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+.kiwi-figure-body {
+  min-width: 0;
+}
+.kiwi-figcaption {
+  @apply mt-2 text-sm text-muted-foreground;
+}
+.kiwi-figsource {
+  @apply text-xs opacity-70;
+}
+.kiwi-embed-frame {
+  position: relative;
+}
+.kiwi-embed-open {
+  @apply absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md border border-border bg-background/90 px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground;
+}
+
+/* ─── Stepped diagrams ─── */
+.kiwi-steps {
+  @apply my-6 flex flex-col gap-3 rounded-lg border border-border bg-card/40 p-3;
+}
+.kiwi-steps:focus {
+  outline: none;
+}
+.kiwi-steps .kiwi-mermaid {
+  margin: 0;
+}
+
+/* ─── Calc blocks ─── */
+.kiwi-calc {
+  @apply my-6 overflow-x-auto rounded-lg border border-border;
+}
+.kiwi-calc-toolbar {
+  @apply flex items-center justify-between border-b border-border px-3 py-2 text-xs;
+}
+.kiwi-calc-label {
+  @apply font-semibold uppercase tracking-wide text-muted-foreground;
+}
+.kiwi-calc-toolbar button {
+  @apply rounded-md border border-border px-2 py-0.5 text-muted-foreground hover:text-foreground;
+}
+.kiwi-calc-toolbar button.is-on {
+  @apply border-primary/40 text-foreground;
+}
+.kiwi-calc table {
+  @apply my-0 w-full text-sm;
+}
+.kiwi-calc th {
+  @apply bg-transparent px-3 py-2 text-left font-medium;
+}
+.kiwi-calc td {
+  @apply px-3 py-2 align-middle;
+}
+.kiwi-calc-assumption th {
+  @apply text-foreground;
+}
+.kiwi-calc-derivation th,
+.kiwi-calc-derivation td {
+  @apply bg-muted/40;
+}
+.kiwi-calc-value {
+  @apply text-right font-semibold tabular-nums whitespace-nowrap;
+}
+.kiwi-calc-comment {
+  @apply text-muted-foreground;
+}
+.kiwi-calc-slider {
+  @apply flex flex-col gap-1;
+}
+.kiwi-calc-slider input[type="range"] {
+  @apply w-full;
+}
+.kiwi-calc-error {
+  @apply my-4;
+}
+
+/* ─── Reading-order nav ───
+   One card: a plain Previous rail, then a "forward" group (destination title
+   + Next) that lifts as a single bordered region when you aim at it. */
+.kiwi-page-nav {
+  margin-top: 3.25rem;
+  margin-bottom: 0.25rem;
+  max-width: var(--content-max-width);
+}
+.kiwi-page-nav-pill {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  background: var(--card);
+  padding: 0.25rem;
+}
+.kiwi-page-nav-rail,
+.kiwi-page-nav-preview {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: color 160ms ease;
+}
+.kiwi-page-nav-rail:focus-visible,
+.kiwi-page-nav-preview:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -3px;
+  border-radius: 0.6rem;
+}
+.kiwi-page-nav-rail {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 1.1rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.kiwi-page-nav-rail:hover {
+  color: var(--foreground);
+}
+.kiwi-page-nav-chevron {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+  transition: transform 180ms ease;
+}
+.kiwi-page-nav-rail.is-prev:hover .kiwi-page-nav-chevron {
+  transform: translateX(-2px);
+}
+
+/* The destination half. Hovering either child outlines the whole group. */
+.kiwi-page-nav-forward {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+.kiwi-page-nav-pill.is-center .kiwi-page-nav-forward:hover,
+.kiwi-page-nav-pill.is-center .kiwi-page-nav-forward:focus-within {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+.kiwi-page-nav-forward:hover .kiwi-page-nav-rail.is-next,
+.kiwi-page-nav-forward:focus-within .kiwi-page-nav-rail.is-next {
+  color: var(--foreground);
+}
+.kiwi-page-nav-forward:hover .kiwi-page-nav-rail.is-next .kiwi-page-nav-chevron,
+.kiwi-page-nav-forward:focus-within .kiwi-page-nav-rail.is-next .kiwi-page-nav-chevron {
+  transform: translateX(2px);
+}
+.kiwi-page-nav-rail.is-next {
+  border-left: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+.kiwi-page-nav-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.95rem 1.25rem;
+}
+.kiwi-page-nav-pill.is-start .kiwi-page-nav-preview {
+  align-items: flex-start;
+  text-align: left;
+}
+.kiwi-page-nav-pill.is-center .kiwi-page-nav-preview {
+  align-items: center;
+  text-align: center;
+}
+.kiwi-page-nav-pill.is-end .kiwi-page-nav-preview {
+  align-items: flex-end;
+  text-align: right;
+}
+.kiwi-page-nav-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+  color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.kiwi-page-nav-desc {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  .kiwi-page-nav-pill {
+    flex-wrap: wrap;
+  }
+  .kiwi-page-nav-forward {
+    order: -1;
+    flex: 1 1 100%;
+  }
+  .kiwi-page-nav-pill.is-center .kiwi-page-nav-preview {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .kiwi-page-nav-rail.is-prev {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 0.85rem 1.1rem;
+  }
+}
+
+/* ─── Comparison tables ─── */
+.kiwi-prose table th:first-child,
+.kiwi-prose table td:first-child {
+  @apply font-medium whitespace-nowrap;
+}
+.kiwi-prose table tbody tr:hover {
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+}

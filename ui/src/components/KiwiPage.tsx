@@ -12,7 +12,7 @@ import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
 import { AlertTriangle, BookOpen, Bug, Calendar, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Crosshair, Edit, Eye, File, FileAxis3D, FileQuestion, Flame, Folder, HelpCircle, History as HistoryIcon, Info, Lightbulb, Link2, List, ListChecks, MessageSquareQuote, NotebookPen, Pin, Plus, Quote, ScrollText, ShieldAlert, Star, Tag, TriangleAlert, Type, User, XCircle, Zap } from "lucide-react";
 import { api, type TreeEntry } from "@kw/lib/api";
-import { dirOf, normalizePath, titleize } from "@kw/lib/paths";
+import { dirOf, isCanvasFile, isExcalidrawFile, normalizePath, titleize } from "@kw/lib/paths";
 import { readingTime } from "@kw/lib/readingTime";
 import { HostPageActions } from "./HostPageActions";
 import { KiwiBreadcrumb } from "./KiwiBreadcrumb";
@@ -24,6 +24,11 @@ import { PageActions } from "./PageActions";
 import { PublishButton } from "./PublishButton";
 import { ShikiCode } from "./ShikiCode";
 import { MermaidDiagram } from "./MermaidDiagram";
+import { KiwiSteps } from "./KiwiSteps";
+import { KiwiCalc } from "./KiwiCalc";
+import { KiwiFigure } from "./KiwiFigure";
+import { KiwiEmbed } from "./KiwiEmbed";
+import { KiwiPageNav } from "./KiwiPageNav";
 import { KiwiChart } from "./KiwiChart";
 import { KiwiApp } from "./KiwiApp";
 import { KiwiDiff } from "./KiwiDiff";
@@ -53,6 +58,17 @@ import remarkEmoji from "remark-emoji";
 import remarkSupersub from "remark-supersub";
 import remarkDefinitionList from "remark-definition-list";
 import { buildResolver, remarkWikiLinks } from "@kw/lib/wikiLinks";
+import {
+  applyPageMeta,
+  applyTitles,
+  bookManifestCandidates,
+  fallbackBookOrder,
+  navForPath,
+  parseBookManifest,
+  type BookNav,
+  type BookOrder,
+} from "@kw/lib/bookOrder";
+import type { FigureWidth } from "@kw/lib/figureLayout";
 import { remarkMark, stripObsidianComments, remarkInlineTags, rehypeCodeMeta } from "@kw/lib/remarkPlugins";
 import remarkDirective from "remark-directive";
 import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "@kw/lib/remarkDirectives";
@@ -126,6 +142,8 @@ const sanitizeSchema = {
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
       "data-tag", "metastring",
       "data-kiwi-directive", "data-label", "data-ratio", "data-cols",
+      "data-width", "data-pin", "data-caption",
+      "data-kiwi-embed", "data-kiwi-target", "data-kiwi-width", "data-kiwi-pin",
       // This schema is a copy of kiwiSanitizeSchema in lib/kiwiMarkdown.ts.
       // The claim attributes come from a shared constant so that half of the
       // duplication cannot drift — an omitted attribute here is not a render
@@ -137,7 +155,8 @@ const sanitizeSchema = {
     video: ["controls", "preload", "className"],
     audio: ["controls", "preload", "className"],
     source: ["src", "type"],
-    img: [...(defaultSchema.attributes?.img || []), "width", "height"],
+    img: [...(defaultSchema.attributes?.img || []), "width", "height",
+      "data-kiwi-embed", "data-kiwi-target", "data-kiwi-width", "data-kiwi-pin"],
     abbr: ["title"],
     // SVG attributes
     svg: ["viewBox", "xmlns", "xmlnsXlink", "width", "height", "fill", "stroke",
@@ -184,6 +203,24 @@ const sanitizeSchema = {
     feMorphology: ["in", "operator", "radius", "result"],
   }),
 };
+
+async function decorateBookTitles(order: BookOrder): Promise<BookOrder> {
+  try {
+    const meta = await api.meta({ limit: 200 });
+    const map: Record<string, { title?: string; description?: string }> = {};
+    for (const row of meta.results) {
+      const title = row.frontmatter?.title;
+      const description = row.frontmatter?.description ?? row.frontmatter?.summary;
+      map[row.path] = {
+        title: typeof title === "string" && title.trim() ? title.trim() : undefined,
+        description: typeof description === "string" && description.trim() ? description.trim() : undefined,
+      };
+    }
+    return applyPageMeta(order, map);
+  } catch {
+    return order;
+  }
+}
 
 function findEntry(node: TreeEntry | null | undefined, target: string): TreeEntry | null {
   if (!node) return null;
@@ -414,6 +451,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
   const [versionError, setVersionError] = useState(false);
   const [commentError, setCommentError] = useState(false);
   const [localNote, setLocalNote] = useState<string | null>(null);
+  const [bookOrder, setBookOrder] = useState<BookOrder | null>(null);
   const proseRef = useRef<HTMLDivElement>(null);
 
   // In headless mode, sync content from prop
@@ -442,6 +480,33 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
       });
     return () => { cancelled = true; };
   }, [path, refreshKey, isDir, isHeadless]);
+
+  useEffect(() => {
+    if (isHeadless || !path) return;
+    let cancelled = false;
+    setBookOrder(null);
+    const candidates = bookManifestCandidates(path);
+    (async () => {
+      for (const candidate of candidates) {
+        try {
+          const file = await api.readFile(candidate);
+          if (cancelled) return;
+          const parsedBook = parseBookManifest(file.content, dirOf(candidate));
+          if (parsedBook) {
+            setBookOrder(await decorateBookTitles(parsedBook));
+            return;
+          }
+        } catch {
+          /* try the next candidate */
+        }
+      }
+      if (!cancelled) {
+        const fallback = fallbackBookOrder(tree ?? null, path);
+        setBookOrder(fallback ? await decorateBookTitles(fallback) : null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [path, tree, isHeadless]);
 
   useEffect(() => {
     if (isHeadless || isDir || !path) return;
@@ -526,6 +591,12 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
   );
   const reading = useMemo(() => readingTime(parsed.body), [parsed.body]);
   const frontmatterTitle = typeof parsed.meta.title === "string" ? parsed.meta.title : null;
+  const titledBook = useMemo<BookOrder | null>(() => {
+    if (!bookOrder) return null;
+    if (!frontmatterTitle || !path) return bookOrder;
+    return applyTitles(bookOrder, { [path]: frontmatterTitle });
+  }, [bookOrder, frontmatterTitle, path]);
+  const readingNav: BookNav | null = titledBook && path ? navForPath(titledBook, path) : null;
   const statusBadge = badges.find((b) => b.key === "status");
 
   if (isDir && treeEntry) {
@@ -931,7 +1002,13 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                         return <KiwiQuery source={raw} onNavigate={nav} isComputedView={parsed.meta?.["kiwi-view"] === true} />;
                       }
                       if (lang === "mermaid") {
-                        return <MermaidDiagram chart={raw} />;
+                        return <MermaidDiagram chart={raw} onNavigate={nav} />;
+                      }
+                      if (lang === "kiwi-steps") {
+                        return <KiwiSteps source={raw} onNavigate={nav} />;
+                      }
+                      if (lang === "kiwi-calc") {
+                        return <KiwiCalc source={raw} />;
                       }
                       if (lang === "kiwi-chart") {
                         return <KiwiChart source={raw} />;
@@ -1015,6 +1092,17 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                           </KiwiColumns>
                         );
                       }
+                      if (directive === "figure") {
+                        return (
+                          <KiwiFigure
+                            width={(props["data-width"] as FigureWidth | undefined) || "inline"}
+                            pin={props["data-pin"] === "true"}
+                            caption={props["data-caption"] as string | undefined}
+                          >
+                            {children}
+                          </KiwiFigure>
+                        );
+                      }
                       return <div {...(rest as any)}>{children}</div>;
                     },
                     img: ({ src, alt, node: _node, width, height, ...rest }) => {
@@ -1027,6 +1115,26 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                         } else {
                           resolvedSrc = resolvedSrc.startsWith("/") ? `/raw${resolvedSrc}` : `/raw/${resolvedSrc}`;
                         }
+                      }
+                      const embedKind = ((rest as any)["data-kiwi-embed"] || (rest as any)["dataKiwiEmbed"]) as string | undefined;
+                      const embedTarget = ((rest as any)["data-kiwi-target"] || (rest as any)["dataKiwiTarget"]) as string | undefined;
+                      const rawPath = (resolvedSrc || "").replace(/^\/raw\//, "");
+                      const drawingPath = embedTarget
+                        || ((isExcalidrawFile(rawPath) || isCanvasFile(rawPath)) ? rawPath : "");
+                      if (embedKind || (drawingPath && (isExcalidrawFile(drawingPath) || isCanvasFile(drawingPath)))) {
+                        return (
+                          <KiwiEmbed
+                            path={drawingPath}
+                            display={{
+                              width: (((rest as any)["data-kiwi-width"] || (rest as any)["dataKiwiWidth"]) as FigureWidth | undefined) || "inline",
+                              pin: ((rest as any)["data-kiwi-pin"] || (rest as any)["dataKiwiPin"]) === "true",
+                              pixelWidth: width ? Number(width) : undefined,
+                              pixelHeight: height ? Number(height) : undefined,
+                              caption: typeof alt === "string" ? alt : undefined,
+                            }}
+                            onNavigate={nav}
+                          />
+                        );
                       }
                       const kind = classifyMedia(resolvedSrc);
                       switch (kind) {
@@ -1178,6 +1286,10 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                 </ReactMarkdown>
                 </ErrorBoundary>
               </div>
+              )}
+
+              {readingNav && titledBook && (
+                <KiwiPageNav nav={readingNav} order={titledBook} onNavigate={nav} />
               )}
 
               {/* ── Footer zone: fixed order, collapsible (hidden in headless mode) ── */}

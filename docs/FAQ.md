@@ -349,9 +349,11 @@ State machines defined in `.kiwi/workflows/*.json` that govern frontmatter trans
 
 ### What are widgets?
 
-Rich blocks embedded in markdown pages using fenced code blocks. They render as interactive components in the web UI and degrade to plain code in other viewers. Available widgets: `kiwi-chart` (bar/line/area/pie/radar/scatter), `kiwi-query` (inline DQL tables), `kiwi-data` (queryable record tables), `kiwi-kanban` (inline boards), `kiwi-playground` (interactive controls), `kiwi-app` (sandboxed HTML/JS), `kiwi-diff` (annotated diffs), `kiwi-progress` (bars/gauges), `kiwi-color` (color swatches), `mermaid` (diagrams), `widget:live` (React Live), `widget:code` (Python via Pyodide).
+Rich blocks embedded in markdown pages using fenced code blocks. They render as interactive components in the web UI and degrade to plain code in other viewers. Available widgets: `kiwi-chart` (bar/line/area/pie/radar/scatter), `kiwi-query` (inline DQL tables), `kiwi-data` (queryable record tables), `kiwi-kanban` (inline boards), `kiwi-playground` (interactive controls), `kiwi-app` (sandboxed HTML/JS), `kiwi-diff` (annotated diffs), `kiwi-progress` (bars/gauges), `kiwi-color` (color swatches), `kiwi-steps` (stepped mermaid diagrams), `kiwi-calc` (assumption → derivation tables), `mermaid` (diagrams), `widget:live` (React Live), `widget:code` (Python via Pyodide).
 
-Container directives `:::tabs` and `:::columns` provide layout control. GitHub-style callouts (`> [!NOTE]`, `> [!WARNING]`, etc.) render as styled admonitions.
+`![[drawing.excalidraw.md]]` and `![[board.canvas.json]]` embed a static preview of a whiteboard or canvas. Labels accept `wide`, `full`, a pixel size (`600x400`), and a caption.
+
+Container directives `:::tabs`, `:::columns`, and `:::figure{width=wide}` provide layout control. A figure is always diagram then caption/prose, top to bottom. GitHub-style callouts (`> [!NOTE]`, `> [!WARNING]`, etc.) render as styled admonitions. A `_book.yaml` `parts:` list drives prev/next reading order on pages.
 
 ### How does publishing work?
 

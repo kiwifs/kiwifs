@@ -11,7 +11,7 @@ import {
 } from "react";
 import { Tree, NodeApi, type NodeRendererProps } from "react-arborist";
 import { useDraggable } from "@dnd-kit/core";
-import { getCurrentSpace } from "../lib/api";
+import { apiBase } from "../lib/api";
 import { useUIConfigStore } from "../lib/uiConfigStore";
 import { TreeSkeleton } from "./TreeSkeleton";
 import { TreeRowShell, TREE_INDENT } from "./tree/TreeRow";
@@ -1447,7 +1447,7 @@ function TreeNode({
             >
               <span className="w-3.5 shrink-0" />
               <a
-                href={`/api/kiwi${getCurrentSpace() && getCurrentSpace() !== "default" ? "/" + getCurrentSpace() : ""}/file?path=${encodeURIComponent(path)}`}
+                href={`${apiBase()}/file?path=${encodeURIComponent(path)}`}
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-1.5 min-w-0 flex-1"

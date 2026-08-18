@@ -59,22 +59,58 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./components/ui/tooltip";
-import { api, getCurrentSpace, setCurrentSpace, sseUrl, type TreeEntry } from "./lib/api";
+import {
+  api,
+  getCurrentSpace,
+  getEffectiveSpace,
+  getPrimarySpace,
+  getSpaceEpoch,
+  setCurrentSpace,
+  setPrimarySpace,
+  sseUrl,
+  type TreeEntry,
+} from "./lib/api";
+import {
+  buildSpaceLocation,
+  parseLegacySpaceLocation,
+  parseSpaceLocation,
+  planHistoryWrite,
+  preservedUrlSuffix,
+  spaceForLocation,
+} from "./lib/spaceUrl";
+import { migrateSpaceScopedKeys } from "./lib/spaceStorage";
 import { useTheme } from "./hooks/useTheme";
 import { isMarkdown, isCanvasFile, isExcalidrawFile } from "./lib/paths";
 import { type TreeRevealRequest } from "./lib/treeReveal";
 import { HostToolbarActions } from "./components/HostToolbarActions";
 
+// The URL the app was opened with. Captured once, because the app rewrites
+// window.location as it boots and the reconciliation below still needs to see
+// what the user actually asked for.
+const entryPathname = typeof window !== "undefined" ? window.location.pathname : "/";
+const entryHash = typeof window !== "undefined" ? window.location.hash : "";
+const entryLocation = parseSpaceLocation(entryPathname, entryHash);
+
+// Resolve the space before the first render. Doing this at import time —
+// rather than in an effect after /api/spaces resolves — means the very first
+// tree and page requests already go to the right space, and activePath never
+// transiently holds a space segment.
+//
+// The URL outranks the remembered space whenever it identifies a page, so a
+// given link always opens the same page for everyone. Only a bare "/" defers
+// to localStorage, since it names no page and reopening the app where you left
+// off is the friendlier default.
+if (entryLocation.space) {
+  setCurrentSpace(entryLocation.space);
+} else if (entryLocation.path) {
+  setCurrentSpace(null);
+}
+
 function getInitialActivePath(): string | null {
   if (typeof window === "undefined") return null;
   const demoPath = getHostConfig().demo?.initialPath;
   if (demoPath) return demoPath;
-  const pathname = window.location.pathname;
-  const hash = window.location.hash.replace(/^#\/?/, "");
-  const raw = pathname.startsWith("/page/")
-    ? decodeURIComponent(pathname.slice("/page/".length))
-    : hash;
-  return raw || null;
+  return entryLocation.path;
 }
 
 export default function App() {
@@ -175,7 +211,7 @@ export default function App() {
     serverPrefs: prefsLoaded ? prefs : null,
     onPresetChange: (preset) => updatePreferences({ theme: preset }),
   });
-  const currentSpace = getCurrentSpace() || "default";
+  const currentSpace = getEffectiveSpace();
   const { recent, recordVisit } = useRecentPages(currentSpace);
   const { starred, toggle: toggleStar, isStarred } = useStarredPages(currentSpace);
   const { pinned, toggle: togglePin, isPinned } = usePinnedPages(currentSpace);
@@ -184,6 +220,7 @@ export default function App() {
   const resolvedStartPage = resolveStartPage(uiConfig.startPage);
   const editorRef = useRef<{ save: () => Promise<void>; toggleMode?: () => void } | null>(null);
   const [spaceKey, setSpaceKey] = useState(0);
+  const [spaceReady, setSpaceReady] = useState(false);
   const refreshPublishedPages = usePublishedPagesStore((state) => state.refresh);
   const treeReconcileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastLocalTreeMutationAtRef = useRef(0);
@@ -286,12 +323,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // A tree request issued before a space switch can resolve after it.
+    // Without the epoch check the old space's tree would render under the new
+    // one, and clicking any node would 404.
+    const epoch = getSpaceEpoch();
     api
       .tree("/")
-      .then((t) => setTree(t))
-      .catch(() => setTree(null))
-      .finally(() => setTreeLoading(false));
-  }, [refreshKey]);
+      .then((t) => {
+        if (getSpaceEpoch() === epoch) setTree(t);
+      })
+      .catch(() => {
+        if (getSpaceEpoch() === epoch) setTree(null);
+      })
+      .finally(() => {
+        if (getSpaceEpoch() === epoch) setTreeLoading(false);
+      });
+  }, [refreshKey, spaceKey]);
 
   useEffect(() => {
     void refreshPublishedPages();
@@ -484,36 +531,60 @@ const handleSpaceSwitch = useCallback(() => {
     };
   }, [scheduleTreeReconcile, spaceKey]);
 
+  // Reconcile the space against the server exactly once: learn the primary
+  // name, drop a remembered space that no longer exists, and migrate URLs
+  // written in the superseded /page/{space}/{path} form.
   useEffect(() => {
-    // Support both /page/{path} (new) and #/{path} (legacy) on initial load.
-    const pathname = window.location.pathname;
-    const hash = window.location.hash.replace(/^#\/?/, "");
-    const raw = pathname.startsWith("/page/")
-      ? decodeURIComponent(pathname.slice("/page/".length))
-      : hash;
-    if (!raw) return;
-    const parts = raw.split("/");
-    api.listSpaces().then((res) => {
-      const names = new Set(res.spaces.map((s) => s.name));
-      if (parts.length > 1 && names.has(parts[0])) {
-        const space = parts[0];
-        const path = parts.slice(1).join("/");
-        setCurrentSpace(space === "default" ? null : space);
-        if (path) setActivePath(path);
+    let cancelled = false;
+    api
+      .listSpaces()
+      .then((res) => {
+        if (cancelled) return;
+        const names = res.spaces.map((s) => s.name);
+        if (names.length === 0) return;
+        const primary = names[0];
+        setPrimarySpace(primary);
+        migrateSpaceScopedKeys(primary);
+
+        const legacy = parseLegacySpaceLocation(entryPathname, names, primary);
+        if (legacy?.space) {
+          setCurrentSpace(legacy.space);
+          setActivePath(legacy.path);
+          // Rewrite in place: the old-form URL already owns this history slot.
+          window.history.replaceState(
+            null,
+            "",
+            buildSpaceLocation(legacy.space, legacy.path, primary) +
+              preservedUrlSuffix(window.location.search, window.location.hash, true),
+          );
+          setSpaceKey((k) => k + 1);
+          setRefreshKey((k) => k + 1);
+          return;
+        }
+
+        const current = getCurrentSpace();
+        if (current && !names.includes(current)) {
+          // The remembered space was deleted or renamed. Without this every
+          // request would 404 against a space that is not there.
+          setCurrentSpace(null);
+          setRefreshKey((k) => k + 1);
+        }
         setSpaceKey((k) => k + 1);
-        setRefreshKey((k) => k + 1);
-      } else {
-        setActivePath(raw);
-      }
-    }).catch(() => {
-      setActivePath(raw);
-    });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setSpaceReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isCloudMode = typeof window !== "undefined" && (window as any).__kiwi_cloud_mode__;
   const isDemoMode = Boolean(getHostConfig().demo);
   const fromPopState = useRef(false);
+  const didInitialUrlSync = useRef(false);
 
   useEffect(() => {
     if (!uiConfigLoaded) return;
@@ -548,48 +619,61 @@ const handleSpaceSwitch = useCallback(() => {
 
   useEffect(() => {
     if (isCloudMode || isDemoMode) return;
-    if (!activePath) {
-      if (window.location.pathname !== "/") {
-        window.history.pushState(null, "", "/");
-      }
-      return;
-    }
+    // Never write a URL before the space topology is known. The entry URL may
+    // still be in the superseded /page/{space}/{path} form, and rewriting it
+    // first would destroy the evidence needed to migrate it.
+    if (!spaceReady) return;
+
     const space = getCurrentSpace();
-    const target = space && space !== "default"
-      ? `/page/${space}/${activePath}`
-      : `/page/${activePath}`;
-    if (window.location.pathname !== target) {
-      if (fromPopState.current) {
-        fromPopState.current = false;
-      } else {
-        window.history.pushState(null, "", target);
-      }
-    }
-  }, [activePath, spaceKey, isCloudMode, isDemoMode]);
+    const wasPop = fromPopState.current;
+    fromPopState.current = false;
+
+    // Whether this is a normalisation or a navigation is decided by *what* is
+    // being shown, not by how long /api/spaces took. Counting files to list
+    // spaces is slow enough that a user can switch spaces before it returns,
+    // and treating that first write as a normalisation would replace the entry
+    // they navigated from and break the back button.
+    const isEntry = !didInitialUrlSync.current;
+    didInitialUrlSync.current = true;
+    const showingEntry =
+      isEntry && activePath === entryLocation.path && space === (entryLocation.space ?? null);
+
+    const write = planHistoryWrite({
+      space,
+      path: activePath,
+      primary: getPrimarySpace(),
+      location: window.location,
+      normalising: wasPop || showingEntry,
+    });
+    if (write.kind === "replace") window.history.replaceState(null, "", write.url);
+    else if (write.kind === "push") window.history.pushState(null, "", write.url);
+  }, [activePath, spaceKey, spaceReady, isCloudMode, isDemoMode]);
 
   useEffect(() => {
     if (isCloudMode || isDemoMode) return;
     const onPopState = () => {
-      const pathname = window.location.pathname;
-      if (pathname.startsWith("/page/")) {
-        fromPopState.current = true;
-        const raw = decodeURIComponent(pathname.slice("/page/".length));
-        const space = getCurrentSpace();
-        const prefix = space && space !== "default" ? space + "/" : "";
-        const stripped = prefix && raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
-        setActivePath(stripped || null);
-        setEditing(false);
-        setGraphOpen(false);
-        setHistoryOpen(false);
-        setDataOpen(false);
-        setBasesOpen(false);
-        setCanvasOpen(false);
-        setTimelineOpen(false);
-        setKanbanOpen(false);
-      } else if (pathname === "/") {
-        fromPopState.current = true;
-        setActivePath(null);
+      const { space, path } = parseSpaceLocation(window.location.pathname);
+      fromPopState.current = true;
+
+      // A history entry can belong to a different space than the one on
+      // screen. Switch first, so the page that follows is read from the space
+      // its URL names rather than resolved against the current one.
+      const target = spaceForLocation(space, getPrimarySpace());
+      if (target !== getCurrentSpace()) {
+        setCurrentSpace(target);
+        setSpaceKey((k) => k + 1);
+        setRefreshKey((k) => k + 1);
       }
+
+      setActivePath(path);
+      setEditing(false);
+      setGraphOpen(false);
+      setHistoryOpen(false);
+      setDataOpen(false);
+      setBasesOpen(false);
+      setCanvasOpen(false);
+      setTimelineOpen(false);
+      setKanbanOpen(false);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);

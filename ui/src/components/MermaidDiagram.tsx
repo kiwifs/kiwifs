@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  applyMermaidEmphasis,
+  findMermaidNodes,
+  mermaidInitConfig,
+  mermaidShadowStyles,
+  mermaidThemeKey,
+  parseMermaidClicks,
+  prepareExportSvg,
+  type MermaidThemeKey,
+} from "@kw/lib/mermaidTheme";
 
 let mermaidReady = false;
+let lastTheme: MermaidThemeKey | "" = "";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
@@ -11,15 +22,12 @@ async function getMermaid() {
   return mermaid;
 }
 
-async function ensureInit() {
+async function ensureInit(theme: MermaidThemeKey) {
   const mermaid = await getMermaid();
-  if (!mermaidReady) {
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: "strict",
-      theme: "default",
-    });
+  if (!mermaidReady || lastTheme !== theme) {
+    mermaid.initialize(mermaidInitConfig(theme));
     mermaidReady = true;
+    lastTheme = theme;
   }
   return mermaid;
 }
@@ -28,16 +36,47 @@ function clampZoom(nextZoom: number) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoom));
 }
 
-export function MermaidDiagram({ chart }: { chart: string }) {
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoking in the same turn cancels the download in Safari / some Chromium builds.
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+type Props = {
+  chart: string;
+  focus?: string[];
+  dim?: string[];
+  onNavigate?: (path: string) => void;
+  onNodeClick?: (id: string) => void;
+};
+
+export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: Props) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [theme, setTheme] = useState<MermaidThemeKey>(() => mermaidThemeKey());
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const renderIdRef = useRef(`kiwi-mermaid-${Math.random().toString(36).slice(2)}`);
   const bindFunctionsRef = useRef<((element: Element) => void) | undefined>(undefined);
   const dragRef = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null);
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const next = mermaidThemeKey();
+      setTheme((prev) => (prev !== next ? next : prev));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +88,7 @@ export function MermaidDiagram({ chart }: { chart: string }) {
       setPan({ x: 0, y: 0 });
 
       try {
-        const mermaid = await ensureInit();
+        const mermaid = await ensureInit(theme);
         const rendered = await mermaid.render(renderIdRef.current, chart);
         if (cancelled) return;
 
@@ -64,22 +103,66 @@ export function MermaidDiagram({ chart }: { chart: string }) {
     return () => {
       cancelled = true;
     };
-  }, [chart]);
+  }, [chart, theme]);
+
+  const handleHref = useCallback((href: string, id: string) => {
+    onNodeClick?.(id);
+    if (!href) return;
+    if (href.startsWith("#")) {
+      const el = document.getElementById(href.slice(1));
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (/^https?:\/\//i.test(href)) {
+      window.open(href, "_blank", "noreferrer");
+      return;
+    }
+    const page = href.replace(/^\//, "");
+    onNavigate?.(page);
+  }, [onNavigate, onNodeClick]);
 
   useEffect(() => {
     const host = containerRef.current;
     if (!host || !svg) return;
 
     const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>
-      :host { display: block; }
-      svg { display: block; width: 100%; max-width: 100%; height: auto; }
-    </style>${svg}`;
+    root.innerHTML = `<style>${mermaidShadowStyles()}</style>${svg}`;
     const svgEl = root.querySelector("svg");
     if (svgEl) bindFunctionsRef.current?.(svgEl);
-  }, [svg]);
 
-  // Scroll-wheel zoom (also handles trackpad pinch via ctrlKey)
+    const clicks = parseMermaidClicks(chart);
+    for (const click of clicks) {
+      for (const node of findMermaidNodes(root, click.id)) {
+        node.setAttribute("data-kiwi-clickable", "true");
+        node.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          handleHref(click.href, click.id);
+        });
+      }
+    }
+    if (onNodeClick) {
+      root.querySelectorAll<SVGGElement>("g.node, g.actor").forEach((el) => {
+        const m = el.id.match(/^flowchart-(.+)-(\d+)$/);
+        const id = m?.[1] || el.id.replace(/-[0-9]+$/, "");
+        if (!id) return;
+        el.setAttribute("data-kiwi-clickable", "true");
+        el.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          onNodeClick(id);
+        });
+      });
+    }
+  }, [svg, chart, handleHref, onNodeClick]);
+
+  useEffect(() => {
+    const host = containerRef.current;
+    const root = host?.shadowRoot;
+    if (!root) return;
+    applyMermaidEmphasis(root, focus ?? [], dim ?? []);
+  }, [svg, focus, dim]);
+
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -130,6 +213,44 @@ export function MermaidDiagram({ chart }: { chart: string }) {
     setPan({ x: 0, y: 0 });
   }, []);
 
+  const exportedSvg = useCallback(() => {
+    const root = containerRef.current?.shadowRoot;
+    const svgEl = root?.querySelector("svg");
+    if (!svgEl) return null;
+    return prepareExportSvg(svgEl, theme);
+  }, [svg, theme]);
+
+  const downloadSvg = useCallback(() => {
+    const exported = exportedSvg();
+    if (!exported) return;
+    downloadBlob("diagram.svg", new Blob([exported.markup], { type: "image/svg+xml;charset=utf-8" }));
+  }, [exportedSvg]);
+
+  const downloadPng = useCallback(() => {
+    const exported = exportedSvg();
+    if (!exported) return;
+    const scale = 2;
+    const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(exported.markup)}`;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(exported.width, 1) * scale;
+      canvas.height = Math.max(exported.height, 1) * scale;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = exported.background;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((png) => {
+        if (png) downloadBlob("diagram.png", png);
+      }, "image/png");
+    };
+    img.onerror = () => {
+      console.error("Mermaid PNG export failed to rasterize the SVG");
+    };
+    img.src = dataUrl;
+  }, [exportedSvg]);
+
   if (error) {
     return (
       <figure className="kiwi-mermaid rounded-md border border-destructive/30 bg-destructive/5 p-4">
@@ -146,12 +267,12 @@ export function MermaidDiagram({ chart }: { chart: string }) {
   const isDefaultView = zoom === 1 && pan.x === 0 && pan.y === 0;
 
   return (
-    <figure className="kiwi-mermaid relative rounded-md border border-border bg-card p-4">
+    <figure className="kiwi-mermaid relative rounded-md border border-border bg-card p-2">
       {svg ? (
         <>
           <div
-            className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-1 text-xs shadow-md"
-            aria-label="Mermaid diagram zoom controls"
+            className="mb-1 flex items-center justify-end gap-1 px-0.5 text-xs"
+            aria-label="Mermaid diagram controls"
           >
             <button
               type="button"
@@ -187,10 +308,26 @@ export function MermaidDiagram({ chart }: { chart: string }) {
             >
               +
             </button>
+            <button
+              type="button"
+              className="rounded-sm border border-border bg-card px-2 py-1 font-medium hover:bg-accent"
+              onClick={downloadSvg}
+              title="Download SVG"
+            >
+              SVG
+            </button>
+            <button
+              type="button"
+              className="rounded-sm border border-border bg-card px-2 py-1 font-medium hover:bg-accent"
+              onClick={downloadPng}
+              title="Download PNG"
+            >
+              PNG
+            </button>
           </div>
           <div
             ref={viewportRef}
-            className="overflow-hidden pt-10"
+            className="overflow-hidden"
             style={{ cursor: "grab", touchAction: "none" }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}

@@ -53,6 +53,8 @@ export const kiwiSanitizeSchema = {
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
       "data-tag", "metastring",
       "data-kiwi-directive", "data-label", "data-ratio", "data-cols",
+      "data-width", "data-pin", "data-caption",
+      "data-kiwi-embed", "data-kiwi-target", "data-kiwi-width", "data-kiwi-pin",
       // Claim provenance, shared with the copy of this schema in
       // components/KiwiPage.tsx so the two cannot disagree.
       ...CLAIM_DATA_ATTRIBUTES,
@@ -62,7 +64,8 @@ export const kiwiSanitizeSchema = {
     video: ["controls", "preload", "className"],
     audio: ["controls", "preload", "className"],
     source: ["src", "type"],
-    img: [...(defaultSchema.attributes?.img || []), "width", "height"],
+    img: [...(defaultSchema.attributes?.img || []), "width", "height",
+      "data-kiwi-embed", "data-kiwi-target", "data-kiwi-width", "data-kiwi-pin"],
     abbr: ["title"],
     svg: ["viewBox", "xmlns", "xmlnsXlink", "width", "height", "fill", "stroke",
       "className", "preserveAspectRatio", "overflow"],

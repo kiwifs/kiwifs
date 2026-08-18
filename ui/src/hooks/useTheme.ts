@@ -5,7 +5,7 @@ import {
   removeKiwiTheme,
   type KiwiThemeOverrides,
 } from "../lib/kiwiTheme";
-import { api, getCurrentSpace, onSpaceChange } from "../lib/api";
+import { api, getCurrentSpace, getPrimarySpace, onSpaceChange } from "../lib/api";
 import { guardedThemeAction } from "../lib/themeEditLock";
 import { useUIConfigStore } from "../lib/uiConfigStore";
 import { presets, presetToOverrides, findPreset } from "../themes";
@@ -17,7 +17,7 @@ const LS_THEME = "kiwifs-theme";
 
 function spaceKey(base: string): string {
   const space = getCurrentSpace();
-  return space && space !== "default" ? `${base}:${space}` : base;
+  return space && space !== getPrimarySpace() ? `${base}:${space}` : base;
 }
 
 function lsPreset(): string { return spaceKey("kiwifs-preset"); }
