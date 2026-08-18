@@ -476,3 +476,18 @@ func TestHTTPListSpacesReturnsAll(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveRoot(t *testing.T) {
+	primary := "/data/problems"
+	if got := ResolveRoot(primary, "/abs/other"); got != "/abs/other" {
+		t.Fatalf("abs = %q", got)
+	}
+	if got := ResolveRoot(primary, ""); got != "" {
+		t.Fatalf("empty = %q", got)
+	}
+	got := ResolveRoot(primary, "../system-design")
+	want := "/data/system-design"
+	if got != want {
+		t.Fatalf("relative = %q, want %q", got, want)
+	}
+}

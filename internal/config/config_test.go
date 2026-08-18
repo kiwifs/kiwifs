@@ -661,6 +661,48 @@ func TestUITagsResolvedBannerDefault(t *testing.T) {
 	}
 }
 
+func TestPrimarySpaceName(t *testing.T) {
+	if (*Config)(nil).PrimarySpaceName() != "default" {
+		t.Fatal("nil config should be default")
+	}
+	if (&Config{}).PrimarySpaceName() != "default" {
+		t.Fatal("empty name should be default")
+	}
+	cfg := &Config{Space: SpaceSettingsConfig{Name: "  leetcode  "}}
+	if cfg.PrimarySpaceName() != "leetcode" {
+		t.Fatalf("PrimarySpaceName = %q", cfg.PrimarySpaceName())
+	}
+}
+
+func TestLoadSpaceNameAndRoster(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[space]
+name = "leetcode"
+visibility = "unlisted"
+
+[[spaces]]
+name = "system-design"
+root = "../system-design"
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.PrimarySpaceName() != "leetcode" {
+		t.Fatalf("PrimarySpaceName = %q", cfg.PrimarySpaceName())
+	}
+	if cfg.Space.Visibility != "unlisted" {
+		t.Fatalf("visibility = %q", cfg.Space.Visibility)
+	}
+	if len(cfg.Spaces) != 1 || cfg.Spaces[0].Name != "system-design" || cfg.Spaces[0].Root != "../system-design" {
+		t.Fatalf("spaces = %+v", cfg.Spaces)
+	}
+}
+
 func TestLoadUIBranding(t *testing.T) {
 	root := t.TempDir()
 	cfgDir := filepath.Join(root, ".kiwi")

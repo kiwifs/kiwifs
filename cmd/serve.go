@@ -148,11 +148,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// accepts keys scoped to that space. Applied before building the
 	// default stack so its auth middleware is correctly configured.
 	spaceSpecs, _ := cmd.Flags().GetStringSlice("space")
+	primaryName := cfg.PrimarySpaceName()
 	defaultCfg := cfg
-	if len(spaceSpecs) > 0 {
-		defaultCfg = spaces.FilterKeysForSpace(cfg, "default")
+	if len(spaceSpecs) > 0 || len(cfg.Spaces) > 0 {
+		defaultCfg = spaces.FilterKeysForSpace(cfg, primaryName)
 	}
-	stack, err := bootstrap.Build("default", root, defaultCfg)
+	stack, err := bootstrap.Build(primaryName, root, defaultCfg)
 	if err != nil {
 		return err
 	}
@@ -297,8 +298,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 		s.Server.SetMCPHandler(mcpserver.StreamableHTTPHandler(mcpSrv, mcpserver.AuthTokenFromConfig(s.Config)))
 	}
-	if err := spaceMgr.RegisterStack("default", root, stack); err != nil {
-		return fmt.Errorf("register default space: %w", err)
+	if err := spaceMgr.RegisterStack(primaryName, root, stack); err != nil {
+		return fmt.Errorf("register %q space: %w", primaryName, err)
+	}
+	if primaryName != "default" {
+		log.Printf("space %q mounted at /api/kiwi/%s → %s (primary)", primaryName, primaryName, root)
 	}
 	// Register spaces from --space CLI flags.
 	for _, spec := range spaceSpecs {
@@ -308,6 +312,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		if !ok || name == "" || spacePath == "" {
 			return fmt.Errorf("invalid --space %q (want name=path)", spec)
 		}
+		spacePath = spaces.ResolveRoot(root, spacePath)
 		sub := *cfg
 		sub.Storage.Root = spacePath
 		filtered := spaces.FilterKeysForSpace(&sub, name)
@@ -328,13 +333,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 		if _, exists := spaceMgr.GetSpace(sc.Name); exists {
 			continue
 		}
+		spacePath := spaces.ResolveRoot(root, sc.Root)
 		sub := *cfg
-		sub.Storage.Root = sc.Root
+		sub.Storage.Root = spacePath
 		filtered := spaces.FilterKeysForSpace(&sub, sc.Name)
-		if err := spaceMgr.AddSpace(sc.Name, sc.Root, filtered); err != nil {
+		if err := spaceMgr.AddSpace(sc.Name, spacePath, filtered); err != nil {
 			return fmt.Errorf("add config space %q: %w", sc.Name, err)
 		}
-		log.Printf("space %q mounted at /api/kiwi/%s → %s (from config.toml)", sc.Name, sc.Name, sc.Root)
+		log.Printf("space %q mounted at /api/kiwi/%s → %s (from config.toml)", sc.Name, sc.Name, spacePath)
 	}
 
 	// Restore dynamically created spaces that were persisted to

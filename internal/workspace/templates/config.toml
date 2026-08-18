@@ -57,6 +57,16 @@ strategy = "git"
 type = "none"
 # type = "apikey" / "perspace" / "oidc" ...
 
+# Name the primary space (--root) in the space selector. Unset → "default".
+# [space]
+# name = "docs"
+# visibility = "private"
+
+# Additional isolated workspaces. Relative roots resolve against --root.
+# [[spaces]]
+# name = "notes"
+# root = "../notes"
+
 # [ui]
 # keybindings_file = ".kiwi/keybindings.json"
 #

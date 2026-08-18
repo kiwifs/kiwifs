@@ -64,7 +64,7 @@ func (m *Manager) persistPath() string {
 }
 
 // saveDynamic writes the current set of dynamically created spaces to disk.
-// The default space is excluded — it's always registered by serve.go.
+// The primary space is excluded — it's always registered by serve.go.
 // Must be called with m.mu held (at least RLock).
 func (m *Manager) saveDynamic() {
 	path := m.persistPath()
@@ -363,6 +363,15 @@ func (m *Manager) CreateSpace(name, root, template string) (*SpaceMeta, error) {
 	m.saveDynamic()
 	m.mu.RUnlock()
 	return m.SpaceInfo(name)
+}
+
+// ResolveRoot joins a space root against the primary workspace root when
+// the space root is relative. Absolute paths and empty strings are unchanged.
+func ResolveRoot(primaryRoot, spaceRoot string) string {
+	if spaceRoot == "" || filepath.IsAbs(spaceRoot) {
+		return spaceRoot
+	}
+	return filepath.Clean(filepath.Join(primaryRoot, spaceRoot))
 }
 
 // spaceCfg derives a config for a new space from the base config.
