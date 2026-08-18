@@ -170,10 +170,14 @@ export function setExtraHeaders(headers: Record<string, string>) {
 }
 
 let _currentSpace: string | null = null;
+let _primarySpace: string | null = null;
+let _spaceEpoch = 0;
 const _spaceListeners = new Set<() => void>();
 
 export function setCurrentSpace(space: string | null) {
+  if (_currentSpace === space) return;
   _currentSpace = space;
+  _spaceEpoch++;
   try {
     if (space) {
       localStorage.setItem("kiwifs-space", space);
@@ -188,12 +192,41 @@ export function getCurrentSpace(): string | null {
   return _currentSpace;
 }
 
+/**
+ * Name of the space served without a URL prefix (the first one registered).
+ * Learned from /api/spaces. Knowing it lets the UI refer to that space by its
+ * real name everywhere instead of a "default" alias, so per-space state does
+ * not split across two keys for one space.
+ */
+export function setPrimarySpace(name: string | null) {
+  _primarySpace = name;
+}
+
+export function getPrimarySpace(): string | null {
+  return _primarySpace;
+}
+
+/** Space the UI is currently reading, by real name once it is known. */
+export function getEffectiveSpace(): string {
+  return _currentSpace || _primarySpace || "default";
+}
+
+/**
+ * Bumped on every space change. Capture before an await and compare after to
+ * drop a response that belongs to the space the user just left.
+ */
+export function getSpaceEpoch(): number {
+  return _spaceEpoch;
+}
+
 export function onSpaceChange(fn: () => void): () => void {
   _spaceListeners.add(fn);
   return () => _spaceListeners.delete(fn);
 }
 
-// Restore last-used space from localStorage on load.
+// Restore last-used space from localStorage on load. The name is not trusted
+// yet — App validates it against /api/spaces and clears it if the space is
+// gone, otherwise every request would 404 with no way back.
 try {
   const saved = localStorage.getItem("kiwifs-space");
   if (saved) _currentSpace = saved;
@@ -204,10 +237,15 @@ function kiwiBase(): string {
   if (typeof window !== "undefined" && (window as any).__kiwi_api_base__) {
     return (window as any).__kiwi_api_base__;
   }
-  if (_currentSpace && _currentSpace !== "default") {
-    return `/api/kiwi/${_currentSpace}`;
+  if (_currentSpace && _currentSpace !== _primarySpace) {
+    return `/api/kiwi/${encodeURIComponent(_currentSpace)}`;
   }
   return "/api/kiwi";
+}
+
+/** Base path for direct links (downloads, embeds) that bypass the api client. */
+export function apiBase(): string {
+  return kiwiBase();
 }
 
 export function sseUrl(): string {

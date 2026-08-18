@@ -117,6 +117,15 @@ describe("remarkKiwiDirectives — existing directives still work", () => {
     expect(findByDirective(tree, "claim")).toHaveLength(0);
   });
 
+  it("turns :::figure into width/pin attributes", () => {
+    const tree = transform(":::figure{width=wide pin caption=\"Write path\"}\nHello.\n:::\n");
+    const figures = findByDirective(tree, "figure");
+    expect(figures).toHaveLength(1);
+    expect(figures[0].data.hProperties["data-width"]).toBe("wide");
+    expect(figures[0].data.hProperties["data-pin"]).toBe("true");
+    expect(figures[0].data.hProperties["data-caption"]).toBe("Write path");
+  });
+
   it("does not disturb :::columns", () => {
     const tree = transform(':::columns{ratio="2:1"}\n::col\nLeft.\n:::\n');
     const columns = findByDirective(tree, "columns");

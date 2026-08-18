@@ -19,8 +19,10 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import {
   api,
-  getCurrentSpace,
+  getEffectiveSpace,
+  getPrimarySpace,
   setCurrentSpace,
+  setPrimarySpace,
   type SpaceMeta,
 } from "../lib/api";
 
@@ -32,7 +34,7 @@ export function SpaceSelector({
   onSwitch: () => void;
 }) {
   const [spaces, setSpaces] = useState<SpaceMeta[]>([]);
-  const [value, setValue] = useState(getCurrentSpace() || "default");
+  const [value, setValue] = useState(getEffectiveSpace());
   const [loaded, setLoaded] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -45,8 +47,9 @@ export function SpaceSelector({
       .then((res) => {
         setSpaces(res.spaces);
         setLoaded(true);
-        if (!getCurrentSpace() && res.spaces.length > 0) {
-          setValue(res.spaces[0].name);
+        if (res.spaces.length > 0) {
+          setPrimarySpace(res.spaces[0].name);
+          setValue(getEffectiveSpace());
         }
       })
       .catch(() => setLoaded(false));
@@ -61,7 +64,9 @@ export function SpaceSelector({
         return;
       }
       setValue(name);
-      setCurrentSpace(name === "default" ? null : name);
+      // The primary space is addressed by its real name, not an alias; null
+      // means "no space prefix", which is only ever the primary space.
+      setCurrentSpace(name === getPrimarySpace() ? null : name);
       onSwitch();
     },
     [onSwitch]

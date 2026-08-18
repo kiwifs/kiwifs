@@ -192,12 +192,14 @@ export function ExcalidrawMarkdownPreview({ markdown, title }: PreviewProps) {
       return () => { cancelled = true; };
     }
 
+    const dark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
     import("@excalidraw/excalidraw")
       .then(({ exportToSvg }) => exportToSvg({
         elements: (scene.elements ?? []).filter((el) => el?.isDeleted !== true),
         appState: {
           ...sanitizeAppStateForStorage(scene.appState),
-          exportBackground: scene.appState?.exportBackground ?? true,
+          exportBackground: false,
+          exportWithDarkMode: dark,
         },
         files: scene.files ?? {},
         exportPadding: 16,
@@ -233,7 +235,7 @@ export function ExcalidrawMarkdownPreview({ markdown, title }: PreviewProps) {
   }
 
   return (
-    <div className="kiwi-excalidraw-preview overflow-auto rounded-lg border border-border bg-white p-3">
+    <div className="kiwi-excalidraw-preview overflow-auto rounded-lg border border-border bg-card p-3">
       <div className="mx-auto w-full" dangerouslySetInnerHTML={{ __html: svg }} />
     </div>
   );

@@ -38,7 +38,8 @@ import { visit } from "unist-util-visit";
 import GithubSlugger from "github-slugger";
 import type { Root } from "mdast";
 import type { TreeEntry } from "@kw/lib/api";
-import { dirOf, normalizePath } from "@kw/lib/paths";
+import { dirOf, isCanvasFile, isExcalidrawFile, normalizePath } from "@kw/lib/paths";
+import { parseEmbedLabel } from "./figureLayout";
 
 /**
  * Resolve a raw wiki-link target to a canonical file path (or null).
@@ -213,7 +214,29 @@ export function remarkWikiLinks(opts: { resolver: LinkResolver; fromPath?: strin
           const width = sizeMatch ? sizeMatch[1] : undefined;
           const height = sizeMatch ? sizeMatch[2] : undefined;
 
-          if (resolved && resolved.endsWith(".md")) {
+          const drawingPath = [resolved, target].find((p) => p && (isExcalidrawFile(p) || isCanvasFile(p)));
+          if (drawingPath) {
+            const display = parseEmbedLabel(label, target);
+            const path = resolved && (isExcalidrawFile(resolved) || isCanvasFile(resolved))
+              ? resolved
+              : drawingPath;
+            parts.push({
+              type: "image",
+              url: `/raw/${path}`,
+              alt: display.caption || path,
+              data: {
+                hProperties: {
+                  className: "kiwi-embed-drawing",
+                  dataKiwiEmbed: isExcalidrawFile(path) ? "excalidraw" : "canvas",
+                  dataKiwiTarget: path,
+                  dataKiwiWidth: display.width,
+                  ...(display.pin ? { dataKiwiPin: "true" } : {}),
+                  ...(display.pixelWidth ? { width: String(display.pixelWidth) } : {}),
+                  ...(display.pixelHeight ? { height: String(display.pixelHeight) } : {}),
+                },
+              },
+            });
+          } else if (resolved && resolved.endsWith(".md")) {
             parts.push({
               type: "link",
               url: `#kiwi:${resolved}`,

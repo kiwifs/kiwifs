@@ -11,6 +11,7 @@
 
 import { visit } from "unist-util-visit";
 import type { Root } from "mdast";
+import { parseFigureAttrs } from "./figureLayout";
 
 /**
  * Attribute names a claim carries through to the DOM.
@@ -56,6 +57,7 @@ export function claimProperties(attrs: Record<string, string> = {}): Record<stri
  * - :::tabs / ::tab[Label] — tabbed content panels
  * - :::columns / ::col — side-by-side column layouts
  * - :::claim{...} / :claim[text]{...} — claim-level provenance
+ * - :::figure{width=wide} — figure with optional caption, stacked
  */
 export function remarkKiwiDirectives() {
   return (tree: Root) => {
@@ -131,6 +133,17 @@ export function remarkKiwiDirectives() {
               };
             }
           }
+        } else if (name === "figure") {
+          const display = parseFigureAttrs(node.attributes || {});
+          node.data = node.data || {};
+          node.data.hName = "div";
+          node.data.hProperties = {
+            "data-kiwi-directive": "figure",
+            "data-width": display.width,
+            ...(display.pin ? { "data-pin": "true" } : {}),
+            ...(display.caption ? { "data-caption": display.caption } : {}),
+            className: "kiwi-figure-directive",
+          };
         } else if (name === "tab") {
           // Standalone ::tab inside a :::tabs — handled by parent
           // If orphaned (no parent tabs), render as-is
