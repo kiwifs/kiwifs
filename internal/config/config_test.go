@@ -613,6 +613,54 @@ theme_locked = true
 	}
 }
 
+func TestLoadUITags(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[ui.tags]
+banner = ["difficulty", "tags", "companies"]
+hide = ["freq"]
+
+[ui.tags.colors]
+easy = "emerald"
+google = "#4285F4"
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got := cfg.UI.Tags.ResolvedBanner()
+	want := []string{"difficulty", "tags", "companies"}
+	if len(got) != len(want) {
+		t.Fatalf("banner = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("banner = %v, want %v", got, want)
+		}
+	}
+	if len(cfg.UI.Tags.Hide) != 1 || cfg.UI.Tags.Hide[0] != "freq" {
+		t.Fatalf("hide = %v", cfg.UI.Tags.Hide)
+	}
+	if cfg.UI.Tags.Colors["easy"] != "emerald" || cfg.UI.Tags.Colors["google"] != "#4285F4" {
+		t.Fatalf("colors = %v", cfg.UI.Tags.Colors)
+	}
+}
+
+func TestUITagsResolvedBannerDefault(t *testing.T) {
+	empty := UITagsConfig{}
+	got := empty.ResolvedBanner()
+	if len(got) != 1 || got[0] != "tags" {
+		t.Fatalf("default banner = %v, want [tags]", got)
+	}
+	explicit := UITagsConfig{Banner: []string{}}
+	if len(explicit.ResolvedBanner()) != 0 {
+		t.Fatalf("empty banner should stay empty, got %v", explicit.ResolvedBanner())
+	}
+}
+
 func TestLoadUIBranding(t *testing.T) {
 	root := t.TempDir()
 	cfgDir := filepath.Join(root, ".kiwi")

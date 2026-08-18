@@ -213,3 +213,13 @@
 .kw-widget-math .katex-html {
   white-space: nowrap;
 }
+
+/* Chips beyond the fixed Tailwind palette. --tag-h is 0–360. */
+.kiwi-tag-tone {
+  border-color: hsl(var(--tag-h) 70% 48% / 0.4);
+  background-color: hsl(var(--tag-h) 70% 48% / 0.1);
+  color: hsl(var(--tag-h) 72% 32%);
+}
+.dark .kiwi-tag-tone {
+  color: hsl(var(--tag-h) 70% 72%);
+}

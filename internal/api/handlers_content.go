@@ -363,6 +363,12 @@ type brandingConfigResponse struct {
 	WelcomeMessage string `json:"welcomeMessage"`
 }
 
+type tagsConfigResponse struct {
+	Banner []string          `json:"banner"`
+	Hide   []string          `json:"hide"`
+	Colors map[string]string `json:"colors"`
+}
+
 type uiConfigResponse struct {
 	ThemeLocked  bool                   `json:"themeLocked"`
 	StartPage    string                 `json:"startPage"`
@@ -370,6 +376,7 @@ type uiConfigResponse struct {
 	Branding     brandingConfigResponse `json:"branding"`
 	Features     map[string]bool        `json:"features"`
 	ToolbarViews *[]string              `json:"toolbarViews"`
+	Tags         tagsConfigResponse     `json:"tags"`
 }
 
 // UIConfig godoc
@@ -402,6 +409,14 @@ func (h *Handlers) UIConfig(c echo.Context) error {
 		toolbarViews = &views
 	}
 	b := h.ui.Branding
+	tagColors := h.ui.Tags.Colors
+	if tagColors == nil {
+		tagColors = map[string]string{}
+	}
+	tagHide := h.ui.Tags.Hide
+	if tagHide == nil {
+		tagHide = []string{}
+	}
 	return c.JSON(http.StatusOK, uiConfigResponse{
 		ThemeLocked: h.ui.ThemeLocked,
 		StartPage:   h.ui.ResolvedStartPage(),
@@ -419,6 +434,11 @@ func (h *Handlers) UIConfig(c echo.Context) error {
 		},
 		Features:     h.ui.Features.Resolved(),
 		ToolbarViews: toolbarViews,
+		Tags: tagsConfigResponse{
+			Banner: h.ui.Tags.ResolvedBanner(),
+			Hide:   tagHide,
+			Colors: tagColors,
+		},
 	})
 }
 

@@ -11,6 +11,7 @@ describe("uiConfigStore", () => {
       branding: DEFAULT_BRANDING,
       features: DEFAULT_UI_FEATURES,
       loaded: false,
+      tags: { banner: ["tags"], hide: [], colors: {} },
     });
     vi.restoreAllMocks();
   });
@@ -61,6 +62,26 @@ describe("uiConfigStore", () => {
     expect(useUIConfigStore.getState().features.publish).toBe(false);
   });
 
+  it("stores tag banner and colors from ui-config", async () => {
+    vi.spyOn(api, "getUIConfig").mockResolvedValue({
+      themeLocked: false,
+      startPage: "welcome",
+      tags: {
+        banner: ["difficulty", "companies"],
+        hide: ["freq"],
+        colors: { Easy: "emerald", google: "#4285F4" },
+      },
+    });
+
+    await useUIConfigStore.getState().load();
+
+    expect(useUIConfigStore.getState().tags).toEqual({
+      banner: ["difficulty", "companies"],
+      hide: ["freq"],
+      colors: { easy: "emerald", google: "#4285F4" },
+    });
+  });
+
   it("falls back to defaults when ui-config fetch fails", async () => {
     vi.spyOn(api, "getUIConfig").mockRejectedValue(new Error("network"));
 
@@ -68,6 +89,7 @@ describe("uiConfigStore", () => {
 
     expect(useUIConfigStore.getState().branding).toEqual(DEFAULT_BRANDING);
     expect(useUIConfigStore.getState().features).toEqual(DEFAULT_UI_FEATURES);
+    expect(useUIConfigStore.getState().tags).toEqual({ banner: ["tags"], hide: [], colors: {} });
     expect(useUIConfigStore.getState().loaded).toBe(true);
   });
 });
