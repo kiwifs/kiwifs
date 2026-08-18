@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.61](https://github.com/kiwifs/kiwifs/compare/v0.19.60...v0.19.61) (2026-08-18)
+
+
+### Features
+
+* **ui:** reading-order nav, content blocks, and unambiguous multi-space URLs ([#506](https://github.com/kiwifs/kiwifs/issues/506)) ([ffa3b31](https://github.com/kiwifs/kiwifs/commit/ffa3b314143778b512f598a4e2cd0f1913fd7d1d))
+
 ## [0.19.60](https://github.com/kiwifs/kiwifs/compare/v0.19.59...v0.19.60) (2026-08-18)
 
 
