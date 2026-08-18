@@ -240,10 +240,10 @@ type DraftsConfig struct {
 }
 
 type JanitorConfig struct {
-	Interval           string                     `toml:"interval"`
-	StaleDays          int                        `toml:"stale_days"`
-	StartupScan        bool                       `toml:"startup_scan"`
-	ExecutionStaleness ExecutionStalenessConfig   `toml:"execution_staleness"`
+	Interval           string                   `toml:"interval"`
+	StaleDays          int                      `toml:"stale_days"`
+	StartupScan        bool                     `toml:"startup_scan"`
+	ExecutionStaleness ExecutionStalenessConfig `toml:"execution_staleness"`
 }
 
 // ExecutionStalenessConfig flags runbooks (or other directory-scoped pages) when
@@ -338,12 +338,12 @@ type UIConfig struct {
 	// StartPage controls the first-load landing view when no deep link is present.
 	// "welcome" (default) | "recent" | "dashboard" | a file path such as "index.md".
 	StartPage string           `toml:"start_page"`
-	Sidebar   UISidebarConfig `toml:"sidebar"`
-	Branding  BrandingConfig  `toml:"branding"`
+	Sidebar   UISidebarConfig  `toml:"sidebar"`
+	Branding  BrandingConfig   `toml:"branding"`
 	Features  UIFeaturesConfig `toml:"features"`
-	Toolbar   ToolbarConfig   `toml:"toolbar"`
-	Editor    UIEditorConfig  `toml:"editor"`
-	Tags      UITagsConfig    `toml:"tags"`
+	Toolbar   ToolbarConfig    `toml:"toolbar"`
+	Editor    UIEditorConfig   `toml:"editor"`
+	Tags      UITagsConfig     `toml:"tags"`
 }
 
 // UITagsConfig controls which frontmatter keys render as header chips and
@@ -507,7 +507,18 @@ type SpaceConfig struct {
 // SpaceSettingsConfig holds per-space settings loaded from the space's
 // own .kiwi/config.toml [space] section.
 type SpaceSettingsConfig struct {
+	// Name is the primary space's label in the space selector and
+	// /api/kiwi/{name}/... routes. Unset, the serve root is "default".
+	Name       string `toml:"name"`
 	Visibility string `toml:"visibility"` // private | unlisted | public (default: private)
+}
+
+// PrimarySpaceName returns the registered name for the serve-root space.
+func (c *Config) PrimarySpaceName() string {
+	if c != nil && strings.TrimSpace(c.Space.Name) != "" {
+		return strings.TrimSpace(c.Space.Name)
+	}
+	return "default"
 }
 
 type ServerConfig struct {
