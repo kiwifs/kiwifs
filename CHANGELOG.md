@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.60](https://github.com/kiwifs/kiwifs/compare/v0.19.59...v0.19.60) (2026-08-18)
+
+
+### Features
+
+* name the primary space and resolve relative space roots ([#504](https://github.com/kiwifs/kiwifs/issues/504)) ([4d99c38](https://github.com/kiwifs/kiwifs/commit/4d99c38f05271c3cba8683fa0d8d673458650a04))
+
 ## [0.19.59](https://github.com/kiwifs/kiwifs/compare/v0.19.58...v0.19.59) (2026-08-18)
 
 
