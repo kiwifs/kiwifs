@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.59](https://github.com/kiwifs/kiwifs/compare/v0.19.58...v0.19.59) (2026-08-18)
+
+
+### Features
+
+* **ui:** tracker modes and configurable banner tags ([#502](https://github.com/kiwifs/kiwifs/issues/502)) ([33b359b](https://github.com/kiwifs/kiwifs/commit/33b359bf9597fda339f985f0c5f2ad70143588f9))
+
+
+### Bug Fixes
+
+* **ci:** auto-merge Cursor agent fix ([#501](https://github.com/kiwifs/kiwifs/issues/501)) ([76d2a8a](https://github.com/kiwifs/kiwifs/commit/76d2a8a964125bcaa2b2838b4cc033fbb517f1f2))
+
 ## [0.19.58](https://github.com/kiwifs/kiwifs/compare/v0.19.57...v0.19.58) (2026-08-17)
 
 
