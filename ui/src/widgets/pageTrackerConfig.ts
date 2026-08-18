@@ -1,4 +1,5 @@
 import yaml from "js-yaml";
+import { parseLabeledCounts } from "@kw/lib/frontmatterTags";
 
 export type TrackerMode = {
   id: string;
@@ -38,24 +39,14 @@ function asStringList(value: unknown): string[] {
 }
 
 export function parseCompanies(value: unknown): CompanyHit[] {
-  const out: CompanyHit[] = [];
-  if (typeof value === "string") {
-    const re = /\[\s*([^[\],]+?)\s*,\s*(\d+)\s*\]/g;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(value))) {
-      out.push({ slug: match[1].trim(), hits: Number(match[2]) });
-    }
-    return out;
+  const pairs = parseLabeledCounts(value);
+  if (pairs.length > 0) {
+    return pairs.map((pair) => ({ slug: pair.label, hits: pair.count ?? 0 }));
   }
-  if (!Array.isArray(value)) return out;
-  for (const item of value) {
-    if (Array.isArray(item) && item[0] != null) {
-      out.push({ slug: String(item[0]).trim(), hits: Number(item[1]) || 0 });
-    } else if (typeof item === "string" && item.trim()) {
-      out.push({ slug: item.trim(), hits: 0 });
-    }
-  }
-  return out.filter((row) => row.slug.length > 0);
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => typeof item === "string" && item.trim() && !item.includes("["))
+    .map((item) => ({ slug: String(item).trim(), hits: 0 }));
 }
 
 export function parseTrackerPageMeta(fm: Record<string, unknown>): TrackerPageMeta {

@@ -9,6 +9,8 @@ import {
   parseTrackerPageMeta,
   type TrackerPageMeta,
 } from "./pageTrackerConfig";
+import { useUIConfigStore } from "@kw/lib/uiConfigStore";
+import { assignTagTones, resolveTagTone, type TagTone } from "@kw/lib/tagStyle";
 
 type ProgressEntry = {
   done: boolean;
@@ -118,44 +120,7 @@ async function fetchAllMeta() {
 }
 
 function difficultyClass(d: string): string {
-  const v = d.toLowerCase();
-  if (v === "easy") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
-  if (v === "medium") return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400";
-  if (v === "hard") return "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400";
-  return "";
-}
-
-/**
- * Free of the emerald/amber/red that difficulty already claims, which leaves
- * only the blue-to-pink arc — too narrow for every entry to be far from every
- * other. Ordered so consecutive slots are the ones furthest apart in hue, since
- * a workspace with a handful of tags only ever reaches the front of the list.
- */
-const TAG_PALETTE = [
-  "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400",
-  "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
-  "border-pink-500/40 bg-pink-500/10 text-pink-700 dark:text-pink-400",
-  "border-purple-500/40 bg-purple-500/10 text-purple-700 dark:text-purple-400",
-  "border-indigo-500/40 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
-  "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-400",
-];
-
-/**
- * Colour by position in the sorted tag list rather than by hashing the name:
- * a hash is stable across workspaces but collides, and two tags sharing a
- * colour defeats the only thing the colour is for. Adding a tag can reshuffle
- * the others, which is the cheaper trade.
- */
-function assignColors(tags: string[]): Record<string, string> {
-  const colors: Record<string, string> = {};
-  let next = 0;
-  for (const tag of [...tags].sort((a, b) => naturalCompare(a, b))) {
-    const difficulty = difficultyClass(tag);
-    colors[tag] = difficulty || TAG_PALETTE[next++ % TAG_PALETTE.length];
-  }
-  return colors;
+  return resolveTagTone(d)?.className ?? "";
 }
 
 /** Tags that merely restate the difficulty would double every row's badges. */
@@ -171,7 +136,7 @@ function PageTags({
   fields,
 }: {
   meta?: PageMeta;
-  colors: Record<string, string>;
+  colors: Record<string, TagTone>;
   fields: string[];
 }) {
   const useOriginal = fields.includes("tags");
@@ -181,7 +146,11 @@ function PageTags({
     return (
       <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
         {meta?.difficulty && (
-          <Badge variant="outline" className={"text-[10px] px-1.5 py-0 h-5 " + difficultyClass(meta.difficulty)}>
+          <Badge
+            variant="outline"
+            className={"text-[10px] px-1.5 py-0 h-5 whitespace-nowrap " + (colors[meta.difficulty]?.className ?? difficultyClass(meta.difficulty))}
+            style={colors[meta.difficulty]?.style}
+          >
             {meta.difficulty}
           </Badge>
         )}
@@ -189,7 +158,8 @@ function PageTags({
           <Badge
             key={tag}
             variant="outline"
-            className={"text-[10px] px-1.5 py-0 h-5 " + (colors[tag] ?? "text-muted-foreground")}
+            className={"text-[10px] px-1.5 py-0 h-5 whitespace-nowrap " + (colors[tag]?.className ?? "text-muted-foreground")}
+            style={colors[tag]?.style}
           >
             {tag}
           </Badge>
@@ -198,26 +168,30 @@ function PageTags({
     );
   }
 
-  const badges: { key: string; label: string; className: string }[] = [];
+  const badges: { key: string; label: string; className: string; style?: React.CSSProperties }[] = [];
   if (fields.includes("difficulty") && meta?.difficulty) {
     badges.push({
       key: "difficulty",
       label: meta.difficulty,
-      className: difficultyClass(meta.difficulty),
+      className: colors[meta.difficulty]?.className ?? difficultyClass(meta.difficulty),
+      style: colors[meta.difficulty]?.style,
     });
   }
   if (fields.includes("premium") && meta?.premium) {
     badges.push({
       key: "premium",
       label: "premium",
-      className: colors.premium ?? "text-muted-foreground",
+      className: colors.premium?.className ?? "text-muted-foreground",
+      style: colors.premium?.style,
     });
   }
   if (fields.includes("freq") && meta?.freq != null) {
+    const freqKey = `freq ${meta.freq}`;
     badges.push({
       key: "freq",
-      label: `freq ${meta.freq}`,
-      className: colors[`freq ${meta.freq}`] ?? "text-muted-foreground",
+      label: freqKey,
+      className: colors[freqKey]?.className ?? "text-muted-foreground",
+      style: colors[freqKey]?.style,
     });
   }
   if (fields.includes("companies")) {
@@ -225,7 +199,8 @@ function PageTags({
       badges.push({
         key: company.slug,
         label: company.hits > 0 ? `${company.slug} ${company.hits}` : company.slug,
-        className: colors[company.slug] ?? "text-muted-foreground",
+        className: colors[company.slug]?.className ?? "text-muted-foreground",
+        style: colors[company.slug]?.style,
       });
     }
   }
@@ -235,7 +210,8 @@ function PageTags({
       badges.push({
         key: `${field}:${item}`,
         label: item,
-        className: colors[item] ?? "text-muted-foreground",
+        className: colors[item]?.className ?? "text-muted-foreground",
+        style: colors[item]?.style,
       });
     }
   }
@@ -246,7 +222,8 @@ function PageTags({
         <Badge
           key={badge.key}
           variant="outline"
-          className={"text-[10px] px-1.5 py-0 h-5 " + badge.className}
+          className={"text-[10px] px-1.5 py-0 h-5 whitespace-nowrap " + badge.className}
+          style={badge.style}
         >
           {badge.label}
         </Badge>
@@ -294,6 +271,7 @@ export function PageTracker({ onNavigate, stateName, source }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [loading, setLoading] = useState(true);
 
+  const tagColorsConfig = useUIConfigStore((s) => s.tags.colors);
   const activeMode = config.modes.find((mode) => mode.id === modeId) ?? config.modes[0];
   const fields = activeMode?.fields ?? ["tags"];
   const showModeToggle = config.modes.length > 1;
@@ -349,8 +327,8 @@ export function PageTracker({ onNavigate, stateName, source }: Props) {
   }, [groups, fields]);
 
   const tagColors = useMemo(
-    () => assignColors(tagUniverse.map((t) => t.tag)),
-    [tagUniverse],
+    () => assignTagTones(tagUniverse.map((t) => t.tag), tagColorsConfig),
+    [tagUniverse, tagColorsConfig],
   );
 
   const filteredGroups = useMemo(() => {
@@ -502,13 +480,14 @@ export function PageTracker({ onNavigate, stateName, source }: Props) {
                     : state === "out" ? "Excluded — click to clear"
                       : "Click to require"
                 }
+                style={state ? undefined : tagColors[tag]?.style}
                 className={
                   "text-[11px] px-2 py-0.5 rounded-full border transition-colors " +
                   (state === "in"
                     ? "border-primary bg-primary text-primary-foreground"
                     : state === "out"
                       ? "border-red-500/50 bg-red-500/10 text-red-600 dark:text-red-400 line-through"
-                      : (tagColors[tag] ?? "border-border text-muted-foreground") + " hover:brightness-95")
+                      : (tagColors[tag]?.className ?? "border-border text-muted-foreground") + " hover:brightness-95")
                 }
               >
                 {tag}

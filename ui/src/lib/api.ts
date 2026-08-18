@@ -632,6 +632,11 @@ export const api = {
     };
     features?: Partial<Record<UIFeatureKey, boolean>>;
     toolbarViews?: string[] | null;
+    tags?: {
+      banner?: string[];
+      hide?: string[];
+      colors?: Record<string, string>;
+    };
   }> {
     return request(`${kiwiBase()}/ui-config`);
   },

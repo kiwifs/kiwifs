@@ -83,6 +83,17 @@ type = "none"
 #
 # [ui.toolbar]
 # views = []
+#
+# Header chips from frontmatter. Unset banner keeps just `tags`.
+# Color values are token names (emerald, amber, red, blue, …) or #hex.
+# [ui.tags]
+# banner = ["status", "difficulty", "tags"]
+# hide = ["internal_id"]
+#
+# [ui.tags.colors]
+# easy = "emerald"
+# medium = "amber"
+# hard = "red"
 
 # Validate frontmatter against .kiwi/schemas/{value}.json on write.
 # [schema]

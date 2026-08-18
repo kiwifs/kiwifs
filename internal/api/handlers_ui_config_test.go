@@ -232,3 +232,70 @@ func TestUIConfig_SidebarFromConfig(t *testing.T) {
 		t.Fatalf("sections = %+v", res.Sidebar.Sections)
 	}
 }
+
+func TestUIConfig_TagsFromConfig(t *testing.T) {
+	dir, pipe, cstore := buildTestPipeline(t)
+	cfg := &config.Config{}
+	cfg.Storage.Root = dir
+	cfg.UI.Tags = config.UITagsConfig{
+		Banner: []string{"difficulty", "tags", "companies"},
+		Hide:   []string{"freq"},
+		Colors: map[string]string{"easy": "emerald", "google": "#4285F4"},
+	}
+	s := NewServer(cfg, pipe, nil, cstore, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/kiwi/ui-config", nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var res struct {
+		Tags struct {
+			Banner []string          `json:"banner"`
+			Hide   []string          `json:"hide"`
+			Colors map[string]string `json:"colors"`
+		} `json:"tags"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Tags.Banner) != 3 || res.Tags.Banner[0] != "difficulty" {
+		t.Fatalf("banner = %v", res.Tags.Banner)
+	}
+	if len(res.Tags.Hide) != 1 || res.Tags.Hide[0] != "freq" {
+		t.Fatalf("hide = %v", res.Tags.Hide)
+	}
+	if res.Tags.Colors["easy"] != "emerald" || res.Tags.Colors["google"] != "#4285F4" {
+		t.Fatalf("colors = %v", res.Tags.Colors)
+	}
+}
+
+func TestUIConfig_TagsDefault(t *testing.T) {
+	s := buildTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/kiwi/ui-config", nil)
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var res struct {
+		Tags struct {
+			Banner []string          `json:"banner"`
+			Hide   []string          `json:"hide"`
+			Colors map[string]string `json:"colors"`
+		} `json:"tags"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Tags.Banner) != 1 || res.Tags.Banner[0] != "tags" {
+		t.Fatalf("default banner = %v, want [tags]", res.Tags.Banner)
+	}
+	if res.Tags.Hide == nil || res.Tags.Colors == nil {
+		t.Fatalf("hide/colors should be empty slices/maps, got hide=%v colors=%v", res.Tags.Hide, res.Tags.Colors)
+	}
+}

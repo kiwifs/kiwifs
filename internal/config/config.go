@@ -343,6 +343,34 @@ type UIConfig struct {
 	Features  UIFeaturesConfig `toml:"features"`
 	Toolbar   ToolbarConfig   `toml:"toolbar"`
 	Editor    UIEditorConfig  `toml:"editor"`
+	Tags      UITagsConfig    `toml:"tags"`
+}
+
+// UITagsConfig controls which frontmatter keys render as header chips and
+// how named values are coloured. Example:
+//
+//	[ui.tags]
+//	banner = ["status", "difficulty", "tags", "companies"]
+//	hide = ["internal_id"]
+//
+//	[ui.tags.colors]
+//	easy = "emerald"
+//	google = "#4285F4"
+type UITagsConfig struct {
+	// Banner is the ordered list of frontmatter keys shown as chips under the
+	// title. nil means default (["tags"]); an explicit empty list hides chips.
+	Banner []string          `toml:"banner"`
+	Hide   []string          `toml:"hide"`
+	Colors map[string]string `toml:"colors"`
+}
+
+// ResolvedBanner returns the chip fields. Unset banner keeps the historical
+// default of just `tags`.
+func (t UITagsConfig) ResolvedBanner() []string {
+	if t.Banner == nil {
+		return []string{"tags"}
+	}
+	return t.Banner
 }
 
 // UIEditorConfig holds editor customization (slash commands, etc.).

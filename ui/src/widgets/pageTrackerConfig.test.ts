@@ -43,6 +43,10 @@ describe("parseCompanies", () => {
       { slug: "google", hits: 210 },
       { slug: "meta", hits: 88 },
     ]);
+    expect(parseCompanies(["[facebook", "2]", "[google", "210]"])).toEqual([
+      { slug: "facebook", hits: 2 },
+      { slug: "google", hits: 210 },
+    ]);
   });
 });
 

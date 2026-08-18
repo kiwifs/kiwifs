@@ -27,6 +27,7 @@ export type MockUIConfig = {
   features?: Record<string, boolean>;
   toolbarViews?: string[] | null;
   sidebar?: Record<string, unknown>;
+  tags?: { banner?: string[]; hide?: string[]; colors?: Record<string, string> };
 };
 
 export type MockTimelineEvent = {
@@ -375,6 +376,7 @@ function createMockFetch(overrides: MockOverrides = {}) {
             ...(cfg.features ?? {}),
           },
           toolbarViews: cfg.toolbarViews ?? null,
+          tags: cfg.tags ?? { banner: ["tags"], hide: [], colors: {} },
         });
       }
 

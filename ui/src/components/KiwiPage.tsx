@@ -41,6 +41,8 @@ import { KiwiWidget } from "./KiwiWidget";
 import { CodeRunner } from "@kw/widgets/CodeRunner";
 import { PageTracker } from "@kw/widgets/PageTracker";
 import { useUIConfigStore } from "@kw/lib/uiConfigStore";
+import { bannerChips, labeledCount, parseFlowList, parseLabeledCounts, propertyHiddenKeys, type FrontmatterChip } from "@kw/lib/frontmatterTags";
+import { assignTagTones, hslTone, resolveTagTone, type TagTone } from "@kw/lib/tagStyle";
 
 import { PageSkeleton } from "./PageSkeleton";
 import { trackRecent } from "./KiwiFavorites";
@@ -362,10 +364,7 @@ function parseFrontmatterScalar(value: string): unknown {
   if (trimmed === "false") return false;
   if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    return trimmed
-      .slice(1, -1)
-      .split(",")
-      .map((s) => parseFrontmatterScalar(s));
+    return parseFlowList(trimmed);
   }
   return trimmed;
 }
@@ -400,6 +399,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
   const isHeadless = contentProp != null;
   const nav = onNavigate ?? (() => {});
   const features = useUIConfigStore((s) => s.features);
+  const tagConfig = useUIConfigStore((s) => s.tags);
 
   const treeEntry = useMemo(() => findEntry(tree ?? null, path), [tree, path]);
   const isDir = !isHeadless && (treeEntry?.isDir ?? false);
@@ -511,12 +511,22 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
     return parseMarkdownPage(content);
   }, [content]);
 
-  const properties = useMemo(() => frontmatterProperties(parsed.meta), [parsed.meta]);
+  const properties = useMemo(
+    () => frontmatterProperties(parsed.meta, propertyHiddenKeys(tagConfig.banner, tagConfig.hide)),
+    [parsed.meta, tagConfig.banner, tagConfig.hide],
+  );
   const badges = useMemo(() => frontmatterBadges(parsed.meta), [parsed.meta]);
+  const headerChips = useMemo(
+    () => bannerChips(parsed.meta, tagConfig.banner),
+    [parsed.meta, tagConfig.banner],
+  );
+  const headerChipTones = useMemo(
+    () => assignTagTones(headerChips.map((chip) => chip.colorKey), tagConfig.colors),
+    [headerChips, tagConfig.colors],
+  );
   const reading = useMemo(() => readingTime(parsed.body), [parsed.body]);
   const frontmatterTitle = typeof parsed.meta.title === "string" ? parsed.meta.title : null;
   const statusBadge = badges.find((b) => b.key === "status");
-  const tagBadges = badges.filter((b) => b.key === "tags");
 
   if (isDir && treeEntry) {
     const children = treeEntry.children ?? [];
@@ -723,19 +733,16 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
               )}
             </div>
 
-            {/* ── Tags ── */}
-            {tagBadges.length > 0 && (
+            {/* ── Banner tags ── */}
+            {headerChips.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-3">
-                {tagBadges.map((b) => (
-                  <Badge
-                    key={b.value}
-                    variant="secondary"
-                    className="cursor-pointer hover:bg-primary/20 transition-colors gap-1"
-                    onClick={() => onTagClick?.(b.value)}
-                  >
-                    <Tag className="h-3 w-3" />
-                    {b.value}
-                  </Badge>
+                {headerChips.map((chip, index) => (
+                  <MetaChip
+                    key={`${chip.key}:${chip.colorKey}:${index}`}
+                    chip={chip}
+                    tone={headerChipTones[chip.colorKey]}
+                    onClick={onTagClick}
+                  />
                 ))}
               </div>
             )}
@@ -744,6 +751,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
             {properties.length > 0 && (
               <FrontmatterProperties
                 properties={properties}
+                colors={tagConfig.colors}
                 onTagClick={onTagClick}
               />
             )}
@@ -1272,11 +1280,38 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
 
 /* ── Frontmatter properties ── */
 
+function MetaChip({
+  chip,
+  tone,
+  onClick,
+}: {
+  chip: FrontmatterChip;
+  tone?: TagTone;
+  onClick?: (value: string) => void;
+}) {
+  return (
+    <Badge
+      variant="outline"
+      className={
+        "inline-flex items-center shrink-0 whitespace-nowrap cursor-pointer hover:bg-primary/20 transition-colors gap-1 " +
+        (tone?.className ?? "text-muted-foreground")
+      }
+      style={tone?.style}
+      onClick={() => onClick?.(chip.colorKey)}
+    >
+      {chip.key === "tags" && <Tag className="h-3 w-3" />}
+      {chip.count != null && chip.count > 0 ? `${chip.label} ${chip.count}` : chip.label}
+    </Badge>
+  );
+}
+
 function FrontmatterProperties({
   properties,
+  colors,
   onTagClick,
 }: {
   properties: FrontmatterProperty[];
+  colors: Record<string, string>;
   onTagClick?: (tag: string) => void;
 }) {
   return (
@@ -1293,7 +1328,7 @@ function FrontmatterProperties({
               <span className="truncate font-medium">{property.key}</span>
             </div>
             <div className="min-w-0 text-foreground/90">
-              <PropertyValue property={property} onTagClick={onTagClick} />
+              <PropertyValue property={property} colors={colors} onTagClick={onTagClick} />
             </div>
           </div>
         ))}
@@ -1312,25 +1347,64 @@ function PropertyIcon({ kind }: { kind: FrontmatterProperty["kind"] }) {
 
 function PropertyValue({
   property,
+  colors,
   onTagClick,
 }: {
   property: FrontmatterProperty;
+  colors: Record<string, string>;
   onTagClick?: (tag: string) => void;
 }) {
   const { key, value } = property;
 
-  return <SemanticFrontmatterValue propertyKey={key} value={value} onTagClick={onTagClick} />;
+  return (
+    <SemanticFrontmatterValue
+      propertyKey={key}
+      value={value}
+      colors={colors}
+      onTagClick={onTagClick}
+    />
+  );
 }
 
 function SemanticFrontmatterValue({
   propertyKey,
   value,
+  colors,
   onTagClick,
 }: {
   propertyKey: string;
   value: unknown;
+  colors: Record<string, string>;
   onTagClick?: (tag: string) => void;
 }) {
+  const pair = labeledCount(value);
+  if (pair) {
+    return (
+      <MetaChip
+        chip={{ key: propertyKey, colorKey: pair.label, label: pair.label, count: pair.count }}
+        tone={resolveTagTone(pair.label, colors) ?? hslTone(pair.label)}
+        onClick={onTagClick}
+      />
+    );
+  }
+
+  const tuples = parseLabeledCounts(value);
+  if (tuples.length > 0 && (typeof value === "string" || Array.isArray(value))) {
+    return (
+      <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label={`${propertyKey} values`}>
+        {tuples.map((item, index) => (
+          <li key={`${propertyKey}-${item.label}-${index}`} className="shrink-0">
+            <MetaChip
+              chip={{ key: propertyKey, colorKey: item.label, label: item.label, count: item.count }}
+              tone={resolveTagTone(item.label, colors) ?? hslTone(item.label)}
+              onClick={onTagClick}
+            />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   if (Array.isArray(value)) {
     if (value.length === 0) return <span className="text-muted-foreground">[]</span>;
 
@@ -1338,7 +1412,7 @@ function SemanticFrontmatterValue({
       <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label={`${propertyKey} values`}>
         {value.map((item, index) => (
           <li key={`${propertyKey}-${index}`} className="min-w-0">
-            <SemanticFrontmatterValue propertyKey={propertyKey} value={item} onTagClick={onTagClick} />
+            <SemanticFrontmatterValue propertyKey={propertyKey} value={item} colors={colors} onTagClick={onTagClick} />
           </li>
         ))}
       </ul>
@@ -1355,7 +1429,7 @@ function SemanticFrontmatterValue({
           <div key={nestedKey} className="grid grid-cols-1 sm:grid-cols-[minmax(6rem,10rem)_1fr] gap-1 sm:gap-2">
             <dt className="min-w-0 truncate text-muted-foreground">{nestedKey}</dt>
             <dd className="m-0 min-w-0">
-              <SemanticFrontmatterValue propertyKey={nestedKey} value={nestedValue} onTagClick={onTagClick} />
+              <SemanticFrontmatterValue propertyKey={nestedKey} value={nestedValue} colors={colors} onTagClick={onTagClick} />
             </dd>
           </div>
         ))}
@@ -1506,11 +1580,12 @@ function statusColor(value: string): string {
   return "";
 }
 
-const HEADER_RENDERED_KEYS = new Set(["title", "status", "tags"]);
-
-function frontmatterProperties(meta: Record<string, unknown>): FrontmatterProperty[] {
+function frontmatterProperties(
+  meta: Record<string, unknown>,
+  hidden: Set<string>,
+): FrontmatterProperty[] {
   return Object.entries(meta)
-    .filter(([key, value]) => value != null && !HEADER_RENDERED_KEYS.has(key))
+    .filter(([key, value]) => value != null && !hidden.has(key))
     .map(([key, value]) => ({
       key,
       value,
