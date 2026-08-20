@@ -63,6 +63,14 @@ export type MockOverrides = {
   timelineEvents?: MockTimelineEvent[];
   uiConfig?: MockUIConfig;
   delay?: number;
+  recentPages?: { path: string; title: string; actor?: string; timestamp: string }[];
+  recentPagesError?: boolean;
+  publishPublished?: boolean;
+  clipError?: boolean;
+  analyticsError?: boolean;
+  analyticsEmpty?: boolean;
+  canvases?: { path: string; name: string }[];
+  canvasDoc?: { nodes: unknown[]; edges: unknown[] };
 };
 
 function resolveFileContent(
@@ -346,16 +354,30 @@ function createMockFetch(overrides: MockOverrides = {}) {
       }
 
       if (url.includes("/recent-pages")) {
-        return jsonResponse({
-          pages: [
-            {
-              path: "pages/use-sqlite-for-search.md",
-              title: "SQLite for Search",
-              actor: "alice",
-              timestamp: new Date(Date.now() - 3600000).toISOString(),
-            },
-          ],
-        });
+        if (overrides.recentPagesError) {
+          return jsonResponse({ error: "unavailable" }, 500);
+        }
+        const pages = overrides.recentPages ?? [
+          {
+            path: "pages/use-sqlite-for-search.md",
+            title: "SQLite for Search",
+            actor: "alice",
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+          },
+          {
+            path: "pages/frontmatter.md",
+            title: "Frontmatter Guide",
+            actor: "bob",
+            timestamp: new Date(Date.now() - 7200000).toISOString(),
+          },
+          {
+            path: "pages/wikilinks.md",
+            title: "Wiki Links",
+            actor: "charlie",
+            timestamp: new Date(Date.now() - 86400000).toISOString(),
+          },
+        ];
+        return jsonResponse({ pages });
       }
 
       if (url.includes("/ui-config")) {
@@ -380,8 +402,170 @@ function createMockFetch(overrides: MockOverrides = {}) {
         });
       }
 
-      if (url.includes("/theme") && method === "GET") {
-        return jsonResponse({});
+      if (url.includes("/theme")) {
+        return jsonResponse({ status: "ok" });
+      }
+
+      if (url.includes("/publish/status")) {
+        const pathMatch = url.match(/[?&]path=([^&]+)/);
+        const path = pathMatch ? decodeURIComponent(pathMatch[1]) : "";
+        const published = overrides.publishPublished ?? false;
+        return jsonResponse({
+          path,
+          published,
+          published_at: published ? new Date(Date.now() - 86400000).toISOString() : undefined,
+          public_url: published ? `/p/${encodeURIComponent(path)}` : undefined,
+          view_count: published ? 42 : 0,
+        });
+      }
+
+      if (url.includes("/publish/list")) {
+        return jsonResponse({
+          pages: overrides.publishPublished
+            ? [{ path: "pages/frontmatter.md", published_at: new Date().toISOString(), public_url: "/p/pages/frontmatter.md", view_count: 42 }]
+            : [],
+        });
+      }
+
+      if (url.includes("/unpublish") && method === "POST") {
+        return jsonResponse({ path: "pages/frontmatter.md", published: false });
+      }
+
+      if (url.includes("/publish") && method === "POST") {
+        return jsonResponse({
+          path: "pages/frontmatter.md",
+          published: true,
+          published_at: new Date().toISOString(),
+          public_url: "/p/pages/frontmatter.md",
+        });
+      }
+
+      if (url.includes("/clip") && method === "POST") {
+        if (overrides.clipError) {
+          return jsonResponse({ error: "Could not fetch URL" }, 502);
+        }
+        return jsonResponse({
+          path: "clips/example.md",
+          title: "Example clip",
+          excerpt: "Clipped page excerpt.",
+        });
+      }
+
+      if (url.includes("/canvases")) {
+        return jsonResponse({
+          canvases: overrides.canvases ?? [
+            { path: "canvases/architecture.canvas.json", name: "architecture" },
+            { path: "canvases/onboarding.canvas.json", name: "onboarding" },
+          ],
+        });
+      }
+
+      if (url.includes("/canvas")) {
+        if (method === "PUT") {
+          return jsonResponse({ status: "ok" });
+        }
+        return jsonResponse(overrides.canvasDoc ?? {
+          nodes: [
+            { id: "n1", type: "text", x: 40, y: 40, width: 200, height: 80, text: "Agents" },
+            { id: "n2", type: "file", x: 320, y: 40, width: 200, height: 80, file: "pages/frontmatter.md" },
+            { id: "n3", type: "link", x: 40, y: 200, width: 200, height: 80, url: "https://kiwifs.com" },
+            { id: "n4", type: "group", x: 20, y: 20, width: 540, height: 300, text: "Workspace" },
+          ],
+          edges: [
+            { id: "e1", fromNode: "n1", toNode: "n2", label: "writes" },
+          ],
+        });
+      }
+
+      if (url.includes("/analytics")) {
+        if (overrides.analyticsError) {
+          return jsonResponse({ error: "analytics unavailable" }, 500);
+        }
+        const empty = overrides.analyticsEmpty ?? false;
+        const now = Date.now();
+        const series = empty
+          ? []
+          : [
+              { timestamp: now - 86400000 * 6, count: 12 },
+              { timestamp: now - 86400000 * 5, count: 18 },
+              { timestamp: now - 86400000 * 4, count: 9 },
+              { timestamp: now - 86400000 * 3, count: 24 },
+              { timestamp: now - 86400000 * 2, count: 21 },
+              { timestamp: now - 86400000, count: 30 },
+              { timestamp: now, count: 16 },
+            ];
+        const topPages = empty
+          ? []
+          : [
+              { path: "pages/frontmatter.md", count: 120, first_seen: now - 86400000 * 10, last_seen: now },
+              { path: "pages/wikilinks.md", count: 84, first_seen: now - 86400000 * 8, last_seen: now - 3600000 },
+              { path: "pages/use-sqlite-for-search.md", count: 41, first_seen: now - 86400000 * 4, last_seen: now - 7200000 },
+            ];
+        const failed = empty
+          ? []
+          : [
+              { query: "vector search setup", search_type: "search", count: 6, first_seen: now - 86400000 * 3, last_seen: now },
+              { query: "airbyte connectors", search_type: "search", count: 3, first_seen: now - 86400000, last_seen: now },
+            ];
+
+        if (url.includes("/analytics/overview")) {
+          return jsonResponse({
+            period: "7d",
+            total_views: empty ? 0 : 1842,
+            views_delta_percent: empty ? 0 : 12.4,
+            total_searches: empty ? 0 : 310,
+            searches_delta_percent: empty ? 0 : -4.1,
+            search_success_rate: empty ? 0 : 0.86,
+            success_rate_delta_pp: empty ? 0 : 2.1,
+            unique_pages_viewed: empty ? 0 : 48,
+            unique_pages_delta_percent: empty ? 0 : 8.3,
+          });
+        }
+        if (url.includes("/analytics/views/v2") || url.includes("/analytics/views")) {
+          return jsonResponse({ period: "30d", time_series: series, top_pages: topPages });
+        }
+        if (url.includes("/analytics/searches")) {
+          return jsonResponse({
+            period: "30d",
+            search_success_rate: empty ? 0 : 0.86,
+            time_series: series,
+            top_failed: empty ? [] : [{ query: "vector search setup", search_type: "search", count: 6, had_results: 0 }],
+          });
+        }
+        if (url.includes("/analytics/trends")) {
+          return jsonResponse({
+            period: "7d",
+            trending: empty ? [] : [{ path: "pages/frontmatter.md", current_views: 40, previous_views: 18, delta_percent: 122 }],
+            declining: empty ? [] : [{ path: "pages/wikilinks.md", current_views: 8, previous_views: 22, delta_percent: -64 }],
+          });
+        }
+        if (url.includes("/analytics/content-gaps")) {
+          return jsonResponse({ results: failed });
+        }
+        if (url.includes("/analytics/sources")) {
+          return jsonResponse({
+            period: "7d",
+            sources: empty ? {} : { ui: 1200, mcp: 420, api: 222 },
+          });
+        }
+        return jsonResponse({
+          total_pages: empty ? 0 : 86,
+          total_words: empty ? 0 : 42000,
+          health: {
+            stale: { count: 0, paths: [] },
+            orphans: { count: 0, paths: [] },
+            broken_links: { count: 0, paths: [] },
+            empty: { count: 0, paths: [] },
+            no_frontmatter: { count: 0, paths: [] },
+          },
+          coverage: { pages_with_links: empty ? 0 : 60, pages_without_links: empty ? 0 : 26, avg_links_per_page: empty ? 0 : 2.4 },
+          top_updated: [],
+          engagement: {
+            total_views: empty ? 0 : 1842,
+            top_viewed: topPages,
+            failed_searches: failed,
+          },
+        });
       }
 
       if (url.includes("/custom.css") && method === "GET") {
