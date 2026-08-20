@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.62](https://github.com/kiwifs/kiwifs/compare/v0.19.61...v0.19.62) (2026-08-20)
+
+
+### Features
+
+* **ui:** add Storybook coverage for new screens and blocks ([#508](https://github.com/kiwifs/kiwifs/issues/508)) ([fef44b1](https://github.com/kiwifs/kiwifs/commit/fef44b1e30d35aaa36823e32cb922bb290a9e226))
+
 ## [0.19.61](https://github.com/kiwifs/kiwifs/compare/v0.19.60...v0.19.61) (2026-08-18)
 
 
