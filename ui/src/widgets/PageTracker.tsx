@@ -266,7 +266,7 @@ export function PageTracker({ onNavigate, stateName, source }: Props) {
   const [tree, setTree] = useState<TreeEntry | null>(null);
   const [progress, setProgress] = useState<ProgressState>({});
   const [metaByPath, setMetaByPath] = useState<Record<string, PageMeta>>({});
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<Record<string, TagFilter>>({});
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [loading, setLoading] = useState(true);
@@ -387,7 +387,7 @@ export function PageTracker({ onNavigate, stateName, source }: Props) {
   }, [config.stateName]);
 
   const toggleGroup = useCallback((folder: string) => {
-    setCollapsedGroups((prev) => {
+    setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(folder)) next.delete(folder);
       else next.add(folder);
@@ -530,7 +530,7 @@ export function PageTracker({ onNavigate, stateName, source }: Props) {
         )}
         {filteredGroups.map((group) => {
           const groupDone = group.pages.filter((p) => progress[p.path]?.done).length;
-          const isCollapsed = collapsedGroups.has(group.folder);
+          const isCollapsed = !expandedGroups.has(group.folder);
           const groupPct = group.pages.length > 0
             ? Math.round((groupDone / group.pages.length) * 100)
             : 0;
