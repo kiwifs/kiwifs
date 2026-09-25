@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.63](https://github.com/kiwifs/kiwifs/compare/v0.19.62...v0.19.63) (2026-09-25)
+
+
+### Bug Fixes
+
+* **ui:** start the progress tracker with sections collapsed ([#510](https://github.com/kiwifs/kiwifs/issues/510)) ([775e275](https://github.com/kiwifs/kiwifs/commit/775e2758166d49a767d4c6d4111531483a55f15a))
+
 ## [0.19.62](https://github.com/kiwifs/kiwifs/compare/v0.19.61...v0.19.62) (2026-08-20)
 
 
