@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.64](https://github.com/kiwifs/kiwifs/compare/v0.19.63...v0.19.64) (2026-09-29)
+
+
+### Features
+
+* add Kiwi Quiz callouts that keep answer keys out of search ([#512](https://github.com/kiwifs/kiwifs/issues/512)) ([a5b913a](https://github.com/kiwifs/kiwifs/commit/a5b913afc0ba4087da75369e6a0420219c2e4867))
+
 ## [0.19.63](https://github.com/kiwifs/kiwifs/compare/v0.19.62...v0.19.63) (2026-09-25)
 
 
