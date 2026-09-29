@@ -1643,3 +1643,34 @@ See [[pages/peer.md]] in the body.
 		t.Fatalf("contradicts backlink: %+v", bl)
 	}
 }
+
+func TestSearchQuizHidesAnswers(t *testing.T) {
+	s := newTestSQLite(t)
+	body := []byte("# Delivery\n\n> [!quiz single] What comes first in the interview?\n> - [x] Requirements xyzzy\n> - [ ] Drawing\n\nLater prose.\n")
+	if err := s.store.Write(ctxBG, "guide.md", body); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Index(ctxBG, "guide.md", body); err != nil {
+		t.Fatal(err)
+	}
+	hidden, err := s.Search(ctxBG, "xyzzy", 10, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hidden) != 0 {
+		t.Fatalf("answer leaked into search: %+v", hidden)
+	}
+	found, err := s.Search(ctxBG, "interview", 10, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("question not indexed: %+v", found)
+	}
+	if strings.Contains(found[0].Snippet, "xyzzy") {
+		t.Fatalf("snippet leaked answer: %s", found[0].Snippet)
+	}
+	if !strings.Contains(found[0].Snippet, "interview") {
+		t.Fatalf("snippet = %q", found[0].Snippet)
+	}
+}

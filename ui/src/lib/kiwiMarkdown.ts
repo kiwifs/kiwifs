@@ -23,6 +23,7 @@ import rehypeAutolinkHeadings from "rehype-autolink-headings";
 
 import { remarkMark, remarkInlineTags, rehypeCodeMeta } from "./remarkPlugins";
 import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "./remarkDirectives";
+import { remarkKiwiQuiz } from "./remarkQuiz";
 import { withDataAttributeAliasesForSchema } from "./sanitizeAttributes";
 import { remarkWikiLinks, type LinkResolver } from "./wikiLinks";
 
@@ -52,7 +53,7 @@ export const kiwiSanitizeSchema = {
     "*": [...(defaultSchema.attributes?.["*"] || []), "className", "style", "role", "id",
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
       "data-tag", "metastring",
-      "data-kiwi-directive", "data-label", "data-ratio", "data-cols",
+      "data-kiwi-directive", "data-quiz", "data-label", "data-ratio", "data-cols",
       "data-width", "data-pin", "data-caption",
       "data-kiwi-embed", "data-kiwi-target", "data-kiwi-width", "data-kiwi-pin",
       // Claim provenance, shared with the copy of this schema in
@@ -120,6 +121,7 @@ export const kiwiSanitizeSchema = {
  */
 export function kiwiRemarkPlugins(resolver?: LinkResolver, fromPath?: string): any[] {
   const plugins: any[] = [
+    remarkKiwiQuiz,
     remarkGfm,
     remarkMath,
     remarkMark,

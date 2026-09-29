@@ -4,7 +4,7 @@ import { type EditorView } from "@codemirror/view";
 import type { EditorSlashCommandConfig } from "@kw/lib/editorSlashCommands";
 import { filterSlashCommands, templateLoadErrorMessage } from "@kw/lib/editorSlashCommands";
 
-export type MarkdownSlashCommandName = "table" | "todo" | "code" | "quote" | "frontmatter";
+export type MarkdownSlashCommandName = "table" | "todo" | "code" | "quote" | "frontmatter" | "quiz";
 
 export type MarkdownSlashCommand = {
   name: MarkdownSlashCommandName;
@@ -56,6 +56,14 @@ export const markdownSlashCommands: MarkdownSlashCommand[] = [
     detail: "Insert a block quote",
     insert: "> ",
     cursorOffset: "> ".length,
+  },
+  {
+    name: "quiz",
+    icon: "❓",
+    label: "Quiz",
+    detail: "Insert a Kiwi Quiz",
+    insert: "> [!quiz single] \n> - [ ] \n> - [x] \n> - [ ] \n>\n> \n",
+    cursorOffset: "> [!quiz single] ".length,
   },
   {
     name: "frontmatter",

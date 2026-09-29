@@ -42,6 +42,9 @@ export function markdownEditorTheme({ dark }: { dark: boolean }) {
         "&.cm-focused": {
           outline: "1px solid hsl(var(--ring))",
         },
+        ".cm-kiwi-quiz": {
+          backgroundColor: dark ? "rgba(167, 139, 250, 0.12)" : "rgba(124, 58, 237, 0.08)",
+        },
       },
       { dark },
     ),

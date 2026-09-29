@@ -711,6 +711,45 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 			Handler: handleLint(b),
 		},
 		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_quiz",
+				mcp.WithDescription("Format a Kiwi Quiz callout, or check quizzes in markdown. Kinds: single (one answer), multi (select all), boolean, order, match, short. The callout keeps the answer in the page. Search indexes the question only."),
+				mcp.WithString("kind", mcp.Description("single, multi, boolean, order, match, or short. Required when formatting.")),
+				mcp.WithString("prompt", mcp.Description("Question shown to the reader.")),
+				mcp.WithString("id", mcp.Description("Stable id, stored as ^id on the tag line.")),
+				mcp.WithBoolean("shuffle", mcp.Description("Shuffle choice order. Order and match quizzes shuffle on their own.")),
+				mcp.WithString("explanation", mcp.Description("Shown after the answer is checked.")),
+				mcp.WithString("answer", mcp.Description("boolean: true or false. short: the accepted answer.")),
+				mcp.WithArray("accept", mcp.Description("Extra accepted answers for a short quiz."), mcp.WithStringItems()),
+				mcp.WithArray("items", mcp.Description("order: strings in the correct order."), mcp.WithStringItems()),
+				mcp.WithArray("options", mcp.Description("single, multi, or boolean options: {text, correct, feedback}."),
+					mcp.Items(map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"text":     map[string]any{"type": "string"},
+							"correct":  map[string]any{"type": "boolean"},
+							"feedback": map[string]any{"type": "string"},
+						},
+						"required": []string{"text"},
+					}),
+				),
+				mcp.WithArray("pairs", mcp.Description("match: {left, right} in the correct pairing."),
+					mcp.Items(map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"left":  map[string]any{"type": "string"},
+							"right": map[string]any{"type": "string"},
+						},
+						"required": []string{"left", "right"},
+					}),
+				),
+				mcp.WithString("content", mcp.Description("Markdown to check. Returns each quiz kind and question, plus problems. Does not repeat answer keys.")),
+				mcp.WithString("path", mcp.Description("Page to check, instead of content.")),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleQuiz(b),
+		},
+		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_clip",
 				mcp.WithDescription("Clip a web page into the knowledge base as a markdown page with extracted article content"),
 				mcp.WithString("url", mcp.Required(), mcp.Description("URL to clip")),
@@ -3137,6 +3176,111 @@ func handleLint(b Backend) server.ToolHandlerFunc {
 		out, _ := json.MarshalIndent(issues, "", "  ")
 		return mcp.NewToolResultText(string(out)), nil
 	}
+}
+
+func handleQuiz(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		content, _ := args["content"].(string)
+		if strings.TrimSpace(content) == "" {
+			path, err := optionalReadOnlyPathArg(args, "path")
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if path != "" {
+				raw, _, err := b.ReadFile(ctx, path)
+				if err != nil {
+					if isNotFound(err) {
+						return mcp.NewToolResultError("file not found: " + path), nil
+					}
+					return mcp.NewToolResultError(fmt.Sprintf("failed to read %s: %v", path, err)), nil
+				}
+				content = raw
+			}
+		}
+		if strings.TrimSpace(content) != "" {
+			reports := markdown.CheckQuizzes(content)
+			if len(reports) == 0 {
+				return mcp.NewToolResultText("No Kiwi Quiz callouts found"), nil
+			}
+			out, _ := json.MarshalIndent(reports, "", "  ")
+			return mcp.NewToolResultText(string(out)), nil
+		}
+
+		draft := markdown.QuizDraft{
+			Kind:        stringArg(args, "kind"),
+			ID:          stringArg(args, "id"),
+			Shuffle:     boolArg(args, "shuffle"),
+			Prompt:      stringArg(args, "prompt"),
+			Explanation: stringArg(args, "explanation"),
+			Answer:      stringArg(args, "answer"),
+			Accept:      stringList(args["accept"]),
+			Items:       stringList(args["items"]),
+			Options:     quizChoices(args["options"]),
+			Pairs:       quizPairs(args["pairs"]),
+		}
+		text, err := markdown.FormatQuiz(draft)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(text), nil
+	}
+}
+
+func boolArg(args map[string]any, key string) bool {
+	value, _ := args[key].(bool)
+	return value
+}
+
+func stringList(raw any) []string {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
+			out = append(out, text)
+		}
+	}
+	return out
+}
+
+func quizChoices(raw any) []markdown.QuizChoice {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]markdown.QuizChoice, 0, len(items))
+	for _, item := range items {
+		rec, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		text, _ := rec["text"].(string)
+		correct, _ := rec["correct"].(bool)
+		feedback, _ := rec["feedback"].(string)
+		out = append(out, markdown.QuizChoice{Text: text, Correct: correct, Feedback: feedback})
+	}
+	return out
+}
+
+func quizPairs(raw any) []markdown.QuizMatch {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]markdown.QuizMatch, 0, len(items))
+	for _, item := range items {
+		rec, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		left, _ := rec["left"].(string)
+		right, _ := rec["right"].(string)
+		out = append(out, markdown.QuizMatch{Left: left, Right: right})
+	}
+	return out
 }
 
 func handleClip(b Backend) server.ToolHandlerFunc {

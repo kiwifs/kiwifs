@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import GithubSlugger from "github-slugger";
 import { cn } from "@kw/lib/cn";
 import { Button } from "@kw/components/ui/button";
+import { useQuizSummary } from "./KiwiQuiz";
 
 type Heading = { id: string; text: string; depth: number };
 
@@ -84,11 +85,17 @@ export function KiwiToC({ markdown, containerRef }: Props) {
     return () => observer.disconnect();
   }, [markdown, headings, containerRef]);
 
-  if (headings.length === 0) return null;
+  const quiz = useQuizSummary();
+  if (headings.length === 0 && (!quiz || quiz.total === 0)) return null;
 
   return (
     <aside className="kiwi-toc-sidebar hidden xl:block w-64 shrink-0">
       <div className="sticky top-4 pr-2 text-sm">
+        {quiz && quiz.total > 0 && (
+          <div className="kiwi-quiz-score kiwi-quiz-score-toc" aria-live="polite">
+            {quiz.correct} / {quiz.total}
+          </div>
+        )}
         <div className="flex items-center justify-between mb-2 px-2">
           <span className="text-xs uppercase tracking-wider text-muted-foreground">
             On this page

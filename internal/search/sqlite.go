@@ -785,7 +785,7 @@ func (s *SQLite) PageViews(ctx context.Context, limit int, path string, since in
 }
 
 func generateSnippet(content []byte, queryTerms []string, maxLen int) string {
-	lines := strings.Split(string(content), "\n")
+	lines := strings.Split(markdown.RedactQuiz(string(content)), "\n")
 
 	// Score each line by number of distinct query terms it contains,
 	// skipping frontmatter, headings, and very short lines.
@@ -905,7 +905,7 @@ func (s *SQLite) Index(ctx context.Context, path string, content []byte) error {
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO docs(rowid, path, content) VALUES (?, ?, ?)`,
-		rowid, path, string(content)); err != nil {
+		rowid, path, markdown.RedactQuiz(string(content))); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -939,7 +939,7 @@ func (s *SQLite) IndexBatch(ctx context.Context, files []IndexEntry) error {
 		if _, err := pathStmt.ExecContext(ctx, rid, f.Path); err != nil {
 			return fmt.Errorf("index batch doc_path %s: %w", f.Path, err)
 		}
-		if _, err := docStmt.ExecContext(ctx, rid, f.Path, string(f.Content)); err != nil {
+		if _, err := docStmt.ExecContext(ctx, rid, f.Path, markdown.RedactQuiz(string(f.Content))); err != nil {
 			return fmt.Errorf("index batch doc %s: %w", f.Path, err)
 		}
 	}
@@ -2257,7 +2257,7 @@ func (s *SQLite) reindexLocked(ctx context.Context) (int, error) {
 			return nil
 		}
 		rid := pathRowID(e.Path)
-		if _, err := docStmt.ExecContext(ctx, rid, e.Path, string(content)); err != nil {
+		if _, err := docStmt.ExecContext(ctx, rid, e.Path, markdown.RedactQuiz(string(content))); err != nil {
 			return fmt.Errorf("insert doc %s: %w", e.Path, err)
 		}
 		if _, err := pathStmt.ExecContext(ctx, rid, e.Path); err != nil {
