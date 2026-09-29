@@ -17,9 +17,9 @@ import (
 
 // LintIssue is a single finding from LintMarkdown.
 type LintIssue struct {
-	Rule     string `json:"rule"`     // e.g. "table-column-mismatch"
-	Line     int    `json:"line"`     // 1-based, 0 = file-level
-	Column   int    `json:"column"`   // 1-based, 0 = N/A
+	Rule     string `json:"rule"`   // e.g. "table-column-mismatch"
+	Line     int    `json:"line"`   // 1-based, 0 = file-level
+	Column   int    `json:"column"` // 1-based, 0 = N/A
 	Message  string `json:"message"`
 	Severity string `json:"severity"` // "error" | "warning"
 }
@@ -95,6 +95,8 @@ func LintMarkdown(content []byte) []LintIssue {
 
 	// Rule 9: link-image-broken
 	issues = append(issues, lintBrokenImages(body, doc, fmLineOffset)...)
+
+	issues = append(issues, lintQuizCallouts(content)...)
 
 	if len(issues) == 0 {
 		return nil

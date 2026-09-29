@@ -40,6 +40,7 @@ import { KiwiPlayground } from "./KiwiPlayground";
 import { KiwiTabs } from "./KiwiTabs";
 import { KiwiColumns } from "./KiwiColumns";
 import { KiwiClaim } from "./KiwiClaim";
+import { KiwiQuiz, KiwiQuizProvider, KiwiQuizScore } from "./KiwiQuiz";
 import { ExcalidrawMarkdownPreview, isExcalidrawMarkdown } from "./ExcalidrawMarkdownPreview";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { KiwiWidget } from "./KiwiWidget";
@@ -72,6 +73,7 @@ import type { FigureWidth } from "@kw/lib/figureLayout";
 import { remarkMark, stripObsidianComments, remarkInlineTags, rehypeCodeMeta } from "@kw/lib/remarkPlugins";
 import remarkDirective from "remark-directive";
 import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "@kw/lib/remarkDirectives";
+import { remarkKiwiQuiz } from "@kw/lib/remarkQuiz";
 import { withDataAttributeAliasesForSchema } from "@kw/lib/sanitizeAttributes";
 type Props = {
   /** Page path in the KiwiFS tree. Used for API fetching in connected mode. */
@@ -141,7 +143,7 @@ const sanitizeSchema = {
     "*": [...(defaultSchema.attributes?.["*"] || []), "className", "style", "role", "id",
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
       "data-tag", "metastring",
-      "data-kiwi-directive", "data-label", "data-ratio", "data-cols",
+      "data-kiwi-directive", "data-quiz", "data-label", "data-ratio", "data-cols",
       "data-width", "data-pin", "data-caption",
       "data-kiwi-embed", "data-kiwi-target", "data-kiwi-width", "data-kiwi-pin",
       // This schema is a copy of kiwiSanitizeSchema in lib/kiwiMarkdown.ts.
@@ -829,8 +831,10 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
           </div>}
 
           {/* ── Content zone + ToC ── */}
+          <KiwiQuizProvider pagePath={path}>
           <div className="flex gap-6">
             <article className="min-w-0 flex-1">
+              <KiwiQuizScore />
               {isExcalidrawMarkdown(content, parsed.meta) ? (
                 <ErrorBoundary>
                   <ExcalidrawMarkdownPreview markdown={content} title={frontmatterTitle || titleize(path)} />
@@ -852,6 +856,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                 <ErrorBoundary>
                 <ReactMarkdown
                   remarkPlugins={[
+                    remarkKiwiQuiz,
                     remarkGfm,
                     remarkMath,
                     remarkMark,
@@ -1068,6 +1073,13 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                     div: ({ children, node: _node, ...rest }: any) => {
                       const props = rest as Record<string, unknown>;
                       const directive = props["data-kiwi-directive"];
+                      if (directive === "quiz") {
+                        return (
+                          <ErrorBoundary>
+                            <KiwiQuiz specAttr={String(props["data-quiz"] ?? props["dataQuiz"] ?? "")} />
+                          </ErrorBoundary>
+                        );
+                      }
                       if (directive === "tabs") {
                         return <KiwiTabs>{children}</KiwiTabs>;
                       }
@@ -1307,6 +1319,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                       <ErrorBoundary>
                         <ReactMarkdown
                           remarkPlugins={[
+                            remarkKiwiQuiz,
                             remarkGfm,
                             remarkMath,
                             remarkMark,
@@ -1345,6 +1358,13 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                               return <ShikiCode code={raw} lang={lang} title={title} />;
                             },
                             pre: ({ children }) => <>{children}</>,
+                            div: ({ children, node: _node, ...rest }: any) => {
+                              const props = rest as Record<string, unknown>;
+                              if (props["data-kiwi-directive"] === "quiz") {
+                                return <KiwiQuiz specAttr={String(props["data-quiz"] ?? props["dataQuiz"] ?? "")} />;
+                              }
+                              return <div {...(rest as any)}>{children}</div>;
+                            },
                           }}
                         >
                           {stripObsidianComments(localNote.replace(/^---[\s\S]*?---\n*/, ""))}
@@ -1384,6 +1404,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
             </article>
             {!isExcalidrawMarkdown(content, parsed.meta) && <KiwiToC markdown={parsed.body} containerRef={proseRef} />}
           </div>
+          </KiwiQuizProvider>
         </div>
       </div>
     </div>

@@ -44,5 +44,6 @@ describe("markdown slash commands", () => {
     expect(command("code").icon).toBe("💻");
     expect(command("quote").icon).toBe("💬");
     expect(command("frontmatter").icon).toBe("🧾");
+    expect(command("quiz").icon).toBe("❓");
   });
 });
