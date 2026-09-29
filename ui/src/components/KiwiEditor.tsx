@@ -15,6 +15,7 @@ import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import matter from "gray-matter";
 import { api, type TreeEntry } from "@kw/lib/api";
+import { resolveRawUrl } from "@kw/lib/rawUrl";
 import { Button } from "@kw/components/ui/button";
 import { Input } from "@kw/components/ui/input";
 import { Textarea } from "@kw/components/ui/textarea";
@@ -491,6 +492,7 @@ function EditorInner({
   const editorOptions = useMemo(
     () => ({
       uploadFile,
+      resolveFileUrl: resolveRawUrl,
       _tiptapOptions: {
         extensions: [] as any[],
       },

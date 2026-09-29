@@ -729,16 +729,20 @@ func assetMarkdown(path, name, ct string) string {
 // ServeRawFile godoc
 //
 //	@Summary		Serve raw file content
-//	@Description	Serves a raw file from the filesystem. Does not require authentication.
+//	@Description	Serves a raw file from the filesystem. When auth is enabled, requires an Authorization header, a signature from /api/kiwi/raw-sign (exp and sig query params), or a file that is already public (published page assets, branding).
 //	@Tags			files
 //	@Param			filepath	path		string	true	"Path to the raw file"
+//	@Param			exp			query		string	false	"Signature expiry (from /api/kiwi/raw-sign)"
+//	@Param			sig			query		string	false	"Signature (from /api/kiwi/raw-sign)"
 //	@Success		200			{string}	string	"Raw file bytes"
 //	@Failure		400			{object}	map[string]string
+//	@Failure		401			{object}	map[string]string
+//	@Failure		403			{object}	map[string]string
 //	@Failure		404			{object}	map[string]string
 //	@Failure		500			{object}	map[string]string
 //	@Router			/raw/{filepath} [get]
 func (h *Handlers) ServeRawFile(c echo.Context) error {
-	path := c.Param("*")
+	path := rawParamPath(c)
 	abs, err := storage.GuardPath(h.store.AbsPath(""), path)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -755,7 +759,11 @@ func (h *Handlers) ServeRawFile(c echo.Context) error {
 	if ct == "image/svg+xml" {
 		c.Response().Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
 	}
-	c.Response().Header().Set("Cache-Control", "public, max-age=3600, must-revalidate")
+	cacheScope := "public"
+	if private, _ := c.Get(rawPrivateCtxKey).(bool); private {
+		cacheScope = "private"
+	}
+	c.Response().Header().Set("Cache-Control", cacheScope+", max-age=3600, must-revalidate")
 	return c.Blob(http.StatusOK, ct, content)
 }
 
