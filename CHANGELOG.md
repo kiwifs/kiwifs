@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.65](https://github.com/kiwifs/kiwifs/compare/v0.19.64...v0.19.65) (2026-09-29)
+
+
+### Bug Fixes
+
+* **api:** require auth for /raw and llms.txt when auth is enabled ([#514](https://github.com/kiwifs/kiwifs/issues/514)) ([004d93c](https://github.com/kiwifs/kiwifs/commit/004d93cb6889a1868689ca5a871ac5e5fb402491))
+
 ## [0.19.64](https://github.com/kiwifs/kiwifs/compare/v0.19.63...v0.19.64) (2026-09-29)
 
 
