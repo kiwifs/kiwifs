@@ -494,6 +494,11 @@ export const api = {
     return "/raw/" + body.path;
   },
 
+  async signRawUrl(path: string): Promise<{ path: string; url: string; expires: string }> {
+    const qs = new URLSearchParams({ path });
+    return request(`${kiwiBase()}/raw-sign?${qs}`);
+  },
+
   async search(q: string, opts?: { modifiedAfter?: string }): Promise<SearchResponse> {
     const qs = new URLSearchParams({ q });
     if (opts?.modifiedAfter) qs.set("modifiedAfter", opts.modifiedAfter);

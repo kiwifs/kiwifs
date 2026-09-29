@@ -14,6 +14,7 @@ import { AlertTriangle, BookOpen, Bug, Calendar, CheckCircle2, CheckSquare, Chev
 import { api, type TreeEntry } from "@kw/lib/api";
 import { dirOf, isCanvasFile, isExcalidrawFile, normalizePath, titleize } from "@kw/lib/paths";
 import { readingTime } from "@kw/lib/readingTime";
+import { useRawUrl } from "@kw/lib/rawUrl";
 import { HostPageActions } from "./HostPageActions";
 import { KiwiBreadcrumb } from "./KiwiBreadcrumb";
 import { KiwiToC } from "./KiwiToC";
@@ -432,6 +433,71 @@ function classifyMedia(src: string): "image" | "video" | "audio" | "pdf" | "unkn
   if (AUDIO_EXTS.has(ext)) return "audio";
   if (ext === ".pdf") return "pdf";
   return "unknown";
+}
+
+function KiwiMedia({ src, alt, width, height, rest }: {
+  src: string;
+  alt?: string;
+  width?: string | number;
+  height?: string | number;
+  rest: Record<string, unknown>;
+}) {
+  const url = useRawUrl(src);
+  switch (classifyMedia(src)) {
+    case "video":
+      return (
+        <figure className="kiwi-media">
+          <video key={url} controls preload="metadata" className="max-w-full rounded-md">
+            {url && <source src={url} />}
+          </video>
+          {alt && <figcaption className="text-sm text-muted-foreground mt-1">{alt}</figcaption>}
+        </figure>
+      );
+    case "audio":
+      return (
+        <figure className="kiwi-media">
+          <audio key={url} controls preload="metadata" className="w-full">
+            {url && <source src={url} />}
+          </audio>
+          {alt && <figcaption className="text-sm text-muted-foreground mt-1">{alt}</figcaption>}
+        </figure>
+      );
+    case "pdf":
+      return (
+        <figure className="kiwi-media">
+          <iframe
+            src={url}
+            title={alt || "PDF"}
+            className="w-full rounded-md border border-border"
+            style={{ height: "600px" }}
+          />
+          {alt && <figcaption className="text-sm text-muted-foreground mt-1">{alt}</figcaption>}
+        </figure>
+      );
+    default: {
+      const imgEl = (
+        <Zoom wrapElement="span" classDialog="kiwi-zoom-dialog" zoomMargin={32}>
+          <img
+            src={url}
+            alt={alt}
+            {...(width ? { width: Number(width) } : {})}
+            {...(height ? { height: Number(height) } : {})}
+            {...(rest as any)}
+          />
+        </Zoom>
+      );
+      // Show caption from alt text for standalone images
+      if (alt?.trim()) {
+        return (
+          <figure className="kiwi-figure">
+            {imgEl}
+            <figcaption className="kiwi-figcaption">{alt}</figcaption>
+          </figure>
+        );
+      }
+      return imgEl;
+    }
+  }
 }
 
 export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, onEdit, onHistory, onRevealInTree, onToggleStar, isStarred, onTogglePin, isPinned, onDeleted, onDuplicated, onMoved, onTagClick, refreshKey, onPublishedChanged, onWikiLinkClick, onHeadingVisible: _onHeadingVisible, className }: Props) {
@@ -1148,62 +1214,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                           />
                         );
                       }
-                      const kind = classifyMedia(resolvedSrc);
-                      switch (kind) {
-                        case "video":
-                          return (
-                            <figure className="kiwi-media">
-                              <video controls preload="metadata" className="max-w-full rounded-md">
-                                <source src={resolvedSrc} />
-                              </video>
-                              {alt && <figcaption className="text-sm text-muted-foreground mt-1">{alt}</figcaption>}
-                            </figure>
-                          );
-                        case "audio":
-                          return (
-                            <figure className="kiwi-media">
-                              <audio controls preload="metadata" className="w-full">
-                                <source src={resolvedSrc} />
-                              </audio>
-                              {alt && <figcaption className="text-sm text-muted-foreground mt-1">{alt}</figcaption>}
-                            </figure>
-                          );
-                        case "pdf":
-                          return (
-                            <figure className="kiwi-media">
-                              <iframe
-                                src={resolvedSrc}
-                                title={alt || "PDF"}
-                                className="w-full rounded-md border border-border"
-                                style={{ height: "600px" }}
-                              />
-                              {alt && <figcaption className="text-sm text-muted-foreground mt-1">{alt}</figcaption>}
-                            </figure>
-                          );
-                        default: {
-                          const imgEl = (
-                            <Zoom wrapElement="span" classDialog="kiwi-zoom-dialog" zoomMargin={32}>
-                              <img
-                                src={resolvedSrc}
-                                alt={alt as string}
-                                {...(width ? { width: Number(width) } : {})}
-                                {...(height ? { height: Number(height) } : {})}
-                                {...(rest as any)}
-                              />
-                            </Zoom>
-                          );
-                          // Show caption from alt text for standalone images
-                          if (alt && typeof alt === "string" && alt.trim()) {
-                            return (
-                              <figure className="kiwi-figure">
-                                {imgEl}
-                                <figcaption className="kiwi-figcaption">{alt}</figcaption>
-                              </figure>
-                            );
-                          }
-                          return imgEl;
-                        }
-                      }
+                      return <KiwiMedia src={resolvedSrc} alt={typeof alt === "string" ? alt : undefined} width={width} height={height} rest={rest as Record<string, unknown>} />;
                     },
                     table: ({ children, node: _node, ...rest }) => (
                       <div className="kiwi-table-wrapper">

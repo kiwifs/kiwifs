@@ -152,7 +152,8 @@ type Server struct {
 
 	analyticsWriter *analytics.Writer
 
-	auth atomic.Pointer[liveAuth]
+	auth      atomic.Pointer[liveAuth]
+	rawSigner *rawSigner
 }
 
 type liveAuth struct {
@@ -189,6 +190,7 @@ func NewServer(
 		linkResolver: lr,
 		emitter:      em,
 		echo:         echo.New(),
+		rawSigner:    newRawSigner(),
 	}
 	for _, o := range opts {
 		o(s)
@@ -478,6 +480,8 @@ func (s *Server) setupRoutes() {
 		backupStatusFn:       s.backupStatusFn,
 		protocolHealth:       s.protocolHealth,
 		analyticsWriter:      s.analyticsWriter,
+		rawSigner:            s.rawSigner,
+		authEnforced:         s.authEnforced,
 	}
 	s.handlers = h
 	prev := s.pipe.OnInvalidate
@@ -512,9 +516,8 @@ func (s *Server) setupRoutes() {
 	})
 
 	api := s.echo.Group("/api/kiwi")
-	if mw := s.authMiddleware(); mw != nil {
-		api.Use(mw)
-	}
+	authMW := s.authMiddleware()
+	api.Use(authMW)
 	api.GET("/changes", h.Changes)
 	api.GET("/tree", h.Tree)
 	api.GET("/file", h.ReadFile)
@@ -701,7 +704,12 @@ func (s *Server) setupRoutes() {
 
 	s.echo.GET("/p/*", h.PublishedPage)
 
-	s.echo.GET("/raw/*", h.ServeRawFile)
+	api.GET("/raw-sign", h.SignRawURL)
+	rawMW := s.rawAccess(h, authMW)
+	s.echo.GET("/raw/*", h.ServeRawFile, rawMW)
+	// Space routing only rewrites /api/kiwi/{space}/..., so the UI uses this
+	// alias to reach assets in a non-primary space.
+	s.echo.GET("/api/kiwi/raw/*", h.ServeRawFile, rawMW)
 
 	// llms.txt (llmstxt.org) sits at the root, not under /api/kiwi: agents that
 	// have never heard of MCP look for it by convention at a fixed path.

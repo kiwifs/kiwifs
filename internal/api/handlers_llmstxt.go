@@ -9,6 +9,7 @@ import (
 
 	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/markdown"
+	"github.com/kiwifs/kiwifs/internal/rbac"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/labstack/echo/v4"
 )
@@ -118,10 +119,16 @@ type llmsPage struct {
 
 func (h *Handlers) llmsPages(c echo.Context) ([]llmsPage, error) {
 	ctx := c.Request().Context()
+	// These routes sit outside the auth group so crawlers can find them; once
+	// auth is on they may only reveal what /p/* would already serve.
+	publicOnly := h.authEnforced != nil && h.authEnforced() && (h.cfg == nil || h.cfg.Space.Visibility != "public")
 	var pages []llmsPage
 	err := storage.Walk(ctx, h.store, "", func(e storage.Entry) error {
 		raw, rerr := h.store.Read(ctx, e.Path)
 		if rerr != nil {
+			return nil
+		}
+		if publicOnly && rbac.PageVisibility(raw) != rbac.VisibilityPublic && !rbac.PagePublished(raw) {
 			return nil
 		}
 		page := llmsPage{Path: e.Path, Title: strings.TrimSuffix(path.Base(e.Path), ".md")}

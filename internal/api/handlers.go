@@ -73,6 +73,9 @@ type Handlers struct {
 
 	analyticsWriter *analytics.Writer
 
+	rawSigner    *rawSigner
+	authEnforced func() bool
+
 	graphCache atomic.Pointer[graphResponse]
 	graphGroup singleflight.Group
 

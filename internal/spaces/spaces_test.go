@@ -477,6 +477,58 @@ func TestHTTPListSpacesReturnsAll(t *testing.T) {
 	}
 }
 
+func TestSignedRawURLIsScopedToItsSpace(t *testing.T) {
+	cfg := minimalCfg()
+	cfg.Auth = config.AuthConfig{Type: "apikey", APIKey: "k"}
+	m := NewManager(nil)
+	alphaDir, betaDir := t.TempDir(), t.TempDir()
+	for dir, body := range map[string]string{alphaDir: "alpha-img", betaDir: "beta-img"} {
+		if err := os.WriteFile(filepath.Join(dir, "img.png"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.AddSpace("alpha", alphaDir, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.AddSpace("beta", betaDir, cfg); err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	h := m.Handler()
+
+	get := func(target, bearer string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		if bearer != "" {
+			req.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	rec := get("/api/kiwi/beta/raw-sign?path=img.png", "k")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("raw-sign = %d: %s", rec.Code, rec.Body.String())
+	}
+	var signed struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &signed); err != nil {
+		t.Fatal(err)
+	}
+	query := signed.URL[strings.Index(signed.URL, "?"):]
+
+	if rec := get("/api/kiwi/beta/raw/img.png"+query, ""); rec.Code != http.StatusOK || rec.Body.String() != "beta-img" {
+		t.Fatalf("beta signed GET = %d %q, want beta-img", rec.Code, rec.Body.String())
+	}
+	if rec := get("/api/kiwi/alpha/raw/img.png"+query, ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("beta signature used on alpha = %d %q, want 403", rec.Code, rec.Body.String())
+	}
+	if rec := get("/api/kiwi/beta/raw/img.png", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unsigned beta GET = %d, want 401", rec.Code)
+	}
+}
+
 func TestResolveRoot(t *testing.T) {
 	primary := "/data/problems"
 	if got := ResolveRoot(primary, "/abs/other"); got != "/abs/other" {
