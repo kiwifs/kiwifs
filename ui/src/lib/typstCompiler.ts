@@ -1,5 +1,9 @@
 import { markdown2typst } from "markdown2typst";
+import { version as compilerVersion } from "@myriaddreamin/typst-ts-web-compiler/package.json";
+import { version as rendererVersion } from "@myriaddreamin/typst-ts-renderer/package.json";
 
+// The wasm must match the installed JS bindings exactly; an unpinned URL
+// resolves to the latest release and breaks with mismatched bindgen symbols.
 const CDN = "https://cdn.jsdelivr.net/npm/@myriaddreamin";
 
 const PREAMBLE = `
@@ -20,11 +24,11 @@ async function ensureInit(): Promise<void> {
     $typst = mod.$typst;
     $typst.setCompilerInitOptions({
       getModule: () =>
-        `${CDN}/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm`,
+        `${CDN}/typst-ts-web-compiler@${compilerVersion}/pkg/typst_ts_web_compiler_bg.wasm`,
     });
     $typst.setRendererInitOptions({
       getModule: () =>
-        `${CDN}/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm`,
+        `${CDN}/typst-ts-renderer@${rendererVersion}/pkg/typst_ts_renderer_bg.wasm`,
     });
   })();
   return initPromise;
