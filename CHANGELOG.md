@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.66](https://github.com/kiwifs/kiwifs/compare/v0.19.65...v0.19.66) (2026-10-08)
+
+
+### Bug Fixes
+
+* **ui:** pin Typst wasm CDN URLs to installed package versions ([#516](https://github.com/kiwifs/kiwifs/issues/516)) ([c78c035](https://github.com/kiwifs/kiwifs/commit/c78c0352ab1e909221e4690a755ebda35cc48e2e))
+
 ## [0.19.65](https://github.com/kiwifs/kiwifs/compare/v0.19.64...v0.19.65) (2026-09-29)
 
 
