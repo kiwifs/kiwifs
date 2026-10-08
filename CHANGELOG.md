@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.67](https://github.com/kiwifs/kiwifs/compare/v0.19.66...v0.19.67) (2026-10-08)
+
+
+### Bug Fixes
+
+* **ui:** table layout, wiki-link classes, and wiki links in PDF export ([#518](https://github.com/kiwifs/kiwifs/issues/518)) ([0ecca1e](https://github.com/kiwifs/kiwifs/commit/0ecca1eea4a51e7eca261a334b7a37d4d06bc8b5))
+
 ## [0.19.66](https://github.com/kiwifs/kiwifs/compare/v0.19.65...v0.19.66) (2026-10-08)
 
 
