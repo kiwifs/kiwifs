@@ -75,7 +75,7 @@ import { remarkMark, stripObsidianComments, remarkInlineTags, rehypeCodeMeta } f
 import remarkDirective from "remark-directive";
 import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "@kw/lib/remarkDirectives";
 import { remarkKiwiQuiz } from "@kw/lib/remarkQuiz";
-import { withDataAttributeAliasesForSchema } from "@kw/lib/sanitizeAttributes";
+import { withDataAttributeAliasesForSchema, withUnrestrictedClassName } from "@kw/lib/sanitizeAttributes";
 type Props = {
   /** Page path in the KiwiFS tree. Used for API fetching in connected mode. */
   path?: string;
@@ -111,6 +111,14 @@ type Props = {
   /** Custom className for the outermost wrapper. */
   className?: string;
 };
+
+function ScrollableTable({ children, node: _node, ...rest }: any) {
+  return (
+    <div className="kiwi-table-wrapper">
+      <table {...rest}>{children}</table>
+    </div>
+  );
+}
 
 type FrontmatterProperty = {
   key: string;
@@ -153,7 +161,7 @@ const sanitizeSchema = {
       // bug, it is silently stripped metadata.
       ...CLAIM_DATA_ATTRIBUTES,
       "aria-describedby", "aria-label"],
-    a: [...(defaultSchema.attributes?.a || []), "className", "data-kiwi-target", "data-kiwi-missing"],
+    a: [...withUnrestrictedClassName(defaultSchema.attributes?.a || []), "data-kiwi-target", "data-kiwi-missing"],
     iframe: ["src", "title", "className", "style"],
     video: ["controls", "preload", "className"],
     audio: ["controls", "preload", "className"],
@@ -967,8 +975,8 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                                 });
                               }
                             }}
-                            className="wiki-link"
                             {...(rest as any)}
+                            className="wiki-link"
                           >
                             {children}
                           </a>
@@ -985,9 +993,9 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                               if (onWikiLinkClick) onWikiLinkClick(target);
                               else nav(`${target}.md`);
                             }}
+                            {...(rest as any)}
                             title={`Missing: ${target} — click to create`}
                             className="wiki-link-missing"
-                            {...(rest as any)}
                           >
                             {children}
                           </a>
@@ -1216,11 +1224,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                       }
                       return <KiwiMedia src={resolvedSrc} alt={typeof alt === "string" ? alt : undefined} width={width} height={height} rest={rest as Record<string, unknown>} />;
                     },
-                    table: ({ children, node: _node, ...rest }) => (
-                      <div className="kiwi-table-wrapper">
-                        <table {...(rest as any)}>{children}</table>
-                      </div>
-                    ),
+                    table: ScrollableTable,
                     p: ({ children, node: _node, ...rest }) => {
                       const arr = Array.isArray(children) ? children : [children];
                       const first = arr[0];
@@ -1369,6 +1373,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                               return <ShikiCode code={raw} lang={lang} title={title} />;
                             },
                             pre: ({ children }) => <>{children}</>,
+                            table: ScrollableTable,
                             div: ({ children, node: _node, ...rest }: any) => {
                               const props = rest as Record<string, unknown>;
                               if (props["data-kiwi-directive"] === "quiz") {

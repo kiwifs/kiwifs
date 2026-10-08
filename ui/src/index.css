@@ -1350,9 +1350,8 @@
 }
 
 /* ─── Comparison tables ─── */
-.kiwi-prose table th:first-child,
 .kiwi-prose table td:first-child {
-  @apply font-medium whitespace-nowrap;
+  @apply font-medium;
 }
 .kiwi-prose table tbody tr:hover {
   background: color-mix(in srgb, var(--primary) 6%, transparent);

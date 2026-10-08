@@ -24,7 +24,7 @@ import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import { remarkMark, remarkInlineTags, rehypeCodeMeta } from "./remarkPlugins";
 import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "./remarkDirectives";
 import { remarkKiwiQuiz } from "./remarkQuiz";
-import { withDataAttributeAliasesForSchema } from "./sanitizeAttributes";
+import { withDataAttributeAliasesForSchema, withUnrestrictedClassName } from "./sanitizeAttributes";
 import { remarkWikiLinks, type LinkResolver } from "./wikiLinks";
 
 export { stripObsidianComments } from "./remarkPlugins";
@@ -60,7 +60,7 @@ export const kiwiSanitizeSchema = {
       // components/KiwiPage.tsx so the two cannot disagree.
       ...CLAIM_DATA_ATTRIBUTES,
       "aria-describedby", "aria-label"],
-    a: [...(defaultSchema.attributes?.a || []), "className", "data-kiwi-target", "data-kiwi-missing"],
+    a: [...withUnrestrictedClassName(defaultSchema.attributes?.a || []), "data-kiwi-target", "data-kiwi-missing"],
     iframe: ["src", "title", "className", "style"],
     video: ["controls", "preload", "className"],
     audio: ["controls", "preload", "className"],
