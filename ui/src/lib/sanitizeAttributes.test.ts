@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import { kiwiSanitizeSchema } from "./kiwiMarkdown";
 import { remarkKiwiDirectives } from "./remarkDirectives";
-import { withDataAttributeAliases } from "./sanitizeAttributes";
+import { withDataAttributeAliases, withUnrestrictedClassName } from "./sanitizeAttributes";
 
 /**
  * The pipeline the app actually runs. rehype-raw sits between the directive
@@ -45,6 +45,17 @@ describe("withDataAttributeAliases", () => {
   it("passes through tuple entries used for fixed attribute values", () => {
     const entries = ["data-tag", ["className", "kiwi"]] as (string | [string, ...unknown[]])[];
     expect(withDataAttributeAliases(entries)).toEqual(["data-tag", ["className", "kiwi"], "dataTag"]);
+  });
+});
+
+describe("withUnrestrictedClassName", () => {
+  it("replaces a value-restricted className with an open one", () => {
+    expect(withUnrestrictedClassName(["href", ["className", "data-footnote-backref"]])).toEqual(["href", "className"]);
+  });
+
+  it("keeps link classes through the sanitizer", async () => {
+    const html = await render('<a href="#x" class="wiki-link wiki-link-missing">x</a>\n');
+    expect(html).toContain('class="wiki-link wiki-link-missing"');
   });
 });
 

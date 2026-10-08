@@ -37,6 +37,16 @@ export function withDataAttributeAliases<T extends AttributeEntry>(entries: T[])
   return [...entries, ...aliases];
 }
 
+/**
+ * Drop value-restricted `className` entries (e.g. the default schema's
+ * `["className", "data-footnote-backref"]` on `<a>`). hast-util-sanitize uses
+ * the first matching definition, so a restricted entry shadows a later plain
+ * `"className"` and strips every other class to `""`.
+ */
+export function withUnrestrictedClassName<T extends AttributeEntry>(entries: T[]): (T | string)[] {
+  return [...entries.filter((e) => !(Array.isArray(e) && e[0] === "className")), "className"];
+}
+
 /** Apply {@link withDataAttributeAliases} to every list in a sanitize schema. */
 export function withDataAttributeAliasesForSchema<T extends Record<string, AttributeEntry[] | undefined>>(
   attributes: T,

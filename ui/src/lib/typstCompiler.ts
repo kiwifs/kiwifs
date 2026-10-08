@@ -34,8 +34,24 @@ async function ensureInit(): Promise<void> {
   return initPromise;
 }
 
+const CODE_OR_WIKI_LINK =
+  /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)|(!?)\[\[([^\]|\\]+)(?:\\?\|([^\]]+))?\]\]/g;
+
+/**
+ * Replace `[[target|label]]` with its label (or target) so the PDF shows link
+ * text instead of raw wiki syntax. `![[embeds]]` are dropped. Code is left
+ * untouched; the optional `\` handles the escaped pipe used inside tables.
+ */
+export function wikiLinksToText(markdown: string): string {
+  return markdown.replace(CODE_OR_WIKI_LINK, (match, code, bang, target, label) => {
+    if (code) return match;
+    if (bang) return "";
+    return (label ?? target).trim();
+  });
+}
+
 export async function exportPdf(markdown: string): Promise<Uint8Array> {
   await ensureInit();
-  const typstSource = PREAMBLE + markdown2typst(markdown);
+  const typstSource = PREAMBLE + markdown2typst(wikiLinksToText(markdown));
   return $typst.pdf({ mainContent: typstSource });
 }
