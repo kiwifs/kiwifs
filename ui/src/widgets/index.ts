@@ -14,6 +14,8 @@ export {
   type PageIndexEntry,
   type PageIndexOptions,
 } from "./usePageIndex";
+export { useTweenedPositions, type Point } from "./useTweenedPositions";
+export { groupColor, GROUP_COLOR_COUNT, type KeyedValues } from "./colors";
 export { PlaybackControls } from "./PlaybackControls";
 export { ArrayView, type ArrayViewProps, type ArrayPointer } from "./ArrayView";
 export { PropertyBar, type PropertyBarProps, type PropertyEntry } from "./PropertyBar";

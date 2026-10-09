@@ -92,6 +92,30 @@ describe("layoutGraph", () => {
       );
       expect(positions.get("x")!.y).toBeGreaterThan(positions.get("a")!.y);
     });
+
+    it("puts edge targets on top with flow up, ignoring self-loops", () => {
+      // Parent pointers: 1 -> 0, 2 -> 0, 3 -> 2, and the root's self-loop.
+      const positions = layoutGraph(
+        ids(4),
+        [{ from: 0, to: 0 }, { from: 1, to: 0 }, { from: 2, to: 0 }, { from: 3, to: 2 }],
+        { ...layered, flow: "up" },
+      );
+      const y = (id: number) => positions.get(id)!.y;
+      expect(y(0)).toBeLessThan(y(1));
+      expect(y(1)).toEqual(y(2));
+      expect(y(2)).toBeLessThan(y(3));
+    });
+
+    it("orders a row to avoid crossings", () => {
+      // a -> d and b -> c would cross if c, d kept input order.
+      const positions = layoutGraph(
+        [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }],
+        [{ from: "a", to: "d" }, { from: "b", to: "c" }],
+        layered,
+      );
+      const x = (id: string) => positions.get(id)!.x;
+      expect(x("a") < x("b")).toBe(x("d") < x("c"));
+    });
   });
 
   it("centres a lone node", () => {

@@ -24,6 +24,7 @@ import { WidgetLayout, WidgetPanel } from "@kw/widgets/WidgetLayout";
 import { StateInspector } from "@kw/widgets/StateInspector";
 import { InputPanel } from "@kw/widgets/InputPanel";
 import { DateField } from "@kw/widgets/DateField";
+import { groupColor } from "@kw/widgets/colors";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 const liveScope = {
@@ -55,6 +56,7 @@ const liveScope = {
   StateInspector,
   InputPanel,
   DateField,
+  groupColor,
 };
 
 interface Props {

@@ -102,6 +102,13 @@
   --kw-widget-accent-amber: #b45309;
   --kw-widget-accent-blue: #2563eb;
   --kw-widget-accent-indigo: #4f46e5;
+  /* Group colors (components, partitions); kept clear of active and highlight */
+  --kw-widget-group-0: #2563eb;
+  --kw-widget-group-1: #b45309;
+  --kw-widget-group-2: #db2777;
+  --kw-widget-group-3: #0d9488;
+  --kw-widget-group-4: #ea580c;
+  --kw-widget-group-5: #4f46e5;
   /* StateInspector value types */
   --kw-widget-value-string: var(--kw-widget-highlight);
   --kw-widget-value-number: var(--kw-widget-accent-blue);
@@ -180,6 +187,12 @@
   --kw-widget-accent-amber: #f59e0b;
   --kw-widget-accent-blue: #60a5fa;
   --kw-widget-accent-indigo: #818cf8;
+  --kw-widget-group-0: #60a5fa;
+  --kw-widget-group-1: #f59e0b;
+  --kw-widget-group-2: #f472b6;
+  --kw-widget-group-3: #2dd4bf;
+  --kw-widget-group-4: #fb923c;
+  --kw-widget-group-5: #818cf8;
   --kw-widget-value-string: #34d399;
   --kw-widget-value-number: var(--kw-widget-accent-blue);
   --kw-widget-value-boolean: var(--kw-widget-accent-amber);
