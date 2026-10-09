@@ -6,7 +6,8 @@ import { usePlayback } from "@kw/widgets/usePlayback";
 import { useLocalState } from "@kw/widgets/useLocalState";
 import { usePageIndex } from "@kw/widgets/usePageIndex";
 import { PlaybackControls } from "@kw/widgets/PlaybackControls";
-import { ArrayView } from "@kw/widgets/ArrayView";
+import { ArrayView, ArrayStack } from "@kw/widgets/ArrayView";
+import { BitsView } from "@kw/widgets/BitsView";
 import { PropertyBar } from "@kw/widgets/PropertyBar";
 import { CodeHighlight } from "@kw/widgets/CodeHighlight";
 import { TreeView } from "@kw/widgets/TreeView";
@@ -27,6 +28,7 @@ import { DateField } from "@kw/widgets/DateField";
 import { groupColor } from "@kw/widgets/colors";
 import { SequenceView } from "@kw/widgets/SequenceView";
 import { ZoomPanel } from "@kw/widgets/ZoomPanel";
+import { WidgetRootContext } from "@kw/widgets/widgetRoot";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { MermaidView } from "./MermaidView";
 
@@ -41,6 +43,8 @@ const liveScope = {
   usePageIndex,
   PlaybackControls,
   ArrayView,
+  ArrayStack,
+  BitsView,
   PropertyBar,
   CodeHighlight,
   TreeView,
@@ -71,17 +75,20 @@ interface Props {
 }
 
 export function KiwiWidget({ name, source }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
   if (name === "live") {
     return (
       <ErrorBoundary fallback={<WidgetError name={name} source={source} />}>
-        <div className="kiwi-widget my-4 rounded-lg border border-border overflow-hidden">
-          <LiveProvider code={source} scope={liveScope} noInline>
-            <div className="p-4 bg-card">
-              <LivePreview />
-            </div>
-            <LiveError className="px-4 py-2 text-sm font-mono text-destructive bg-destructive/10 border-t border-border whitespace-pre-wrap" />
-          </LiveProvider>
-        </div>
+        <WidgetRootContext.Provider value={rootRef}>
+          <div ref={rootRef} className="kiwi-widget my-4 rounded-lg border border-border overflow-hidden">
+            <LiveProvider code={source} scope={liveScope} noInline>
+              <div className="p-4 bg-card">
+                <LivePreview />
+              </div>
+              <LiveError className="px-4 py-2 text-sm font-mono text-destructive bg-destructive/10 border-t border-border whitespace-pre-wrap" />
+            </LiveProvider>
+          </div>
+        </WidgetRootContext.Provider>
       </ErrorBoundary>
     );
   }

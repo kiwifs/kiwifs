@@ -1,36 +1,41 @@
 import { Button } from "@kw/components/ui/button";
 import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from "lucide-react";
+import type { PlaybackControlsBinding } from "./usePlayback";
 
 interface Props {
-  currentStep: number;
-  totalSteps: number;
-  playing: boolean;
-  speed: number;
-  onPlay: () => void;
-  onStop: () => void;
-  onStepForward: () => void;
-  onStepBack: () => void;
-  onReset: () => void;
-  onSeek: (step: number) => void;
+  /** The object returned by usePlayback; replaces every prop below. */
+  pb?: { controls: PlaybackControlsBinding };
+  currentStep?: number;
+  totalSteps?: number;
+  playing?: boolean;
+  speed?: number;
+  onPlay?: () => void;
+  onStop?: () => void;
+  onStepForward?: () => void;
+  onStepBack?: () => void;
+  onReset?: () => void;
+  onSeek?: (step: number) => void;
   /** Cycle speed (1x → 2x → 4x → 1x). If omitted, speed badge is hidden. */
   onCycleSpeed?: () => void;
   /** @deprecated Use onCycleSpeed instead. Kept for backward compat. */
   onSpeedChange?: (speed: number) => void;
 }
 
-export function PlaybackControls({
-  currentStep,
-  totalSteps,
-  playing,
-  speed,
-  onPlay,
-  onStop,
-  onStepForward,
-  onStepBack,
-  onReset,
-  onSeek,
-  onCycleSpeed,
-}: Props) {
+const noop = () => {};
+
+export function PlaybackControls({ pb, ...props }: Props) {
+  const b = { ...pb?.controls, ...stripUndefined(props) };
+  const currentStep = b.currentStep ?? 0;
+  const totalSteps = b.totalSteps ?? 1;
+  const playing = b.playing ?? false;
+  const speed = b.speed ?? 1;
+  const onPlay = b.onPlay ?? noop;
+  const onStop = b.onStop ?? noop;
+  const onStepForward = b.onStepForward ?? noop;
+  const onStepBack = b.onStepBack ?? noop;
+  const onReset = b.onReset ?? noop;
+  const onSeek = b.onSeek ?? noop;
+  const onCycleSpeed = b.onCycleSpeed;
   const atStart = currentStep === 0;
   const atEnd = currentStep >= totalSteps - 1;
 
@@ -99,4 +104,10 @@ export function PlaybackControls({
       </div>
     </div>
   );
+}
+
+function stripUndefined<T extends object>(o: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const [k, v] of Object.entries(o)) if (v !== undefined) (out as Record<string, unknown>)[k] = v;
+  return out;
 }

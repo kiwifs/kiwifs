@@ -1,4 +1,5 @@
 import { alpha } from "./colors";
+import { toSet, type Many } from "./sets";
 import { hasMath } from "./widgetLabel";
 import { WidgetText } from "./WidgetText";
 
@@ -13,8 +14,8 @@ export interface StackViewProps {
   values: (string | number)[];
   /** Index of the active item. Defaults to the top of the stack. */
   activeIndex?: number;
-  highlightIndices?: Set<number>;
-  dimIndices?: Set<number>;
+  highlightIndices?: Many<number>;
+  dimIndices?: Many<number>;
   /** Named markers beside individual items. */
   pointers?: StackPointer[];
   /** Where the top of the stack is drawn. Default "top". */
@@ -53,8 +54,8 @@ const DEFAULTS = {
 export function StackView({
   values,
   activeIndex,
-  highlightIndices,
-  dimIndices,
+  highlightIndices: highlightIndicesIn,
+  dimIndices: dimIndicesIn,
   pointers = [],
   growth = "top",
   topLabel = "top",
@@ -67,6 +68,8 @@ export function StackView({
   activeColor = DEFAULTS.activeColor,
   highlightColor = DEFAULTS.highlightColor,
 }: StackViewProps) {
+  const highlightIndices = toSet(highlightIndicesIn);
+  const dimIndices = toSet(dimIndicesIn);
   const active = activeIndex ?? values.length - 1;
 
   const ptrMap = new Map<number, StackPointer[]>();

@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { toSet, type Many } from "./sets";
 import { alpha, lookupKeyed, type KeyedValues } from "./colors";
 import { SvgLabel } from "./WidgetText";
 import {
@@ -48,20 +49,20 @@ export interface TreeViewProps {
    */
   nodeColors?: KeyedValues<string>;
   /** Node keys that are currently active / highlighted. */
-  activeNodes?: Set<string | number>;
+  activeNodes?: Many<string | number>;
   /** Node keys that are secondary-highlighted. */
-  highlightNodes?: Set<string | number>;
+  highlightNodes?: Many<string | number>;
   /** Node keys that are dimmed (already processed). */
-  dimNodes?: Set<string | number>;
+  dimNodes?: Many<string | number>;
   /** Node keys the search abandoned — drawn dashed and faded, with a dashed
    *  edge from the parent. */
-  prunedNodes?: Set<string | number>;
+  prunedNodes?: Many<string | number>;
   /**
    * Child keys (or `"parent->child"` strings) whose incoming edge should light
    * up. Edges whose two ends are both in `highlightNodes` also light, so a
    * highlighted root-to-leaf walk draws as a path without extra bookkeeping.
    */
-  highlightEdges?: Set<string | number>;
+  highlightEdges?: Many<string | number>;
   /**
    * Edges that no longer exist, drawn dashed and faded between the two nodes'
    * current positions — the old parent link after a rotation, re-parenting,
@@ -130,11 +131,11 @@ export function TreeView({
   parents,
   badges,
   nodeColors,
-  activeNodes,
-  highlightNodes,
-  dimNodes,
-  prunedNodes,
-  highlightEdges,
+  activeNodes: activeNodesIn,
+  highlightNodes: highlightNodesIn,
+  dimNodes: dimNodesIn,
+  prunedNodes: prunedNodesIn,
+  highlightEdges: highlightEdgesIn,
   ghostEdges = [],
   edgeDirection = "none",
   nextLinks = [],
@@ -148,6 +149,11 @@ export function TreeView({
   vGap = DEFAULTS.vGap,
   nodeSize = DEFAULTS.nodeSize,
 }: TreeViewProps) {
+  const activeNodes = toSet(activeNodesIn);
+  const highlightNodes = toSet(highlightNodesIn);
+  const dimNodes = toSet(dimNodesIn);
+  const prunedNodes = toSet(prunedNodesIn);
+  const highlightEdges = toSet(highlightEdgesIn);
   const uid = useId().replace(/:/g, "");
   const markerId = `kw-tree-next-${uid}`;
   const arrowId = `kw-tree-arrow-${uid}`;

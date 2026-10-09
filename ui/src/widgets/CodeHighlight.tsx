@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { getHighlighter, hasLang } from "@kw/lib/shiki";
 import { alpha } from "./colors";
+import { toSet, type Many } from "./sets";
 
 export interface CodeHighlightProps {
   /** The source code to display (plain text, one line per array entry or newline-separated string). */
   code: string | string[];
-  /** 0-based line index to highlight. -1 or undefined means no highlight. */
-  activeLine?: number;
+  /** 0-based line index (or indices) to highlight. -1 or undefined means no highlight. */
+  activeLine?: number | number[];
+  /** 0-based lines given a softer secondary highlight — the branch not taken, the lines a value came from. */
+  highlightLines?: Many<number>;
+  /** Values shown at the end of a line, keyed by 0-based line: `{ 2: "take = 12" }`. */
+  annotations?: Record<number, string | number | null | undefined> | (string | number | null | undefined)[];
   /** Optional label above the code block. */
   title?: string;
   /** Language for syntax highlighting (default: "python"). */
@@ -18,13 +23,25 @@ interface TokenSpan {
   color?: string;
 }
 
-export function CodeHighlight({ code, activeLine, title, lang = "python" }: CodeHighlightProps) {
+function useIsDark(): boolean {
+  const read = () => typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  const [dark, setDark] = useState(read);
+  useEffect(() => {
+    if (typeof MutationObserver === "undefined") return;
+    const mo = new MutationObserver(() => setDark(read()));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, []);
+  return dark;
+}
+
+export function CodeHighlight({ code, activeLine, highlightLines, annotations, title, lang = "python" }: CodeHighlightProps) {
   const lines = Array.isArray(code) ? code : code.split("\n");
   const source = lines.join("\n");
+  const activeSet = toSet(activeLine);
+  const softSet = toSet(highlightLines);
 
-  const isDark =
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("dark");
+  const isDark = useIsDark();
 
   const [tokenLines, setTokenLines] = useState<TokenSpan[][] | null>(null);
 
@@ -75,7 +92,9 @@ export function CodeHighlight({ code, activeLine, title, lang = "python" }: Code
       )}
       <div style={{ padding: "8px 0" }}>
         {lines.map((line, i) => {
-          const active = i === activeLine;
+          const active = activeSet.has(i);
+          const soft = !active && softSet.has(i);
+          const note = annotations?.[i as keyof typeof annotations] as string | number | null | undefined;
           const tokens = tokenLines?.[i];
           return (
             <div
@@ -83,10 +102,12 @@ export function CodeHighlight({ code, activeLine, title, lang = "python" }: Code
               style={{
                 display: "flex",
                 padding: "1px 12px",
-                background: active ? alpha("var(--kw-widget-active, #a78bfa)", 13) : "transparent",
+                background: active
+                  ? alpha("var(--kw-widget-active, #a78bfa)", 13)
+                  : soft ? alpha("var(--kw-widget-highlight, #22c55e)", 8) : "transparent",
                 borderLeft: active
                   ? "3px solid var(--kw-widget-active, #a78bfa)"
-                  : "3px solid transparent",
+                  : soft ? `3px solid ${alpha("var(--kw-widget-highlight, #22c55e)", 60)}` : "3px solid transparent",
                 transition: "all 0.15s ease",
               }}
             >
@@ -119,6 +140,18 @@ export function CodeHighlight({ code, activeLine, title, lang = "python" }: Code
                   </span>
                 )}
               </span>
+              {note != null && note !== "" && (
+                <span style={{
+                  marginLeft: "auto",
+                  paddingLeft: 16,
+                  color: active ? "var(--kw-widget-active, #a78bfa)" : "var(--kw-widget-dim, #94a3b8)",
+                  fontSize: "0.72rem",
+                  fontStyle: "italic",
+                  whiteSpace: "nowrap",
+                }}>
+                  {"← " + String(note)}
+                </span>
+              )}
             </div>
           );
         })}

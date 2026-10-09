@@ -1,11 +1,13 @@
 import { alpha } from "./colors";
+import { toSet, type Many } from "./sets";
+import { useChangedValues } from "./PropertyBar";
 import { WidgetText } from "./WidgetText";
 
 export interface StateInspectorProps {
   /** Key-value pairs to display. Values can be primitives, arrays, or objects. */
   state: Record<string, unknown>;
   /** Set of keys that changed on this step (will be highlighted). */
-  changedKeys?: Set<string>;
+  changedKeys?: Many<string>;
   /** Optional title above the inspector. */
   title?: string;
 }
@@ -41,7 +43,9 @@ function typeColor(val: unknown): string {
   return DEFAULTS.text;
 }
 
-export function StateInspector({ state, changedKeys, title }: StateInspectorProps) {
+export function StateInspector({ state, changedKeys: changedKeysIn, title }: StateInspectorProps) {
+  const auto = useChangedValues(Object.entries(state ?? {}), changedKeysIn == null);
+  const changedKeys = changedKeysIn == null ? auto : toSet(changedKeysIn);
   const entries = Object.entries(state);
 
   if (entries.length === 0) {
