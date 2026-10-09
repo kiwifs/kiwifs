@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.68](https://github.com/kiwifs/kiwifs/compare/v0.19.67...v0.19.68) (2026-10-09)
+
+
+### Features
+
+* **widgets:** animated forests, parent pointers, group colors, ghost edges ([#520](https://github.com/kiwifs/kiwifs/issues/520)) ([bb4df56](https://github.com/kiwifs/kiwifs/commit/bb4df56e8f6397c9824cf307d325cb550268f49d))
+
 ## [0.19.67](https://github.com/kiwifs/kiwifs/compare/v0.19.66...v0.19.67) (2026-10-08)
 
 
