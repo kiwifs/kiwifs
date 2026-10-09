@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.70](https://github.com/kiwifs/kiwifs/compare/v0.19.69...v0.19.70) (2026-10-09)
+
+
+### Features
+
+* **widgets:** DP-ready ArrayView/MatrixView, ArrayStack, BitsView, scoped playback keys ([#524](https://github.com/kiwifs/kiwifs/issues/524)) ([9d7f2e5](https://github.com/kiwifs/kiwifs/commit/9d7f2e5d4446978f42fd0a9ca775910018939526))
+
 ## [0.19.69](https://github.com/kiwifs/kiwifs/compare/v0.19.68...v0.19.69) (2026-10-09)
 
 
