@@ -21,8 +21,8 @@ const VARIANT_STYLES = {
     bg: "var(--kw-widget-highlight, #22c55e)",
   },
   warning: {
-    border: "#f59e0b",
-    bg: "#f59e0b",
+    border: "var(--kw-widget-warning, #f59e0b)",
+    bg: "var(--kw-widget-warning, #f59e0b)",
   },
 };
 
@@ -30,7 +30,7 @@ export function AnnotationBar({ text, label, variant = "info" }: AnnotationBarPr
   const style = VARIANT_STYLES[variant];
 
   return (
-    <div style={{
+    <div aria-live="polite" style={{
       borderLeft: `3px solid ${style.border}`,
       background: alpha(style.bg, 5),
       borderRadius: "0 6px 6px 0",

@@ -288,6 +288,8 @@ function matchCall(text: string, i: number): { end: number; math: string } | nul
 
 function matchPrimeCall(text: string, i: number): { end: number; math: string } | null {
   if (!atTokenStart(text, i)) return null;
+  // `s[1]='b'` quotes a character literal; the closing quote is not a prime.
+  if (i > 0 && /['‘"]/.test(text[i - 1]!)) return null;
   const m = /^([A-Za-z][A-Za-z0-9]*)(['′]+)/.exec(text.slice(i));
   if (!m) return null;
   let end = i + m[0].length;

@@ -1,4 +1,5 @@
 import { alpha } from "./colors";
+import { toSet, type Many } from "./sets";
 import { SvgLabel } from "./WidgetText";
 
 export interface BarPointer {
@@ -44,11 +45,11 @@ export interface BarViewProps {
    */
   valueLabels?: boolean | (string | number | null)[];
   /** Emphasized columns (primary color). */
-  activeIndices?: Set<number>;
+  activeIndices?: Many<number>;
   /** Secondary highlighted columns. */
-  highlightIndices?: Set<number>;
+  highlightIndices?: Many<number>;
   /** Dimmed / eliminated columns. */
-  dimIndices?: Set<number>;
+  dimIndices?: Many<number>;
   /** Per-bar fill override (takes priority below active/highlight/dim). */
   barColors?: (string | undefined | null)[];
   /** Named pointers shown above their column. */
@@ -107,9 +108,9 @@ export function BarView({
   values,
   labels,
   valueLabels = true,
-  activeIndices,
-  highlightIndices,
-  dimIndices,
+  activeIndices: activeIndicesIn,
+  highlightIndices: highlightIndicesIn,
+  dimIndices: dimIndicesIn,
   barColors,
   pointers = [],
   overlays = [],
@@ -123,6 +124,9 @@ export function BarView({
   highlightColor = DEFAULTS.highlightColor,
   overlayColor = DEFAULTS.overlay,
 }: BarViewProps) {
+  const activeIndices = toSet(activeIndicesIn);
+  const highlightIndices = toSet(highlightIndicesIn);
+  const dimIndices = toSet(dimIndicesIn);
   if (!values || values.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: 16, color: DEFAULTS.dimColor, fontSize: "0.8rem" }}>

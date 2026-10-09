@@ -6,7 +6,15 @@ export {
   clearWidgets,
 } from "./registry";
 export type { WidgetComponent, WidgetProps } from "./registry";
-export { usePlayback, type Step, type PlaybackReturn } from "./usePlayback";
+export {
+  usePlayback,
+  type Step,
+  type PlaybackReturn,
+  type PlaybackOptions,
+  type PlaybackControlsBinding,
+} from "./usePlayback";
+export { WidgetRootContext } from "./widgetRoot";
+export { toSet, toCellSet, cellKey, type Many, type ManyCells, type CellRef } from "./sets";
 export { useLocalState, type LocalStateResult } from "./useLocalState";
 export {
   usePageIndex,
@@ -17,11 +25,22 @@ export {
 export { useTweenedPositions, type Point } from "./useTweenedPositions";
 export { groupColor, GROUP_COLOR_COUNT, type KeyedValues } from "./colors";
 export { PlaybackControls } from "./PlaybackControls";
-export { ArrayView, type ArrayViewProps, type ArrayPointer } from "./ArrayView";
+export {
+  ArrayView,
+  ArrayStack,
+  type ArrayViewProps,
+  type ArrayStackProps,
+  type ArrayRowProps,
+  type ArrayPointer,
+  type ArrayArrow,
+  type ArrayRange,
+  type ArrayStackArrow,
+} from "./ArrayView";
+export { BitsView, type BitsViewProps } from "./BitsView";
 export { PropertyBar, type PropertyBarProps, type PropertyEntry } from "./PropertyBar";
 export { CodeHighlight, type CodeHighlightProps } from "./CodeHighlight";
 export { TreeView, type TreeViewProps, type TreeNode } from "./TreeView";
-export { MatrixView, type MatrixViewProps } from "./MatrixView";
+export { MatrixView, type MatrixViewProps, type MatrixArrow, type MatrixLayer } from "./MatrixView";
 export { WidgetText, SvgLabel, type WidgetTextProps, type SvgLabelProps } from "./WidgetText";
 export {
   headerGutterPx,

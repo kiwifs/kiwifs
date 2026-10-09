@@ -1,4 +1,5 @@
 import { alpha } from "./colors";
+import { toSet, type Many } from "./sets";
 import { SvgLabel } from "./WidgetText";
 
 export interface TimelineInterval {
@@ -27,9 +28,9 @@ export interface TimelineViewProps {
   sweepLabel?: string;
   /** Extra vertical marks: query points, event coordinates. */
   marks?: TimelineMark[];
-  activeIds?: Set<string | number>;
-  highlightIds?: Set<string | number>;
-  dimIds?: Set<string | number>;
+  activeIds?: Many<string | number>;
+  highlightIds?: Many<string | number>;
+  dimIds?: Many<string | number>;
   /** Axis range. Defaults to the extent of the data. */
   min?: number;
   max?: number;
@@ -93,9 +94,9 @@ export function TimelineView({
   sweep,
   sweepLabel,
   marks = [],
-  activeIds,
-  highlightIds,
-  dimIds,
+  activeIds: activeIdsIn,
+  highlightIds: highlightIdsIn,
+  dimIds: dimIdsIn,
   min,
   max,
   ticks,
@@ -105,6 +106,9 @@ export function TimelineView({
   activeColor = DEFAULTS.activeColor,
   highlightColor = DEFAULTS.highlightColor,
 }: TimelineViewProps) {
+  const activeIds = toSet(activeIdsIn);
+  const highlightIds = toSet(highlightIdsIn);
+  const dimIds = toSet(dimIdsIn);
   if (intervals.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: 16, color: DEFAULTS.dimColor, fontSize: "0.8rem" }}>

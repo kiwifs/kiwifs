@@ -1,4 +1,5 @@
 import { alpha } from "./colors";
+import { toSet, type Many } from "./sets";
 import { SvgLabel } from "./WidgetText";
 
 export interface LLNode {
@@ -32,9 +33,9 @@ export interface LinkedListViewProps {
   /** Index of the active node. */
   activeIndex?: number;
   /** Set of indices that are highlighted. */
-  highlightIndices?: Set<number>;
+  highlightIndices?: Many<number>;
   /** Set of indices that are dimmed. */
-  dimIndices?: Set<number>;
+  dimIndices?: Many<number>;
   /** Named pointers (slow, fast, curr, prev, etc.). */
   pointers?: LinkedListPointer[];
   /** Draw a backward arrow beside each forward one, for a doubly linked list. */
@@ -83,8 +84,8 @@ function arcDepth(span: number): number {
 export function LinkedListView({
   nodes,
   activeIndex,
-  highlightIndices,
-  dimIndices,
+  highlightIndices: highlightIndicesIn,
+  dimIndices: dimIndicesIn,
   pointers = [],
   doubly = false,
   edges = [],
@@ -93,6 +94,8 @@ export function LinkedListView({
   highlightColor = DEFAULTS.highlightColor,
   nodeWidth = DEFAULTS.nodeWidth,
 }: LinkedListViewProps) {
+  const highlightIndices = toSet(highlightIndicesIn);
+  const dimIndices = toSet(dimIndicesIn);
   if (nodes.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: 16, color: DEFAULTS.dimColor, fontSize: "0.8rem" }}>

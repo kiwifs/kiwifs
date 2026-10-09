@@ -3,7 +3,8 @@ import type { Meta, StoryObj } from "@storybook/react";
 
 import { ActivityGrid } from "./ActivityGrid";
 import { AnnotationBar } from "./AnnotationBar";
-import { ArrayView } from "./ArrayView";
+import { ArrayStack, ArrayView } from "./ArrayView";
+import { BitsView } from "./BitsView";
 import { BarView } from "./BarView";
 import { PlotView } from "./PlotView";
 import { CallStackView } from "./CallStackView";
@@ -242,6 +243,50 @@ function Gallery() {
             activeIndex={4}
             cellSize={36}
           />
+        </div>
+      </Section>
+
+      <Section name="ArrayView — DP tabulation (reads, arc, range, unfilled)">
+        <ArrayView
+          label="dp"
+          values={[0, 1, 2, 1, 1, 2, null, null]}
+          activeIndex={5}
+          readIndices={[4]}
+          arrows={[{ from: 4, to: 5, label: "+1 (coin 1)" }]}
+          ranges={[{ start: 1, end: 5, label: "w = 4", side: "bottom" }]}
+          pointers={[{ index: 5, label: "c" }, { index: 1, label: "c-w", side: "bottom" }]}
+        />
+      </Section>
+
+      <Section name="ArrayStack — state machine rows">
+        <ArrayStack
+          rows={[
+            { label: "price", values: [3, 1, 4, 1, 5], highlightIndices: [4] },
+            { label: "hold", values: [-3, -1, -1, 2, null], activeIndex: 4, readIndices: [3] },
+            { label: "free", values: [0, 0, 3, 3, null], readIndices: [3] },
+          ]}
+          arrows={[{ from: [2, 3], to: [1, 4], label: "buy" }]}
+          indexLabels={["d0", "d1", "d2", "d3", "d4"]}
+        />
+      </Section>
+
+      <Section name="BitsView">
+        <BitsView value={11} bits={5} label="mask" labels={["A", "B", "C", "D", "E"]} activeBits={[2]} readBits={[0]} />
+      </Section>
+
+      <Section name="MatrixView — reads, arrows, traceback, mask, heatmap, layers">
+        <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <MatrixView
+            values={[[0, 1, 2], [1, 0, 1], [2, 1, null]]}
+            activeCell={[2, 2]}
+            readCells={[[1, 1], [1, 2], [2, 1]]}
+            arrows={[{ from: [1, 1], to: [2, 2] }, { from: [1, 2], to: [2, 2] }, { from: [2, 1], to: [2, 2] }]}
+            rowHeaders={['""', "a", "b"]}
+            colHeaders={['""', "a", "c"]}
+          />
+          <MatrixView values={[[0, 1, 2], [1, 0, 1], [2, 1, 1]]} path={[[0, 0], [1, 1], [2, 2]]} sublabels={[[null, "←", "←"], ["↑", "↖", "←"], ["↑", "↑", "↖"]]} />
+          <MatrixView values={[[1, 3, 9], [null, 2, 5], [null, null, 4]]} mask="lower" heatmap activeCell="0,2" />
+          <MatrixView layers={[{ label: "k = 0", values: [[1, 2], [3, 4]] }, { label: "k = 1", values: [[5, Infinity], [true, false]] }]} />
         </div>
       </Section>
 

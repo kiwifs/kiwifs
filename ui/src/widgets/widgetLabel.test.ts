@@ -104,6 +104,7 @@ describe("labelSegments", () => {
       "no bytes crossed the phone's network, and we don't retry",
     );
     expect(kinds("then f' is positive")).toBe("then [f'] is positive");
+    expect(kinds("s[1]='b' != s[2]='c'")).toBe("s[1]='b' != s[2]='c'");
   });
 
   it("keeps markdown and code fences as text", () => {

@@ -649,6 +649,21 @@
   z-index: 1;
 }
 
+/* Widget cells: a value that changed since the previous step pulses once. */
+@keyframes kw-cell-flash {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--kw-widget-active, #a78bfa) 0%, transparent); }
+  30% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--kw-widget-active, #a78bfa) 55%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--kw-widget-active, #a78bfa) 0%, transparent); }
+}
+
+.kw-cell-flash {
+  animation: kw-cell-flash 0.7s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kw-cell-flash { animation: none; }
+}
+
 /* ─── Figures: widths, captions, sticky ─── */
 .kiwi-prose {
   overflow: visible;

@@ -1,10 +1,27 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { ensureRootTracking, keyBelongsTo, useWidgetRoot } from "./widgetRoot";
 
 export interface Step<T> {
   state: T;
   label: string;
   /** If true, auto-play pauses when reaching this step. */
   breakpoint?: boolean;
+  /** How long auto-play lingers on this step at 1x, in ms. */
+  duration?: number;
+}
+
+export interface PlaybackControlsBinding {
+  currentStep: number;
+  totalSteps: number;
+  playing: boolean;
+  speed: number;
+  onPlay: () => void;
+  onStop: () => void;
+  onStepForward: () => void;
+  onStepBack: () => void;
+  onReset: () => void;
+  onSeek: (step: number) => void;
+  onCycleSpeed: () => void;
 }
 
 export interface PlaybackReturn<T> {
@@ -22,53 +39,87 @@ export interface PlaybackReturn<T> {
   setCurrentStep: (step: number) => void;
   /** Cycle through speed presets: 1 → 2 → 4 → 1 */
   cycleSpeed: () => void;
+  /** Spread into PlaybackControls, or pass the whole object as `pb`. */
+  controls: PlaybackControlsBinding;
+}
+
+export interface PlaybackOptions {
+  /** Ref scoping keyboard events. Defaults to the enclosing widget. */
+  containerRef?: React.RefObject<HTMLElement | null>;
+  /** Default ms per step at 1x. Defaults to 600. */
+  interval?: number;
+  /** Start playing on mount. */
+  autoPlay?: boolean;
+  /** Wrap to the first step instead of stopping at the end. */
+  loop?: boolean;
 }
 
 const SPEED_PRESETS = [1, 2, 4];
+const EMPTY_STEP: Step<never> = { state: {} as never, label: "" };
+
+/**
+ * A step written flat as `{ ...fields, label }` keeps its fields on
+ * `current` and also exposes itself as `current.state`.
+ */
+function normalizeStep<T>(raw: unknown): Step<T> {
+  if (raw && typeof raw === "object" && "state" in raw) return raw as Step<T>;
+  if (raw && typeof raw === "object") {
+    const flat = raw as Record<string, unknown>;
+    return { ...flat, state: raw as T, label: flat.label == null ? "" : String(flat.label) } as Step<T>;
+  }
+  return { state: raw as T, label: "" };
+}
+
+function isRef(v: unknown): v is React.RefObject<HTMLElement | null> {
+  return typeof v === "object" && v !== null && "current" in v && Object.keys(v).length === 1;
+}
+
+function readHashStep(total: number): number {
+  if (typeof window === "undefined") return 0;
+  const match = window.location.hash.match(/[?&]step=(\d+)/);
+  if (!match) return 0;
+  const s = parseInt(match[1]!, 10);
+  return isNaN(s) ? 0 : Math.max(0, Math.min(s, total - 1));
+}
 
 export function usePlayback<T>(
   steps: Step<T>[],
-  /** Optional ref to the container element for scoping keyboard events. */
-  containerRef?: React.RefObject<HTMLElement | null>,
+  /** A container ref (legacy) or options. */
+  arg?: React.RefObject<HTMLElement | null> | PlaybackOptions,
 ): PlaybackReturn<T> {
-  const initialStep = (() => {
-    if (typeof window === "undefined") return 0;
-    const match = window.location.hash.match(/[?&]step=(\d+)/);
-    if (!match) return 0;
-    const s = parseInt(match[1], 10);
-    return isNaN(s) ? 0 : Math.min(s, steps.length - 1);
-  })();
+  const opts: PlaybackOptions = isRef(arg) ? { containerRef: arg } : (arg ?? {});
+  const { containerRef, interval = 600, autoPlay = false, loop = false } = opts;
+  const list = Array.isArray(steps) ? steps : [];
+  const total = Math.max(1, list.length);
+  const widgetRoot = useWidgetRoot();
 
-  const [currentStep, setCurrentStep] = useState(initialStep);
-  const [playing, setPlaying] = useState(false);
+  const [rawStep, setRawStep] = useState(() => readHashStep(list.length));
+  const [playing, setPlaying] = useState(autoPlay);
   const [speed, setSpeed] = useState(1);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentStep = Math.max(0, Math.min(rawStep, total - 1));
 
-  const stop = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setPlaying(false);
-  }, []);
-
+  const stop = useCallback(() => setPlaying(false), []);
   const play = useCallback(() => {
-    stop();
+    setRawStep((s) => (!loop && s >= total - 1 ? 0 : s));
     setPlaying(true);
-  }, [stop]);
+  }, [loop, total]);
 
   const stepForward = useCallback(() => {
-    setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
-  }, [steps.length]);
+    setRawStep((s) => Math.min(Math.min(s, total - 1) + 1, total - 1));
+  }, [total]);
 
   const stepBack = useCallback(() => {
-    setCurrentStep((s) => Math.max(s - 1, 0));
-  }, []);
+    setRawStep((s) => Math.max(Math.min(s, total - 1) - 1, 0));
+  }, [total]);
 
   const reset = useCallback(() => {
-    stop();
-    setCurrentStep(0);
-  }, [stop]);
+    setPlaying(false);
+    setRawStep(0);
+  }, []);
+
+  const seek = useCallback((s: number) => {
+    setRawStep(Math.max(0, Math.min(Math.round(s), total - 1)));
+  }, [total]);
 
   const cycleSpeed = useCallback(() => {
     setSpeed((prev) => {
@@ -77,55 +128,56 @@ export function usePlayback<T>(
     });
   }, []);
 
+  const current = useMemo(
+    () => (list.length ? normalizeStep<T>(list[currentStep]) : (EMPTY_STEP as Step<T>)),
+    [list, currentStep],
+  );
+
+  const listRef = useRef(list);
+  listRef.current = list;
+
   useEffect(() => {
     if (!playing) return;
-    const interval = 600 / speed;
-    timerRef.current = setInterval(() => {
-      setCurrentStep((s) => {
-        if (s >= steps.length - 1) {
-          stop();
-          return s;
-        }
-        const next = s + 1;
-        if (steps[next]?.breakpoint) {
-          stop();
-        }
-        return next;
-      });
-    }, interval);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [playing, speed, steps.length, stop, steps]);
+    if (currentStep >= total - 1 && !loop) {
+      setPlaying(false);
+      return;
+    }
+    const here = normalizeStep<T>(listRef.current[currentStep]);
+    const ms = (here.duration ?? interval) / speed;
+    const timer = setTimeout(() => {
+      const next = currentStep >= total - 1 ? 0 : currentStep + 1;
+      setRawStep(next);
+      if (normalizeStep(listRef.current[next]).breakpoint) setPlaying(false);
+    }, ms);
+    return () => clearTimeout(timer);
+  }, [playing, currentStep, total, loop, interval, speed]);
 
-  // Keyboard controls scoped to container (or document if no container)
   useEffect(() => {
-    const target = containerRef?.current ?? document;
+    ensureRootTracking();
+    const scoped = containerRef?.current;
+    const target: EventTarget = scoped ?? document;
     const handler = (e: Event) => {
       const ke = e as KeyboardEvent;
-      const tag = (ke.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (ke.defaultPrevented || ke.metaKey || ke.ctrlKey || ke.altKey) return;
+      const el = ke.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
+      if (!scoped && widgetRoot?.current && !keyBelongsTo(widgetRoot.current, ke.target)) return;
 
       switch (ke.key) {
         case " ":
+          if (tag === "BUTTON") return;
           ke.preventDefault();
-          setPlaying((p) => {
-            if (p) {
-              stop();
-              return false;
-            }
-            play();
-            return true;
-          });
+          setPlaying((p) => !p);
           break;
         case "ArrowRight":
           ke.preventDefault();
-          stop();
+          setPlaying(false);
           stepForward();
           break;
         case "ArrowLeft":
           ke.preventDefault();
-          stop();
+          setPlaying(false);
           stepBack();
           break;
         case "r":
@@ -136,12 +188,26 @@ export function usePlayback<T>(
     };
     target.addEventListener("keydown", handler);
     return () => target.removeEventListener("keydown", handler);
-  }, [containerRef, play, stop, stepForward, stepBack, reset]);
+  }, [containerRef, widgetRoot, stepForward, stepBack, reset]);
+
+  const controls = useMemo<PlaybackControlsBinding>(() => ({
+    currentStep,
+    totalSteps: total,
+    playing,
+    speed,
+    onPlay: play,
+    onStop: stop,
+    onStepForward: stepForward,
+    onStepBack: stepBack,
+    onReset: reset,
+    onSeek: seek,
+    onCycleSpeed: cycleSpeed,
+  }), [currentStep, total, playing, speed, play, stop, stepForward, stepBack, reset, seek, cycleSpeed]);
 
   return {
-    current: steps[currentStep]!,
+    current,
     currentStep,
-    totalSteps: steps.length,
+    totalSteps: total,
     playing,
     speed,
     play,
@@ -150,7 +216,8 @@ export function usePlayback<T>(
     stepBack,
     reset,
     setSpeed,
-    setCurrentStep,
+    setCurrentStep: seek,
     cycleSpeed,
+    controls,
   };
 }

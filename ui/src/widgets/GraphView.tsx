@@ -1,4 +1,5 @@
 import { useId, useMemo } from "react";
+import { toSet, type Many } from "./sets";
 
 import { alpha, lookupKeyed, type KeyedValues } from "./colors";
 import {
@@ -82,17 +83,17 @@ export interface GraphViewProps {
   nodes: GraphNode[];
   edges: GraphEdge[];
   /** Set of node IDs that are currently active. */
-  activeNodes?: Set<string | number>;
+  activeNodes?: Many<string | number>;
   /** Set of node IDs that are highlighted (secondary). */
-  highlightNodes?: Set<string | number>;
+  highlightNodes?: Many<string | number>;
   /** Set of node IDs that are dimmed. */
-  dimNodes?: Set<string | number>;
+  dimNodes?: Many<string | number>;
   /** Set of edge keys (`id` or `"from->to"`) for highlighted edges. */
-  activeEdges?: Set<string>;
+  activeEdges?: Many<string>;
   /** Set of edge keys for secondary-highlighted edges. */
-  highlightEdges?: Set<string>;
+  highlightEdges?: Many<string>;
   /** Set of edge keys for dimmed edges. */
-  dimEdges?: Set<string>;
+  dimEdges?: Many<string>;
   /** Whether edges are directed (arrows). Default false. */
   directed?: boolean;
   /** Node labels shown next to nodes (e.g. "src", "dst"). */
@@ -188,12 +189,12 @@ interface Rect {
 export function GraphView({
   nodes,
   edges,
-  activeNodes,
-  highlightNodes,
-  dimNodes,
-  activeEdges,
-  highlightEdges,
-  dimEdges,
+  activeNodes: activeNodesIn,
+  highlightNodes: highlightNodesIn,
+  dimNodes: dimNodesIn,
+  activeEdges: activeEdgesIn,
+  highlightEdges: highlightEdgesIn,
+  dimEdges: dimEdgesIn,
   directed = false,
   pointers = [],
   layout = "force",
@@ -217,6 +218,12 @@ export function GraphView({
   width,
   height,
 }: GraphViewProps) {
+  const activeNodes = toSet(activeNodesIn);
+  const highlightNodes = toSet(highlightNodesIn);
+  const dimNodes = toSet(dimNodesIn);
+  const activeEdges = toSet(activeEdgesIn);
+  const highlightEdges = toSet(highlightEdgesIn);
+  const dimEdges = toSet(dimEdgesIn);
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const canvasW = width ?? DEFAULTS.width;
   const canvasH = height ?? DEFAULTS.height;
