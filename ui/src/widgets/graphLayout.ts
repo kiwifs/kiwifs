@@ -29,12 +29,14 @@ interface Options {
   height: number;
   nodeSize: number;
   layout: GraphLayout;
+  /** Layered only: which way edges point down the page. Default "down". */
+  flow?: "down" | "up";
 }
 
 export function layoutGraph(
   nodes: LayoutInput[],
   edges: LayoutEdge[],
-  { width, height, nodeSize, layout }: Options,
+  { width, height, nodeSize, layout, flow = "down" }: Options,
 ): Map<string | number, Positioned> {
   const pad = nodeSize;
   const placed = new Map<string | number, Positioned>();
@@ -50,7 +52,7 @@ export function layoutGraph(
   const positions =
     layout === "circular" ? circular(nodes, width, height, pad)
     : layout === "grid" ? grid(nodes, width, height, pad)
-    : layout === "layered" ? layered(nodes, edges, width, height, pad)
+    : layout === "layered" ? layered(nodes, edges, width, height, pad, flow)
     : force(nodes, edges, width, height, pad);
 
   for (const n of free) {
@@ -100,24 +102,64 @@ function grid(
   return out;
 }
 
-/** BFS depth from the sources becomes the row. Best for DAGs and trees. */
+/**
+ * Reorder each row by the mean position of its neighbours in the row above
+ * (then below), a few sweeps each way. Fewer crossings, same determinism:
+ * ties keep their current order.
+ */
+function reduceCrossings(
+  rows: (string | number)[][],
+  neighbours: Map<string | number, (string | number)[]>,
+): void {
+  const indexIn = (row: (string | number)[]) =>
+    new Map<string | number, number>(row.map((id, i) => [id, i]));
+  const reorder = (r: number, ref: number) => {
+    const refIndex = indexIn(rows[ref]!);
+    const row = rows[r]!;
+    const scored = row.map((id, i) => {
+      const ns = (neighbours.get(id) ?? []).filter((n) => refIndex.has(n));
+      const bary = ns.length ? ns.reduce<number>((s, n) => s + refIndex.get(n)!, 0) / ns.length : i;
+      return { id, bary, i };
+    });
+    scored.sort((a, b) => a.bary - b.bary || a.i - b.i);
+    rows[r] = scored.map((s) => s.id);
+  };
+  for (let sweep = 0; sweep < 4; sweep++) {
+    for (let r = 1; r < rows.length; r++) reorder(r, r - 1);
+    for (let r = rows.length - 2; r >= 0; r--) reorder(r, r + 1);
+  }
+}
+
+/**
+ * BFS depth from the sources becomes the row. Best for DAGs and trees.
+ * `flow: "up"` ranks from edge targets instead, so child → parent pointers
+ * draw with the parent on top. Self-loops never affect the ranking.
+ */
 function layered(
   nodes: LayoutInput[],
-  edges: LayoutEdge[],
+  allEdges: LayoutEdge[],
   width: number,
   height: number,
   pad: number,
+  flow: "down" | "up",
 ): Map<string | number, Positioned> {
+  const edges = allEdges
+    .filter((e) => e.from !== e.to)
+    .map((e) => (flow === "up" ? { from: e.to, to: e.from } : e));
   const ids = nodes.map((n) => n.id);
   const adjacency = new Map<string | number, (string | number)[]>();
+  const neighbours = new Map<string | number, (string | number)[]>();
   const indegree = new Map<string | number, number>();
   for (const id of ids) {
     adjacency.set(id, []);
+    neighbours.set(id, []);
     indegree.set(id, 0);
   }
   for (const e of edges) {
     if (!adjacency.has(e.from) || !adjacency.has(e.to)) continue;
     adjacency.get(e.from)!.push(e.to);
+    neighbours.get(e.from)!.push(e.to);
+    neighbours.get(e.to)!.push(e.from);
     indegree.set(e.to, (indegree.get(e.to) ?? 0) + 1);
   }
 
@@ -148,10 +190,12 @@ function layered(
   }
 
   const depths = [...byLevel.keys()].sort((a, b) => a - b);
+  const rows = depths.map((d) => byLevel.get(d)!);
+  reduceCrossings(rows, neighbours);
   const stepY = depths.length > 1 ? (height - pad * 2) / (depths.length - 1) : 0;
   const out = new Map<string | number, Positioned>();
-  depths.forEach((depth, row) => {
-    const rowIds = byLevel.get(depth)!;
+  depths.forEach((_depth, row) => {
+    const rowIds = rows[row]!;
     const stepX = rowIds.length > 1 ? (width - pad * 2) / (rowIds.length - 1) : 0;
     rowIds.forEach((id, i) => {
       out.set(id, {

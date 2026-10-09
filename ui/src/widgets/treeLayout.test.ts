@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flattenTree, layoutTree, type LayoutInput } from "./treeLayout";
+import { flattenTree, forestFromParents, layoutTree, type LayoutInput } from "./treeLayout";
 
 const OPTS = { hGap: 24, vGap: 56, nodeSize: 40, showNulls: true };
 const COMPACT = { ...OPTS, showNulls: false };
@@ -74,5 +74,33 @@ describe("layoutTree binary sides", () => {
     expect([...map.values()].filter((n) => n.ghost)).toHaveLength(0);
     expect(map.get("a")!.x).toBeLessThan(map.get("root")!.x);
     expect(map.get("b")!.x).toBeGreaterThan(map.get("root")!.x);
+  });
+});
+
+describe("forestFromParents", () => {
+  const shape = (n: LayoutInput): unknown => ({ v: n.value, c: (n.children ?? []).map(shape) });
+
+  it("builds one tree per root, in key order", () => {
+    const roots = forestFromParents([0, 0, 0, 2, 4, 4]);
+    expect(roots.map(shape)).toEqual([
+      { v: 0, c: [{ v: 1, c: [] }, { v: 2, c: [{ v: 3, c: [] }] }] },
+      { v: 4, c: [{ v: 5, c: [] }] },
+    ]);
+  });
+
+  it("treats null, -1 and unknown parents as roots", () => {
+    const roots = forestFromParents([null, -1, 9]);
+    expect(roots.map((r) => r.value)).toEqual([0, 1, 2]);
+  });
+
+  it("accepts an object of parent links", () => {
+    const roots = forestFromParents({ a: "a", b: "a", c: "b" });
+    expect(roots.map(shape)).toEqual([{ v: "a", c: [{ v: "b", c: [{ v: "c", c: [] }] }] }]);
+  });
+
+  it("breaks a rootless cycle instead of looping", () => {
+    const roots = forestFromParents([1, 0]);
+    expect(roots).toHaveLength(1);
+    expect(flattenTree(layoutTree(roots[0], 0, OPTS)!)).toHaveLength(2);
   });
 });

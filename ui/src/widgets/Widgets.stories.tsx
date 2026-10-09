@@ -20,6 +20,7 @@ import { StateInspector } from "./StateInspector";
 import { TimelineView } from "./TimelineView";
 import { TreeView } from "./TreeView";
 import { WidgetLayout, WidgetPanel } from "./WidgetLayout";
+import { groupColor } from "./colors";
 
 /**
  * Every widget rendered together so the whole library can be reviewed in one
@@ -314,6 +315,19 @@ function Gallery() {
         <TreeView roots={FOREST} activeNodes={new Set([0, 1])} nodeSize={32} />
       </Section>
 
+      <Section name="TreeView — parent pointers, group colors, ghost edge">
+        <TreeView
+          parents={[0, 0, 0, 0, 4, 4]}
+          badges={[4, 1, 1, 1, 2, 1]}
+          nodeColors={[0, 0, 0, 0, 1, 1].map(groupColor)}
+          edgeDirection="up"
+          ghostEdges={[{ from: 2, to: 3 }]}
+          highlightNodes={new Set([3, 0])}
+          highlightEdges={new Set(["0->3"])}
+          nodeSize={32}
+        />
+        <ArrayView values={[0, 0, 0, 0, 4, 4]} cellColors={[0, 0, 0, 0, 1, 1].map(groupColor)} cellSize={36} />
+      </Section>
       <Section name="TreeView — one-sided binary (right stick + left stick)">
         <div style={{ display: "flex", gap: 32, flexWrap: "wrap", justifyContent: "center" }}>
           <TreeView

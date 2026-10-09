@@ -1,5 +1,6 @@
-import { alpha } from "./colors";
+import { alpha, lookupKeyed, type KeyedValues } from "./colors";
 import { layoutGraph, type GraphLayout } from "./graphLayout";
+import { useTweenedPositions, type Point } from "./useTweenedPositions";
 import { SvgLabel } from "./WidgetText";
 
 export interface GraphNode {
@@ -41,6 +42,18 @@ export interface GraphViewProps {
    * dense graphs, and "grid" for grid-shaped ones.
    */
   layout?: GraphLayout;
+  /**
+   * Layered layout only: `"down"` (default) puts edge sources on top; `"up"`
+   * puts edge targets on top, so child → parent pointers draw parent-first.
+   */
+  flow?: "down" | "up";
+  /**
+   * Base color per node id — e.g. one {@link groupColor} per component.
+   * Active and highlight styling still take precedence.
+   */
+  nodeColors?: KeyedValues<string>;
+  /** Glide nodes to new positions when they move between steps. Default true. */
+  animate?: boolean;
   activeColor?: string;
   highlightColor?: string;
   nodeSize?: number;
@@ -72,12 +85,23 @@ export function GraphView({
   directed = false,
   pointers = [],
   layout = "force",
+  flow = "down",
+  nodeColors,
+  animate = true,
   activeColor = DEFAULTS.activeColor,
   highlightColor = DEFAULTS.highlightColor,
   nodeSize = DEFAULTS.nodeSize,
   width = DEFAULTS.width,
   height = DEFAULTS.height,
 }: GraphViewProps) {
+  const positions = layoutGraph(nodes, edges, { width, height, nodeSize, layout, flow });
+  const target = new Map<string | number, Point>();
+  for (const n of nodes) {
+    const p = positions.get(n.id);
+    target.set(n.id, { x: p?.x ?? width / 2, y: p?.y ?? height / 2 });
+  }
+  const tweened = useTweenedPositions(target, { enabled: animate });
+
   if (nodes.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: 16, color: DEFAULTS.dimColor, fontSize: "0.8rem" }}>
@@ -86,11 +110,7 @@ export function GraphView({
     );
   }
 
-  const positions = layoutGraph(nodes, edges, { width, height, nodeSize, layout });
-  const placed = nodes.map((n) => {
-    const p = positions.get(n.id);
-    return { ...n, x: p?.x ?? width / 2, y: p?.y ?? height / 2 };
-  });
+  const placed = nodes.map((n) => ({ ...n, ...tweened.get(n.id)! }));
 
   const nodeMap = new Map(placed.map((n) => [n.id, n]));
   const r = nodeSize / 2;
@@ -146,10 +166,11 @@ export function GraphView({
 
           // A self-loop has no direction to draw along — arc it above the node
           // instead. Union-find roots point at themselves this way.
+          const key = `${edgeKey}#${i}`;
           if (e.from === e.to) {
             const loop = r * 0.9;
             return (
-              <g key={i}>
+              <g key={key}>
                 <path
                   d={`M ${from.x - loop * 0.6} ${from.y - r * 0.8}
                       A ${loop} ${loop} 0 1 1 ${from.x + loop * 0.6} ${from.y - r * 0.8}`}
@@ -188,7 +209,7 @@ export function GraphView({
           const my = (from.y + to.y) / 2;
 
           return (
-            <g key={i}>
+            <g key={key}>
               <line
                 x1={x1} y1={y1} x2={x2} y2={y2}
                 stroke={strokeColor}
@@ -229,9 +250,16 @@ export function GraphView({
           } else if (isHighlight) {
             fill = alpha(highlightColor, 18);
             stroke = highlightColor;
-          } else if (isDim) {
-            stroke = DEFAULTS.dimColor;
-            opacity = 0.5;
+          } else {
+            const groupColor = lookupKeyed(nodeColors, n.id);
+            if (groupColor) {
+              fill = alpha(groupColor, 18);
+              stroke = groupColor;
+            }
+            if (isDim) {
+              if (!groupColor) stroke = DEFAULTS.dimColor;
+              opacity = 0.5;
+            }
           }
 
           return (

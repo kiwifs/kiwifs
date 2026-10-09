@@ -155,6 +155,53 @@ export function layoutTree(
   return { ...base, x: 0, children };
 }
 
+type ParentLinks =
+  | readonly (string | number | null | undefined)[]
+  | Readonly<Record<string, string | number | null | undefined>>;
+
+/**
+ * Build a forest from parent pointers: `parents[i]` is the parent of node `i`
+ * (array) or `parents[key]` the parent of `key` (object). A node is a root when
+ * its parent is itself, missing, `null`, `-1`, or unknown. Roots and children
+ * keep key order, so the picture stays stable as links change. A cycle that
+ * never reaches a root is broken at its first key, which becomes a root.
+ */
+export function forestFromParents(parents: ParentLinks): LayoutInput[] {
+  const isArray = Array.isArray(parents);
+  const keys: (string | number)[] = isArray
+    ? (parents as readonly unknown[]).map((_, i) => i)
+    : Object.keys(parents);
+  const byId = new Map<string, string | number>(keys.map((k) => [String(k), k]));
+  const parentOf = (k: string | number): string | number | null => {
+    const p = isArray
+      ? (parents as readonly (string | number | null | undefined)[])[k as number]
+      : (parents as Record<string, string | number | null | undefined>)[String(k)];
+    if (p == null || p === -1 || String(p) === String(k)) return null;
+    return byId.get(String(p)) ?? null;
+  };
+
+  const children = new Map<string, (string | number)[]>();
+  for (const k of keys) {
+    const p = parentOf(k);
+    if (p === null) continue;
+    const list = children.get(String(p)) ?? [];
+    list.push(k);
+    children.set(String(p), list);
+  }
+
+  const visited = new Set<string>();
+  const build = (k: string | number): LayoutInput => {
+    visited.add(String(k));
+    const kids = (children.get(String(k)) ?? []).filter((c) => !visited.has(String(c)));
+    return { value: k, id: k, children: kids.map(build) };
+  };
+
+  const roots: LayoutInput[] = [];
+  for (const k of keys) if (parentOf(k) === null) roots.push(build(k));
+  for (const k of keys) if (!visited.has(String(k))) roots.push(build(k));
+  return roots;
+}
+
 /** Lay each tree out independently, then push it clear of the previous one. */
 export function layoutForest(
   roots: (LayoutInput | null | undefined)[],

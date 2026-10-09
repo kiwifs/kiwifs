@@ -25,6 +25,11 @@ export interface ArrayViewProps {
   highlightIndices?: Set<number>;
   /** Set of indices that are "done" / checked / greyed out. */
   dimIndices?: Set<number>;
+  /**
+   * Base color per cell — e.g. one `groupColor` per component, matching the
+   * same nodes in a TreeView or GraphView. Active and highlight still win.
+   */
+  cellColors?: (string | null | undefined)[];
   /** Named pointers shown above or below cells. */
   pointers?: ArrayPointer[];
   /** Primary highlight color. Defaults to purple. */
@@ -59,6 +64,7 @@ function getCellStyle(
   dimIndices: Set<number> | undefined,
   activeColor: string,
   highlightColor: string,
+  groupColor: string | null | undefined,
 ): CellStyle {
   const isActive = index === activeIndex;
   const isHighlighted = highlightIndices?.has(index) ?? false;
@@ -73,6 +79,12 @@ function getCellStyle(
     border: highlightColor,
     background: alpha(highlightColor, 18),
     color: DEFAULTS.text,
+  };
+  if (groupColor) return {
+    border: groupColor,
+    background: alpha(groupColor, 18),
+    color: DEFAULTS.text,
+    opacity: isDim ? 0.55 : undefined,
   };
   if (isDim) return {
     border: DEFAULTS.dimColor,
@@ -93,6 +105,7 @@ export function ArrayView({
   activeIndex,
   highlightIndices,
   dimIndices,
+  cellColors,
   pointers = [],
   activeColor = DEFAULTS.activeColor,
   highlightColor = DEFAULTS.highlightColor,
@@ -113,7 +126,7 @@ export function ArrayView({
         <div key={`pad-${i}`} style={{ width: cellSize, flexShrink: 0 }} aria-hidden />
       ))}
       {values.map((val, i) => {
-        const style = getCellStyle(i, activeIndex, highlightIndices, dimIndices, activeColor, highlightColor);
+        const style = getCellStyle(i, activeIndex, highlightIndices, dimIndices, activeColor, highlightColor, cellColors?.[i]);
         const ptrs = pointersByIndex.get(i);
 
         const sub = sublabels?.[i];
