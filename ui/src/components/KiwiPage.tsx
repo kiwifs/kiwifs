@@ -25,6 +25,7 @@ import { PageActions } from "./PageActions";
 import { PublishButton } from "./PublishButton";
 import { ShikiCode } from "./ShikiCode";
 import { MermaidDiagram } from "./MermaidDiagram";
+import { parseMermaidMeta } from "@kw/lib/mermaidTheme";
 import { KiwiSteps } from "./KiwiSteps";
 import { KiwiCalc } from "./KiwiCalc";
 import { KiwiFigure } from "./KiwiFigure";
@@ -1081,7 +1082,8 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                         return <KiwiQuery source={raw} onNavigate={nav} isComputedView={parsed.meta?.["kiwi-view"] === true} />;
                       }
                       if (lang === "mermaid") {
-                        return <MermaidDiagram chart={raw} onNavigate={nav} />;
+                        const { focus, dim } = parseMermaidMeta(node?.data?.meta || node?.properties?.metastring);
+                        return <MermaidDiagram chart={raw} onNavigate={nav} focus={focus} dim={dim} />;
                       }
                       if (lang === "kiwi-steps") {
                         return <KiwiSteps source={raw} onNavigate={nav} />;

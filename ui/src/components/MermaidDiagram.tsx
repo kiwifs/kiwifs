@@ -16,6 +16,11 @@ let lastTheme: MermaidThemeKey | "" = "";
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
 const ZOOM_STEP = 0.25;
+/**
+ * Shrinking a wide diagram to the column below this scale makes its text
+ * unreadable, so past it the diagram keeps this scale and scrolls sideways.
+ */
+const MIN_FIT_SCALE = 0.58;
 
 async function getMermaid() {
   const { default: mermaid } = await import("mermaid");
@@ -63,6 +68,9 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [theme, setTheme] = useState<MermaidThemeKey>(() => mermaidThemeKey());
+  const [naturalWidth, setNaturalWidth] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const figureRef = useRef<HTMLElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const renderIdRef = useRef(`kiwi-mermaid-${Math.random().toString(36).slice(2)}`);
@@ -105,8 +113,14 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
     };
   }, [chart, theme]);
 
+  const onNodeClickRef = useRef(onNodeClick);
+  onNodeClickRef.current = onNodeClick;
+  const onNavigateRef = useRef(onNavigate);
+  onNavigateRef.current = onNavigate;
+  const hasNodeClick = !!onNodeClick;
+
   const handleHref = useCallback((href: string, id: string) => {
-    onNodeClick?.(id);
+    onNodeClickRef.current?.(id);
     if (!href) return;
     if (href.startsWith("#")) {
       const el = document.getElementById(href.slice(1));
@@ -118,8 +132,8 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
       return;
     }
     const page = href.replace(/^\//, "");
-    onNavigate?.(page);
-  }, [onNavigate, onNodeClick]);
+    onNavigateRef.current?.(page);
+  }, []);
 
   useEffect(() => {
     const host = containerRef.current;
@@ -129,6 +143,8 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
     root.innerHTML = `<style>${mermaidShadowStyles()}</style>${svg}`;
     const svgEl = root.querySelector("svg");
     if (svgEl) bindFunctionsRef.current?.(svgEl);
+    const viewBoxWidth = Number(svgEl?.getAttribute("viewBox")?.split(/[\s,]+/)[2]);
+    setNaturalWidth(Number.isFinite(viewBoxWidth) ? viewBoxWidth : 0);
 
     const clicks = parseMermaidClicks(chart);
     for (const click of clicks) {
@@ -141,27 +157,40 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
         });
       }
     }
-    if (onNodeClick) {
+    if (hasNodeClick) {
       root.querySelectorAll<SVGGElement>("g.node, g.actor").forEach((el) => {
-        const m = el.id.match(/^flowchart-(.+)-(\d+)$/);
+        const m = el.id.match(/flowchart-(.+)-(\d+)$/);
         const id = m?.[1] || el.id.replace(/-[0-9]+$/, "");
         if (!id) return;
         el.setAttribute("data-kiwi-clickable", "true");
         el.addEventListener("click", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          onNodeClick(id);
+          onNodeClickRef.current?.(id);
         });
       });
     }
-  }, [svg, chart, handleHref, onNodeClick]);
+  }, [svg, chart, handleHref, hasNodeClick]);
 
   useEffect(() => {
     const host = containerRef.current;
     const root = host?.shadowRoot;
     if (!root) return;
     applyMermaidEmphasis(root, focus ?? [], dim ?? []);
-  }, [svg, focus, dim]);
+    // A diagram wider than its column scrolls; keep the focused part in view.
+    const viewport = viewportRef.current;
+    const first = root.querySelector(".node.kiwi-focus, [data-et='participant'].kiwi-focus, .kiwi-focus");
+    if (viewport && first && viewport.scrollWidth > viewport.clientWidth + 1) {
+      const box = first.getBoundingClientRect();
+      const view = viewport.getBoundingClientRect();
+      if (box.left < view.left || box.right > view.right) {
+        viewport.scrollTo({
+          left: viewport.scrollLeft + box.left + box.width / 2 - (view.left + view.width / 2),
+          behavior: "smooth",
+        });
+      }
+    }
+  }, [svg, focus?.join("\u0000"), dim?.join("\u0000")]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -206,6 +235,17 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
       el.releasePointerCapture(e.pointerId);
       el.style.cursor = "grab";
     }
+  }, []);
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === figureRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void figureRef.current?.requestFullscreen?.();
   }, []);
 
   const resetView = useCallback(() => {
@@ -267,7 +307,11 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
   const isDefaultView = zoom === 1 && pan.x === 0 && pan.y === 0;
 
   return (
-    <figure className="kiwi-mermaid relative rounded-md border border-border bg-card p-2">
+    <figure
+      ref={figureRef}
+      className="kiwi-mermaid relative rounded-md border border-border bg-card p-2"
+      style={fullscreen ? { overflow: "auto", display: "flex", flexDirection: "column" } : undefined}
+    >
       {svg ? (
         <>
           <div
@@ -311,6 +355,15 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
             <button
               type="button"
               className="rounded-sm border border-border bg-card px-2 py-1 font-medium hover:bg-accent"
+              onClick={toggleFullscreen}
+              aria-label={fullscreen ? "Exit fullscreen" : "Show Mermaid diagram fullscreen"}
+              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            >
+              {fullscreen ? "Exit" : "⤢"}
+            </button>
+            <button
+              type="button"
+              className="rounded-sm border border-border bg-card px-2 py-1 font-medium hover:bg-accent"
               onClick={downloadSvg}
               title="Download SVG"
             >
@@ -327,8 +380,8 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
           </div>
           <div
             ref={viewportRef}
-            className="overflow-hidden"
-            style={{ cursor: "grab", touchAction: "none" }}
+            className="overflow-x-auto overflow-y-hidden"
+            style={{ cursor: "grab", touchAction: "none", flex: fullscreen ? 1 : undefined }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -338,6 +391,7 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
               className="mx-auto origin-center"
               style={{
                 width: `${zoom * 100}%`,
+                minWidth: !fullscreen && naturalWidth > 0 ? naturalWidth * MIN_FIT_SCALE * zoom : undefined,
                 transform: `translate(${pan.x}px, ${pan.y}px)`,
               }}
             />

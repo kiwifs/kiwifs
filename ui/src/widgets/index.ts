@@ -49,8 +49,29 @@ export {
   type PlotMark,
 } from "./PlotView";
 export { type PlotDomain } from "./plotLayout";
-export { GraphView, type GraphViewProps, type GraphNode, type GraphEdge } from "./GraphView";
-export { type GraphLayout } from "./graphLayout";
+export {
+  GraphView,
+  edgeKey,
+  type GraphViewProps,
+  type GraphNode,
+  type GraphEdge,
+  type GraphGroup,
+  type GraphPacket,
+} from "./GraphView";
+export { type GraphLayout, type GraphDirection } from "./graphLayout";
+export { type NodeShape, NODE_SHAPES } from "./graphGeometry";
+export {
+  SequenceView,
+  type SequenceViewProps,
+  type SequenceParticipant,
+  type SequenceItem,
+  type SequenceMessage,
+  type SequenceNote,
+  type SequenceDivider,
+  type SequenceFrame,
+} from "./SequenceView";
+export { ZoomPanel, type ZoomPanelProps } from "./ZoomPanel";
+export { useFlowProgress } from "./useFlowProgress";
 export {
   LinkedListView,
   type LinkedListViewProps,

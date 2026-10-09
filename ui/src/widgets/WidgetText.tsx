@@ -104,6 +104,8 @@ export interface SvgLabelProps {
   dominantBaseline?: "auto" | "central";
   /** Halo color so the label stays readable on a stroke or fill. */
   halo?: string;
+  /** Prose caption: only typeset math written explicitly as `$…$`. */
+  plain?: boolean;
   style?: CSSProperties;
 }
 
@@ -122,11 +124,12 @@ export function SvgLabel({
   anchor = "start",
   dominantBaseline = "auto",
   halo,
+  plain = false,
   style,
 }: SvgLabelProps) {
   if (text == null) return null;
   const raw = String(text);
-  if (!hasMath(raw)) {
+  if ((plain && !raw.includes("$")) || !hasMath(raw)) {
     return (
       <text
         x={x}

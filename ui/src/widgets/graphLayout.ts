@@ -6,7 +6,102 @@
  * between frames.
  */
 
-export type GraphLayout = "force" | "circular" | "layered" | "grid";
+import dagre from "@dagrejs/dagre";
+
+/**
+ * `"dagre"` is a full layered layout (Sugiyama via dagre): nodes keep their
+ * measured size, edges get routed waypoints, edge labels get reserved space,
+ * and groups stay together. Use it for architecture and flow diagrams.
+ */
+export type GraphLayout = "force" | "circular" | "layered" | "grid" | "dagre";
+
+export type GraphDirection = "TB" | "BT" | "LR" | "RL";
+
+export interface DagreNodeInput {
+  id: string | number;
+  w: number;
+  h: number;
+}
+
+export interface DagreEdgeInput {
+  from: string | number;
+  to: string | number;
+  labelW?: number;
+  labelH?: number;
+}
+
+export interface DagreGroupInput {
+  id: string;
+  nodes: (string | number)[];
+  parent?: string;
+}
+
+export interface DagreResult {
+  nodes: Map<string | number, Positioned>;
+  /** Interior waypoints per input edge (endpoints excluded); empty for self-loops. */
+  routes: Positioned[][];
+  /** Reserved label centre per input edge, when it had a label size. */
+  labels: (Positioned | null)[];
+  width: number;
+  height: number;
+}
+
+const GROUP_PREFIX = "\u0000group:";
+
+export function layoutDagre(
+  nodes: DagreNodeInput[],
+  edges: DagreEdgeInput[],
+  {
+    direction = "TB",
+    groups = [],
+    nodeSep = 36,
+    rankSep = 52,
+    margin = 16,
+  }: { direction?: GraphDirection; groups?: DagreGroupInput[]; nodeSep?: number; rankSep?: number; margin?: number } = {},
+): DagreResult {
+  const compound = groups.length > 0;
+  const g = new dagre.graphlib.Graph({ multigraph: true, compound });
+  g.setGraph({ rankdir: direction, nodesep: nodeSep, ranksep: rankSep, edgesep: 14, marginx: margin, marginy: margin });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  const key = new Map<string, string | number>();
+  for (const n of nodes) {
+    key.set(String(n.id), n.id);
+    g.setNode(String(n.id), { width: n.w, height: n.h });
+  }
+  if (compound) {
+    for (const grp of groups) g.setNode(GROUP_PREFIX + grp.id, {});
+    for (const grp of groups) {
+      if (grp.parent) g.setParent(GROUP_PREFIX + grp.id, GROUP_PREFIX + grp.parent);
+      for (const id of grp.nodes) if (key.has(String(id))) g.setParent(String(id), GROUP_PREFIX + grp.id);
+    }
+  }
+  edges.forEach((e, i) => {
+    if (e.from === e.to || !key.has(String(e.from)) || !key.has(String(e.to))) return;
+    const label = e.labelW ? { width: e.labelW, height: e.labelH ?? 16, labelpos: "c" } : {};
+    g.setEdge(String(e.from), String(e.to), label, String(i));
+  });
+
+  dagre.layout(g);
+
+  const out = new Map<string | number, Positioned>();
+  for (const n of nodes) {
+    const p = g.node(String(n.id));
+    out.set(n.id, { x: p?.x ?? 0, y: p?.y ?? 0 });
+  }
+  const routes: Positioned[][] = [];
+  const labels: (Positioned | null)[] = [];
+  edges.forEach((e, i) => {
+    const data = g.edge({ v: String(e.from), w: String(e.to), name: String(i) }) as
+      | { points?: Positioned[]; x?: number; y?: number }
+      | undefined;
+    const pts = data?.points ?? [];
+    routes.push(pts.length > 2 ? pts.slice(1, -1).map((p) => ({ x: p.x, y: p.y })) : []);
+    labels.push(e.labelW && data?.x !== undefined && data?.y !== undefined ? { x: data.x, y: data.y } : null);
+  });
+  const graph = g.graph() as { width?: number; height?: number };
+  return { nodes: out, routes, labels, width: graph.width ?? 0, height: graph.height ?? 0 };
+}
 
 interface LayoutInput {
   id: string | number;
@@ -52,7 +147,7 @@ export function layoutGraph(
   const positions =
     layout === "circular" ? circular(nodes, width, height, pad)
     : layout === "grid" ? grid(nodes, width, height, pad)
-    : layout === "layered" ? layered(nodes, edges, width, height, pad, flow)
+    : layout === "layered" || layout === "dagre" ? layered(nodes, edges, width, height, pad, flow)
     : force(nodes, edges, width, height, pad);
 
   for (const n of free) {
