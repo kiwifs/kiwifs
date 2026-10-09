@@ -288,11 +288,13 @@ function matchCall(text: string, i: number): { end: number; math: string } | nul
 
 function matchPrimeCall(text: string, i: number): { end: number; math: string } | null {
   if (!atTokenStart(text, i)) return null;
-  const m = /^[A-Za-z][A-Za-z0-9]*['′]+/.exec(text.slice(i));
+  const m = /^([A-Za-z][A-Za-z0-9]*)(['′]+)/.exec(text.slice(i));
   if (!m) return null;
   let end = i + m[0].length;
   const argsEnd = consumeCallArgs(text, end);
   if (argsEnd > end) end = argsEnd;
+  // A bare `f'` is a derivative; `phone's` and `don't` are prose.
+  else if (m[1]!.length > 1 || /[A-Za-z]/.test(text[end] ?? "")) return null;
   return { end, math: text.slice(i, end) };
 }
 

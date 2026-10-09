@@ -192,9 +192,29 @@ export function mermaidShadowStyles(): string {
     .kiwi-focus > polygon,
     .kiwi-focus > circle,
     .kiwi-focus > path,
-    .actor.kiwi-focus rect {
-      stroke: var(--primary) !important;
+    .actor.kiwi-focus rect,
+    [data-et='participant'].kiwi-focus rect {
+      stroke: var(--kw-widget-active, var(--primary)) !important;
       stroke-width: 2.4px !important;
+    }
+    .node.kiwi-focus,
+    [data-et='participant'].kiwi-focus {
+      filter: drop-shadow(0 0 5px color-mix(in srgb, var(--kw-widget-active, var(--primary)) 50%, transparent));
+    }
+    .node.kiwi-focus > rect,
+    .node.kiwi-focus > polygon,
+    .node.kiwi-focus > circle,
+    .node.kiwi-focus > path {
+      stroke-width: 3px !important;
+    }
+    path.flowchart-link.kiwi-focus,
+    [data-et='message'].kiwi-focus {
+      stroke: var(--kw-widget-active, var(--primary)) !important;
+      stroke-width: 2.6px !important;
+    }
+    .messageText.kiwi-focus,
+    .edgeLabel.kiwi-focus {
+      font-weight: 700;
     }
     .node[data-kiwi-clickable],
     .actor[data-kiwi-clickable],
@@ -252,33 +272,110 @@ export function findMermaidNodes(root: ParentNode, id: string): Element[] {
   return [...new Set(matches)];
 }
 
-export function applyMermaidEmphasis(root: ParentNode, focus: string[], dim: string[]): void {
-  const focusSet = new Set(focus);
-  const dimSet = new Set(dim);
-  const nodes = root.querySelectorAll<SVGGElement>("g.node, g.actor, g.cluster");
-  nodes.forEach((el) => {
-    const id = mermaidNodeId(el.id);
-    const flowchart = el.id.match(/^flowchart-(.+)-(\d+)$/);
-    const key = flowchart?.[1] ?? id;
-    const isFocus = focusSet.has(key) || focusSet.has(id);
-    const isDim = dimSet.has(key) || dimSet.has(id) || (focusSet.size > 0 && !isFocus);
-    el.classList.toggle("kiwi-focus", isFocus);
-    el.classList.toggle("kiwi-dim", isDim && !isFocus);
-  });
-  root.querySelectorAll<SVGGElement>("g.edgePath, g.flowchart-link, path.messageLine0, path.messageLine1").forEach((el) => {
-    if (focusSet.size === 0) {
-      el.classList.remove("kiwi-dim");
-      return;
-    }
-    // Dim edges whose endpoints are both dimmed — best-effort from edge id.
-    el.classList.toggle("kiwi-dim", true);
-  });
-  // Re-lighten edges that mention a focused node in their id.
-  if (focusSet.size > 0) {
-    root.querySelectorAll<SVGGElement>("g.edgePath, g.flowchart-link").forEach((el) => {
-      const raw = el.id || "";
-      const mentions = [...focusSet].some((id) => raw.includes(id));
-      if (mentions) el.classList.remove("kiwi-dim");
-    });
+/**
+ * Split a flowchart edge id (`L_<from>_<to>_<n>`) into endpoints. Node ids may
+ * themselves contain underscores, so prefer a split where both sides are known.
+ */
+export function parseMermaidEdgeId(dataId: string, known: Set<string>): { from: string; to: string } | null {
+  const m = dataId.match(/^L_(.+)_\d+$/);
+  if (!m) return null;
+  const parts = m[1]!.split("_");
+  let fallback: { from: string; to: string } | null = null;
+  for (let i = 1; i < parts.length; i++) {
+    const from = parts.slice(0, i).join("_");
+    const to = parts.slice(i).join("_");
+    if (known.has(from) && known.has(to)) return { from, to };
+    if (!fallback) fallback = { from, to };
   }
+  return fallback;
+}
+
+function edgeTokens(token: string): [string, string] | null {
+  const m = token.match(/^\s*(.+?)\s*-+>\s*(.+?)\s*$/);
+  return m ? [m[1]!, m[2]!] : null;
+}
+
+/**
+ * Light up part of a rendered diagram and fade the rest. Tokens:
+ *
+ * - `A` — flowchart node, subgraph, or sequence participant `A`
+ * - `A->B` — every flowchart edge / sequence message from A to B
+ * - `e1` — an edge declared with an id (`A e1@--> B`)
+ * - `#3` — the third message of a sequence diagram
+ *
+ * Edges between two focused nodes light up with them. With any focus, every
+ * unfocused node, edge, and message dims; `dim` fades items explicitly.
+ */
+export function applyMermaidEmphasis(root: ParentNode, focus: string[], dim: string[]): void {
+  const focusSet = new Set(focus.map((s) => s.trim()).filter(Boolean));
+  const dimSet = new Set(dim.map((s) => s.trim()).filter(Boolean));
+  const focusing = focusSet.size > 0;
+  const focusEdges = [...focusSet].map(edgeTokens).filter((x): x is [string, string] => !!x);
+  const dimEdges = [...dimSet].map(edgeTokens).filter((x): x is [string, string] => !!x);
+  const matchesEdge = (pairs: [string, string][], from: string, to: string) =>
+    pairs.some(([a, b]) => a === from && b === to);
+
+  const mark = (el: Element, isFocus: boolean, isDim: boolean) => {
+    el.classList.toggle("kiwi-focus", isFocus);
+    el.classList.toggle("kiwi-dim", !isFocus && (isDim || focusing));
+  };
+
+  const known = new Set<string>();
+  root.querySelectorAll<SVGGElement>("g.node").forEach((el) => {
+    const id = el.id.match(/flowchart-(.+)-\d+$/)?.[1] ?? mermaidNodeId(el.id);
+    known.add(id);
+    mark(el, focusSet.has(id), dimSet.has(id));
+  });
+  // Subgraphs are context: they only change when named.
+  root.querySelectorAll<SVGGElement>("g.cluster").forEach((el) => {
+    const id = el.getAttribute("data-id") || el.id.replace(/^.*?-?([^-]+)$/, "$1");
+    el.classList.toggle("kiwi-focus", focusSet.has(id));
+    el.classList.toggle("kiwi-dim", dimSet.has(id));
+  });
+
+  const edgeState = new Map<string, { focus: boolean; dim: boolean }>();
+  root.querySelectorAll<SVGPathElement>("path.flowchart-link, path[data-edge='true']").forEach((el) => {
+    const dataId = el.getAttribute("data-id") || "";
+    const ends = parseMermaidEdgeId(dataId, known);
+    const between = !!ends && focusSet.has(ends.from) && focusSet.has(ends.to);
+    const isFocus = focusSet.has(dataId) || between || (!!ends && matchesEdge(focusEdges, ends.from, ends.to));
+    const isDim = dimSet.has(dataId) || (!!ends && (matchesEdge(dimEdges, ends.from, ends.to) || dimSet.has(ends.from) || dimSet.has(ends.to)));
+    edgeState.set(dataId, { focus: isFocus, dim: isDim });
+    mark(el, isFocus, isDim);
+  });
+  root.querySelectorAll<SVGGElement>("g.edgeLabel").forEach((el) => {
+    const dataId = el.querySelector("[data-id]")?.getAttribute("data-id") || "";
+    const state = edgeState.get(dataId);
+    mark(el, state?.focus ?? false, state?.dim ?? false);
+  });
+
+  // Sequence diagrams.
+  root.querySelectorAll<SVGElement>("[data-et='participant'], [data-et='life-line']").forEach((el) => {
+    const id = el.getAttribute("data-id") || "";
+    mark(el, focusSet.has(id), dimSet.has(id));
+  });
+  root.querySelectorAll<SVGRectElement>("rect.actor-bottom[name]").forEach((el) => {
+    const id = el.getAttribute("name") || "";
+    mark(el.parentElement ?? el, focusSet.has(id), dimSet.has(id));
+  });
+  const texts = [...root.querySelectorAll<SVGTextElement>(".messageText")];
+  root.querySelectorAll<SVGElement>("[data-et='message']").forEach((el, i) => {
+    const from = el.getAttribute("data-from") || "";
+    const to = el.getAttribute("data-to") || "";
+    const n = `#${i + 1}`;
+    const isFocus = focusSet.has(n) || matchesEdge(focusEdges, from, to) || (focusSet.has(from) && focusSet.has(to));
+    const isDim = dimSet.has(n) || matchesEdge(dimEdges, from, to);
+    mark(el, isFocus, isDim);
+    if (texts[i]) mark(texts[i]!, isFocus, isDim);
+  });
+}
+
+/** Read `focus="A,B"` / `dim="C"` from a mermaid fence's meta string. */
+export function parseMermaidMeta(meta: string | undefined | null): { focus: string[]; dim: string[] } {
+  const read = (name: string) => {
+    const m = (meta ?? "").match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|(\\S+))`));
+    const raw = m ? m[1] ?? m[2] ?? m[3] ?? "" : "";
+    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  };
+  return { focus: read("focus"), dim: read("dim") };
 }

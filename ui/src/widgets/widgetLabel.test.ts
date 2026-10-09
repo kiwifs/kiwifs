@@ -99,6 +99,13 @@ describe("labelSegments", () => {
     );
   });
 
+  it("leaves possessives and contractions as prose", () => {
+    expect(kinds("no bytes crossed the phone's network, and we don't retry")).toBe(
+      "no bytes crossed the phone's network, and we don't retry",
+    );
+    expect(kinds("then f' is positive")).toBe("then [f'] is positive");
+  });
+
   it("keeps markdown and code fences as text", () => {
     expect(kinds("Look up **target - n** in `seen` before inserting.")).toBe(
       "Look up **target - n** in `seen` before inserting.",

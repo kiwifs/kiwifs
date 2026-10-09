@@ -15,6 +15,7 @@ import { LinkedListView } from "./LinkedListView";
 import { MatrixView } from "./MatrixView";
 import { PlaybackControls } from "./PlaybackControls";
 import { PropertyBar } from "./PropertyBar";
+import { SequenceView } from "./SequenceView";
 import { StackView } from "./StackView";
 import { StateInspector } from "./StateInspector";
 import { TimelineView } from "./TimelineView";
@@ -359,6 +360,67 @@ function Gallery() {
           dimNodes={new Set(["b"])}
           highlightEdges={new Set(["a-c"])}
           pointers={[{ id: "c", label: "visit" }]}
+        />
+      </Section>
+
+      <Section name="GraphView — architecture (dagre, shapes, groups, packets)">
+        <GraphView
+          layout="dagre"
+          direction="LR"
+          directed
+          shape="box"
+          nodes={[
+            { id: "user", label: "User", shape: "person" },
+            { id: "cdn", label: "CDN", shape: "cloud" },
+            { id: "lb", label: "Load balancer", shape: "hexagon" },
+            { id: "api", label: "API", sublabel: "stateless × 3", group: "vpc" },
+            { id: "cache", label: "Redis", shape: "pill", group: "vpc" },
+            { id: "db", label: "Postgres", sublabel: "primary", shape: "cylinder", group: "data" },
+            { id: "q", label: "Jobs", shape: "queue", group: "vpc" },
+            { id: "ok", label: "Healthy?", shape: "diamond" },
+          ]}
+          groups={[
+            { id: "vpc", label: "VPC", color: groupColor(0) },
+            { id: "data", label: "Data tier", parent: "vpc", color: groupColor(3) },
+          ]}
+          edges={[
+            { from: "user", to: "cdn", label: "GET /" },
+            { from: "cdn", to: "lb", label: "miss" },
+            { from: "lb", to: "api" },
+            { from: "api", to: "cache", label: "read" },
+            { from: "cache", to: "api", label: "hit", style: "dashed" },
+            { from: "api", to: "db", label: "SQL" },
+            { from: "api", to: "q", animated: true, label: "enqueue" },
+            { from: "lb", to: "ok", style: "dotted" },
+          ]}
+          activeEdges={new Set(["api->db"])}
+          activeNodes={new Set(["db"])}
+          packets={[{ edge: "api->db", t: 0.5, label: "SELECT" }]}
+          badges={{ api: 3 }}
+          zoomable
+        />
+      </Section>
+
+      <Section name="SequenceView">
+        <SequenceView
+          participants={[
+            { id: "c", label: "Client", shape: "person" },
+            { id: "api", label: "API" },
+            { id: "db", label: "DB", shape: "cylinder" },
+            { id: "q", label: "Outbox", shape: "queue" },
+          ]}
+          items={[
+            { from: "c", to: "api", label: "POST /orders" },
+            { from: "api", to: "db", label: "INSERT order + outbox row" },
+            { from: "db", to: "api", label: "commit", kind: "reply" },
+            { note: "one transaction", over: ["api", "db"] },
+            { divider: "later" },
+            { from: "q", to: "q", label: "relay polls", kind: "async" },
+            { from: "api", to: "c", label: "201 Created", kind: "reply" },
+          ]}
+          frames={[{ kind: "opt", label: "[new idempotency key]", from: 1, to: 3 }]}
+          step={4}
+          numbered
         />
       </Section>
 

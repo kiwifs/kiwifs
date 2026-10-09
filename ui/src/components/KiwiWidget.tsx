@@ -25,7 +25,10 @@ import { StateInspector } from "@kw/widgets/StateInspector";
 import { InputPanel } from "@kw/widgets/InputPanel";
 import { DateField } from "@kw/widgets/DateField";
 import { groupColor } from "@kw/widgets/colors";
+import { SequenceView } from "@kw/widgets/SequenceView";
+import { ZoomPanel } from "@kw/widgets/ZoomPanel";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { MermaidView } from "./MermaidView";
 
 const liveScope = {
   useState,
@@ -57,6 +60,9 @@ const liveScope = {
   InputPanel,
   DateField,
   groupColor,
+  SequenceView,
+  ZoomPanel,
+  MermaidView,
 };
 
 interface Props {
