@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.69](https://github.com/kiwifs/kiwifs/compare/v0.19.68...v0.19.69) (2026-10-09)
+
+
+### Features
+
+* **ui:** diagram widgets — shaped/grouped GraphView, SequenceView, steppable Mermaid ([#522](https://github.com/kiwifs/kiwifs/issues/522)) ([3e47f2f](https://github.com/kiwifs/kiwifs/commit/3e47f2fc9ed402db9fada48eefc769c411553290))
+
 ## [0.19.68](https://github.com/kiwifs/kiwifs/compare/v0.19.67...v0.19.68) (2026-10-09)
 
 
