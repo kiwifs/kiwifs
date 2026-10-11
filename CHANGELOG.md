@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.71](https://github.com/kiwifs/kiwifs/compare/v0.19.70...v0.19.71) (2026-10-11)
+
+
+### Features
+
+* **ui:** Storybook coverage for quizzes, live widgets, and diagram focus ([#528](https://github.com/kiwifs/kiwifs/issues/528)) ([98bbcee](https://github.com/kiwifs/kiwifs/commit/98bbceef947ae672b1a3525c647d36e45c715918))
+
 ## [0.19.70](https://github.com/kiwifs/kiwifs/compare/v0.19.69...v0.19.70) (2026-10-09)
 
 
