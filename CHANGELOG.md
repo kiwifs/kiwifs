@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.72](https://github.com/kiwifs/kiwifs/compare/v0.19.71...v0.19.72) (2026-10-11)
+
+
+### Features
+
+* **widgets:** typed widget fences, shared playback clock, inspect bus, new canvases ([#527](https://github.com/kiwifs/kiwifs/issues/527)) ([af47375](https://github.com/kiwifs/kiwifs/commit/af473759ec8f13a96f1d055d32f0b9fedb376b04))
+
 ## [0.19.71](https://github.com/kiwifs/kiwifs/compare/v0.19.70...v0.19.71) (2026-10-11)
 
 
