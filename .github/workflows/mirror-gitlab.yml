@@ -1,0 +1,48 @@
+name: Mirror to GitLab
+
+# Keeps https://gitlab.com/kiwifs/kiwifs in sync with main and all tags.
+# GitHub stays the source of truth; the GitLab project is read-only.
+# Release tags are pushed by GITHUB_TOKEN and never fire `push`, so
+# release-please.yml calls this workflow directly after each release.
+# The hourly schedule is a safety net for anything else that slips past.
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: mirror-gitlab
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Push main and tags to GitLab
+        env:
+          SSH_KEY: ${{ secrets.GITLAB_MIRROR_SSH_KEY }}
+          # Published fingerprint: SHA256:eUXGGm1YGsMAS7vkcx6JOJdOGHPem5gQp4taiCfCLB8
+          GITLAB_HOST_KEY: gitlab.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAfuCHKVTjquxvt6CM6tdG4SLp1Btn/nOeHHE5UOzRdf
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/gitlab_mirror
+          chmod 600 ~/.ssh/gitlab_mirror
+          printf '%s\n' "$GITLAB_HOST_KEY" > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/gitlab_mirror -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+
+          git fetch --force --tags origin
+          git push --force git@gitlab.com:kiwifs/kiwifs.git HEAD:refs/heads/main
+          git push --force --tags git@gitlab.com:kiwifs/kiwifs.git

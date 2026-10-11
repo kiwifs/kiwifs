@@ -294,6 +294,38 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # ── Phase C2: Mirror the new tag to GitLab ─────────────────────────
+  mirror-gitlab:
+    needs: [release-please]
+    if: ${{ needs.release-please.outputs.release_created }}
+    uses: ./.github/workflows/mirror-gitlab.yml
+    secrets: inherit
+
+  # ── Phase C3: Tell downstream GitLab projects about the release ────
+  # Set repo variable GITLAB_DOWNSTREAM_PROJECT_ID (and optionally
+  # GITLAB_DOWNSTREAM_REF) plus secret GITLAB_DOWNSTREAM_TRIGGER_TOKEN
+  # to enable. Skipped while the variable is unset.
+  notify-gitlab:
+    needs: [release-please, upload-release, mirror-gitlab]
+    if: ${{ needs.release-please.outputs.release_created && vars.GITLAB_DOWNSTREAM_PROJECT_ID != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger downstream pipeline
+        env:
+          TRIGGER_TOKEN: ${{ secrets.GITLAB_DOWNSTREAM_TRIGGER_TOKEN }}
+          PROJECT_ID: ${{ vars.GITLAB_DOWNSTREAM_PROJECT_ID }}
+          REF: ${{ vars.GITLAB_DOWNSTREAM_REF || 'main' }}
+          VERSION: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          curl --fail-with-body -sS -X POST \
+            --form "token=${TRIGGER_TOKEN}" \
+            --form "ref=${REF}" \
+            --form "variables[UPSTREAM]=kiwifs" \
+            --form "variables[UPSTREAM_VERSION]=${VERSION}" \
+            --form "variables[UPSTREAM_REPO]=https://gitlab.com/kiwifs/kiwifs.git" \
+            "https://gitlab.com/api/v4/projects/${PROJECT_ID}/trigger/pipeline" \
+            -o /dev/null -w 'GitLab responded %{http_code}\n'
+
   # ── Phase D: Deploy to EC2 ──────────────────────────────────────────
   # After the Docker image is pushed, SSH into the EC2 instance and
   # pull the new image. This replaces the separate deploy-cloud.yml
