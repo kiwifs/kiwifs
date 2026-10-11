@@ -99,6 +99,72 @@ export const StateDiagram: Story = {
   },
 };
 
+const REQUEST_PATH = `graph LR
+    U((User)) --> CDN[CDN]
+    CDN -->|miss| LB{{Load balancer}}
+    LB --> API[API]
+    API --> C[(Redis)]
+    API --> DB[(Postgres)]
+    API --> Q[[Jobs]]`;
+
+export const FocusedPath: Story = {
+  name: "Focus — request path",
+  args: {
+    chart: REQUEST_PATH,
+    focus: ["LB", "API", "DB"],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Nodes in `focus` light up, edges between them follow, everything else fades. In markdown: ```` ```mermaid focus="LB,API,DB" ````.',
+      },
+    },
+  },
+};
+
+export const FocusedEdgeAndDim: Story = {
+  name: "Focus — single edge, explicit dim",
+  args: {
+    chart: REQUEST_PATH,
+    focus: ["API->C"],
+    dim: ["Q"],
+  },
+};
+
+export const FocusedSequenceMessage: Story = {
+  name: "Focus — sequence message #n",
+  args: {
+    chart: `sequenceDiagram
+    participant C as Client
+    participant A as API
+    participant D as DB
+    C->>A: POST /orders
+    A->>D: INSERT order
+    D-->>A: commit
+    A-->>C: 201 Created`,
+    focus: ["#2"],
+  },
+};
+
+export const WideDiagram: Story = {
+  name: "Wide diagram scrolls to focus",
+  args: {
+    chart: `graph LR
+    S[Source] --> P1[Parse] --> P2[Validate] --> P3[Normalize] --> P4[Enrich]
+    P4 --> P5[Deduplicate] --> P6[Chunk] --> P7[Embed] --> P8[Index] --> P9[Serve]`,
+    focus: ["P8", "P9"],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Diagrams too wide to stay legible keep a minimum scale and scroll sideways, auto-scrolling to the focused part. Use the ⤢ button for fullscreen.",
+      },
+    },
+  },
+};
+
 export const InvalidSyntax: Story = {
   args: {
     chart: `graph INVALID

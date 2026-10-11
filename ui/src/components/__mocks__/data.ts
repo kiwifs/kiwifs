@@ -739,3 +739,87 @@ export const mockBasesRows: Record<string, unknown>[] = [
     location: "New York Office",
   },
 ];
+
+export const mockMarkdownStudyPage = `---
+title: Caching Study Guide
+tags:
+  - system-design
+  - caching
+status: active
+---
+
+# Caching Study Guide
+
+Read [[wikilinks|Wiki Links]] and [[frontmatter]] first, then work through the checks below. Pages that do not exist yet, like [[Write-behind Caching]], stay marked as missing.
+
+## Strategies at a glance
+
+| Strategy | Read path | Write path | Stale window | When it fits | Failure mode |
+| --- | --- | --- | --- | --- | --- |
+| Cache-aside | app checks cache, falls back to DB | app writes DB, deletes key | until next delete | read-heavy, tolerant of misses | thundering herd on hot keys |
+| Read-through | cache loads from DB on miss | app writes DB | TTL | uniform access, shared loader | loader becomes a bottleneck |
+| Write-through | cache always warm | write cache and DB together | none | read-after-write matters | higher write latency |
+| Write-behind | cache always warm | cache first, DB later | until flush | bursty writes | data loss on crash |
+
+## The request path
+
+\`\`\`mermaid focus="API,C"
+graph LR
+  U((User)) --> API[API]
+  API --> C[(Redis)]
+  API --> DB[(Postgres)]
+\`\`\`
+
+## Check yourself
+
+> [!quiz ^cache-aside-delete] After a write, what should cache-aside do to the cached key?
+> - [ ] Update it with the new value
+>   Two concurrent writers can leave the older value cached.
+> - [x] Delete it
+> - [ ] Leave it until the TTL expires
+>
+> Deleting forces the next read to load the committed value.
+
+> [!quiz boolean] Write-behind can lose acknowledged writes if the cache node crashes.
+> true
+>
+> Writes sit in the cache until the flush reaches the database.
+
+> [!quiz match] Match the strategy to its biggest risk
+> - Cache-aside :: thundering herd
+> - Write-through :: write latency
+> - Write-behind :: data loss
+
+## Progress
+
+\`\`\`widget:tracker
+caching-progress
+\`\`\`
+`;
+
+/** Numbered chapter folders, the layout `widget:tracker` groups by. */
+export const mockStudyTree: TreeEntry = {
+  ...mockTree,
+  children: [
+    ...(mockTree.children ?? []),
+    {
+      path: "01-caching",
+      name: "01-caching",
+      isDir: true,
+      children: [
+        { path: "01-caching/cache-aside.md", name: "cache-aside.md", isDir: false, size: 900 },
+        { path: "01-caching/write-through.md", name: "write-through.md", isDir: false, size: 800 },
+        { path: "01-caching/write-behind.md", name: "write-behind.md", isDir: false, size: 850 },
+      ],
+    },
+    {
+      path: "02-messaging",
+      name: "02-messaging",
+      isDir: true,
+      children: [
+        { path: "02-messaging/outbox.md", name: "outbox.md", isDir: false, size: 1200 },
+        { path: "02-messaging/backpressure.md", name: "backpressure.md", isDir: false, size: 700 },
+      ],
+    },
+  ],
+};

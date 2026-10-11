@@ -9,6 +9,8 @@ import {
   mockMarkdownExcalidraw,
   mockMarkdownMermaid,
   mockMarkdownRenderingTest,
+  mockMarkdownStudyPage,
+  mockStudyTree,
 } from "./__mocks__/data";
 
 const meta: Meta<typeof KiwiPage> = {
@@ -115,6 +117,45 @@ export const WithMermaid: Story = {
   decorators: [
     (Story) => (
       <MockApiProvider overrides={{ fileContent: mockMarkdownMermaid }}>
+        <div className="h-screen bg-background text-foreground">
+          <Story />
+        </div>
+      </MockApiProvider>
+    ),
+  ],
+};
+
+export const StudyPage: Story = {
+  name: "Study page (quizzes, table, tracker)",
+  args: {
+    path: "pages/caching-study-guide.md",
+    tree: mockStudyTree,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Quiz callouts with a page score, a wide comparison table, resolved and missing wiki links, a focused Mermaid fence, and a `widget:tracker` whose sections start collapsed.",
+      },
+    },
+  },
+  decorators: [
+    (Story) => (
+      <MockApiProvider
+        overrides={{
+          fileContent: mockMarkdownStudyPage,
+          tree: mockStudyTree,
+          localState: {
+            "caching-progress": {
+              "01-caching/cache-aside.md": { done: true, doneAt: "2026-10-09T15:00:00.000Z" },
+              "01-caching/write-through.md": { done: false, bookmarked: true },
+            },
+          },
+          localNotes: {
+            "pages/caching-study-guide.md": "Revisit **write-behind** before the mock interview.",
+          },
+        }}
+      >
         <div className="h-screen bg-background text-foreground">
           <Story />
         </div>

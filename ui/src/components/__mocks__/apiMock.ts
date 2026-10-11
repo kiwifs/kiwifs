@@ -71,6 +71,10 @@ export type MockOverrides = {
   analyticsEmpty?: boolean;
   canvases?: { path: string; name: string }[];
   canvasDoc?: { nodes: unknown[]; edges: unknown[] };
+  /** Seed `.me/<name>.json` documents read by `api.getLocalState`. */
+  localState?: Record<string, unknown>;
+  /** Personal notes by page path, shown in the page's "My Notes" footer. */
+  localNotes?: Record<string, string>;
 };
 
 function resolveFileContent(
@@ -116,6 +120,7 @@ function textResponse(body: string, status = 200): Response {
 
 function createMockFetch(overrides: MockOverrides = {}) {
   const originalFetch = window.fetch;
+  const localState: Record<string, unknown> = { ...(overrides.localState ?? {}) };
 
   const mockFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -566,6 +571,21 @@ function createMockFetch(overrides: MockOverrides = {}) {
             failed_searches: failed,
           },
         });
+      }
+
+      if (url.includes("/local-note") && method === "GET") {
+        const path = new URL(url, window.location.origin).searchParams.get("path") ?? "";
+        const note = overrides.localNotes?.[path];
+        return note == null ? new Response("Not found", { status: 404 }) : textResponse(note);
+      }
+
+      if (url.includes("/me/state")) {
+        const name = new URL(url, window.location.origin).searchParams.get("name") ?? "";
+        if (method === "PUT") {
+          localState[name] = init?.body ? JSON.parse(String(init.body)) : {};
+          return jsonResponse({ status: "ok" });
+        }
+        return jsonResponse(localState[name] ?? {});
       }
 
       if (url.includes("/custom.css") && method === "GET") {
