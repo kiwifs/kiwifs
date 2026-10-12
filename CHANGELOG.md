@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.73](https://github.com/kiwifs/kiwifs/compare/v0.19.72...v0.19.73) (2026-10-12)
+
+
+### Bug Fixes
+
+* **widgets:** error on strict array, matrix, tree and memory fences with nothing to draw ([#531](https://github.com/kiwifs/kiwifs/issues/531)) ([e4b5bcf](https://github.com/kiwifs/kiwifs/commit/e4b5bcf6d256152790f6b3d61d780cc1e7260115))
+
 ## [0.19.72](https://github.com/kiwifs/kiwifs/compare/v0.19.71...v0.19.72) (2026-10-11)
 
 
