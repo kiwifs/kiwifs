@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.75](https://github.com/kiwifs/kiwifs/compare/v0.19.74...v0.19.75) (2026-10-13)
+
+
+### Features
+
+* **diagrams:** render D2 fences to SVG in-process ([#535](https://github.com/kiwifs/kiwifs/issues/535)) ([f05c3d7](https://github.com/kiwifs/kiwifs/commit/f05c3d75ee8fb2cabc5eecb8d04aee769d266e49))
+
 ## [0.19.74](https://github.com/kiwifs/kiwifs/compare/v0.19.73...v0.19.74) (2026-10-13)
 
 
