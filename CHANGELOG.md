@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.74](https://github.com/kiwifs/kiwifs/compare/v0.19.73...v0.19.74) (2026-10-13)
+
+
+### Features
+
+* refactor plan/apply — move and merge pages without breaking links ([#533](https://github.com/kiwifs/kiwifs/issues/533)) ([e3b3318](https://github.com/kiwifs/kiwifs/commit/e3b3318c952613f06e4c4b022434889dd04367b0))
+
 ## [0.19.73](https://github.com/kiwifs/kiwifs/compare/v0.19.72...v0.19.73) (2026-10-12)
 
 
