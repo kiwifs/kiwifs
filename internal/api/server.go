@@ -606,6 +606,8 @@ func (s *Server) setupRoutes() {
 	api.GET("/links/broken", h.BrokenLinks)
 	api.GET("/links/orphans", h.Orphans)
 	api.POST("/refactor/fix-broken", h.FixBrokenLinks)
+	api.POST("/refactor/plan", h.RefactorPlan)
+	api.POST("/refactor/apply", h.RefactorApply)
 	api.GET("/health-check", h.HealthCheck)
 	api.GET("/context", h.Context)
 	api.GET("/rules", h.Rules)

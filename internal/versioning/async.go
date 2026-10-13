@@ -173,8 +173,11 @@ func (a *AsyncGit) clearJournal() {
 // batches use the original message; multi-path batches list every path
 // so `git log` stays useful.
 func buildMessage(actor string, reqs []commitReq) string {
-	if len(reqs) == 1 && len(reqs[0].paths) == 1 {
-		return reqs[0].message
+	if len(reqs) == 1 {
+		if len(reqs[0].paths) == 1 {
+			return reqs[0].message
+		}
+		return fmt.Sprintf("%s\n\n%s", reqs[0].message, strings.Join(reqs[0].paths, "\n"))
 	}
 	var paths []string
 	for _, r := range reqs {

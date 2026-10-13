@@ -118,6 +118,12 @@ func (idx *PathIndex) lookupExact(p string) string {
 	return idx.byNormPath[normalizeLinkPath(p)]
 }
 
+// LookupExact returns the canonical path that p names exactly (after the
+// same case and separator normalization ResolveLink applies), or "".
+func (idx *PathIndex) LookupExact(p string) string {
+	return idx.lookupExact(p)
+}
+
 // tieBreak picks deterministically among ambiguous candidates: a candidate in
 // the source directory wins; otherwise the shortest path; otherwise the
 // lexicographically smallest. Matches the UI's tieBreak.
