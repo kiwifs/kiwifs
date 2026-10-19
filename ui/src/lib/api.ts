@@ -1358,6 +1358,10 @@ export type ImportPreviewRequest = {
   from: string;
   dsn?: string;
   uri?: string;
+  db?: string;
+  file?: string;
+  path?: string;
+  query?: string;
   project?: string;
   database?: string;
   table?: string;
@@ -1386,6 +1390,9 @@ export type ImportRunRequest = {
   dsn?: string;
   uri?: string;
   db?: string;
+  file?: string;
+  path?: string;
+  query?: string;
   project?: string;
   database?: string;
   table?: string;

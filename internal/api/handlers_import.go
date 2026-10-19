@@ -429,6 +429,11 @@ func buildBuiltinSource(req importRequest) (importer.Source, error) {
 			return nil, fmt.Errorf("path is required for markdown")
 		}
 		return importer.NewMarkdown(req.Path, importer.MarkdownOpts{})
+	case "obsidian":
+		if req.Path == "" {
+			return nil, fmt.Errorf("path is required for obsidian")
+		}
+		return importer.NewObsidian(req.Path)
 	default:
 		// Try Airbyte as final fallback for unknown source types
 		if importer.DockerAvailable() {
@@ -442,7 +447,7 @@ func buildBuiltinSource(req importRequest) (importer.Source, error) {
 				})
 			}
 		}
-		supported := strings.Join([]string{"markdown", "postgres", "mysql", "firestore", "sqlite", "mongodb", "csv", "json", "jsonl", "bibtex", "croissant", "notion", "airtable"}, ", ")
+		supported := strings.Join([]string{"markdown", "obsidian", "postgres", "mysql", "firestore", "sqlite", "mongodb", "csv", "json", "jsonl", "bibtex", "croissant", "notion", "airtable"}, ", ")
 		return nil, fmt.Errorf("unknown source type %q (supported: %s). For Airbyte connectors, provide airbyte_config", req.From, supported)
 	}
 }

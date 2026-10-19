@@ -1,8 +1,9 @@
 package importer
 
 import (
-	"bytes"
 	"fmt"
+
+	"github.com/kiwifs/kiwifs/internal/markdown"
 )
 
 // PreviewItem is one import preview row for the API/UI.
@@ -14,12 +15,12 @@ type PreviewItem struct {
 
 // RecordPreviewOpts controls how a record is transformed for preview/import rendering.
 type RecordPreviewOpts struct {
-	Prefix         string
-	IDColumn       string
-	Columns        []string
-	FieldMappings  []FieldMapping
-	SourceName     string
-	DefaultPrefix  string // used when Prefix is empty
+	Prefix        string
+	IDColumn      string
+	Columns       []string
+	FieldMappings []FieldMapping
+	SourceName    string
+	DefaultPrefix string // used when Prefix is empty
 }
 
 // BuildPreviewItem renders one record the same way as Run(), for preview endpoints.
@@ -54,6 +55,9 @@ func BuildPreviewItem(rec Record, opts RecordPreviewOpts) PreviewItem {
 
 	fm := make(map[string]any, len(fields)+2)
 	for k, v := range fields {
+		if k == "_raw_content" {
+			continue
+		}
 		fm[k] = v
 	}
 	fm["_source"] = opts.SourceName
@@ -85,14 +89,7 @@ func BuildPreviewItem(rec Record, opts RecordPreviewOpts) PreviewItem {
 
 // BodyAfterFrontmatter returns markdown body text following YAML frontmatter.
 func BodyAfterFrontmatter(content []byte) string {
-	end := bytes.Index(content[4:], []byte("\n---"))
-	if end < 0 {
-		return string(content)
-	}
-	end += 4
-	body := content[end:]
-	body = bytes.TrimPrefix(body, []byte("\n"))
-	return string(body)
+	return markdown.BodyAfterFrontmatter(content)
 }
 
 func truncatePreview(body string) string {

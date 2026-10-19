@@ -50,6 +50,41 @@ func TestImportPreviewMarkdownUsesPath(t *testing.T) {
 	}
 }
 
+func TestImportPreviewObsidianVault(t *testing.T) {
+	s, _ := buildSQLiteTestServer(t)
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, ".obsidian"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vault, "one.md"), []byte("---\nstatus: open\n---\n# One\nSee [[two]].\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, route := range []string{"preview", "infer-fields"} {
+		rec := postImportJSON(t, s, route, map[string]any{"from": "obsidian", "path": vault, "prefix": "vault"})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status %d: %s", route, rec.Code, rec.Body.String())
+		}
+	}
+
+	rec := postImportJSON(t, s, "preview", map[string]any{"from": "obsidian", "path": vault, "prefix": "vault"})
+	var resp previewResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v (%s)", err, rec.Body.String())
+	}
+	if len(resp.Records) != 1 {
+		t.Fatalf("records = %d, want 1: %s", len(resp.Records), rec.Body.String())
+	}
+	if body := resp.Records[0].BodyPreview; !strings.HasPrefix(body, "# One") {
+		t.Fatalf("body preview = %q, want it to start with the heading", body)
+	}
+
+	rec = postImportJSON(t, s, "preview", map[string]any{"from": "obsidian"})
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "path is required for obsidian") {
+		t.Fatalf("missing path: status %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestImportPreviewSQLiteUsesQuery(t *testing.T) {
 	s, _ := buildSQLiteTestServer(t)
 	dbPath := filepath.Join(t.TempDir(), "data.db")
