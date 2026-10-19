@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.78](https://github.com/kiwifs/kiwifs/compare/v0.19.77...v0.19.78) (2026-10-19)
+
+
+### Bug Fixes
+
+* **import:** support obsidian in the API and clean up preview bodies ([#541](https://github.com/kiwifs/kiwifs/issues/541)) ([389bb72](https://github.com/kiwifs/kiwifs/commit/389bb72ad0c43e66ba86b7fd65441f9d7903f005))
+
 ## [0.19.77](https://github.com/kiwifs/kiwifs/compare/v0.19.76...v0.19.77) (2026-10-19)
 
 
