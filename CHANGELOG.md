@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.77](https://github.com/kiwifs/kiwifs/compare/v0.19.76...v0.19.77) (2026-10-19)
+
+
+### Bug Fixes
+
+* **import:** pass path and query through preview and infer-fields ([#539](https://github.com/kiwifs/kiwifs/issues/539)) ([24fddbf](https://github.com/kiwifs/kiwifs/commit/24fddbf476b185b8998574a99ee01a334edce01d))
+
 ## [0.19.76](https://github.com/kiwifs/kiwifs/compare/v0.19.75...v0.19.76) (2026-10-14)
 
 
