@@ -26,6 +26,7 @@ describe("stripMarkdown", () => {
 
   it("leaves snake_case and arithmetic alone", () => {
     expect(stripMarkdown("use my_var_name and 2 * 3 * 4")).toBe("use my_var_name and 2 * 3 * 4");
+    expect(stripMarkdown("if a < b and c > d")).toBe("if a < b and c > d");
   });
 });
 

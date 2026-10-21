@@ -1025,6 +1025,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                               className="wiki-link-missing"
                             >
                               {children}
+                              <span className="sr-only"> (missing page, click to create)</span>
                             </a>
                           </WikiLinkPreview>
                         );

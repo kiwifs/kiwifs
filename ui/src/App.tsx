@@ -83,6 +83,7 @@ import { migrateSpaceScopedKeys } from "./lib/spaceStorage";
 import { useTheme } from "./hooks/useTheme";
 import { isMarkdown, isCanvasFile, isExcalidrawFile } from "./lib/paths";
 import { type TreeRevealRequest } from "./lib/treeReveal";
+import { invalidatePagePreview } from "./lib/pagePreview";
 import { HostToolbarActions } from "./components/HostToolbarActions";
 
 // The URL the app was opened with. Captured once, because the app rewrites
@@ -282,6 +283,8 @@ export default function App() {
 
   const refreshTree = useCallback((options?: { background?: boolean; reconcile?: boolean }) => {
     if (options?.background) {
+      // Background refreshes may skip the refreshKey bump that normally clears this cache.
+      invalidatePagePreview();
       const now = Date.now();
       lastLocalTreeMutationAtRef.current = now;
       if (options.reconcile === false) {
@@ -518,6 +521,7 @@ const handleSpaceSwitch = useCallback(() => {
   useEffect(() => {
     const es = new EventSource(sseUrl());
     const bump = () => {
+      invalidatePagePreview();
       const now = Date.now();
       if (now < suppressTreeEventsUntilRef.current) return;
       if (shouldRefreshTreeImmediately({

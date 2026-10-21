@@ -27,6 +27,7 @@ export function WikiLinkPreview({ path, missing = false, children }: Props) {
       return;
     }
     if (!open) return;
+    setState((s) => (s.status === "error" ? { status: "loading" } : s));
     let cancelled = false;
     loadPagePreview(path).then(
       (preview) => {

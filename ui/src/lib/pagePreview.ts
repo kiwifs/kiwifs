@@ -12,7 +12,7 @@ export const PREVIEW_SNIPPET_LENGTH = 200;
 
 export function stripMarkdown(text: string): string {
   return text
-    .replace(/<[^>]+>/g, "")
+    .replace(/<\/?[a-zA-Z][^<>]*>/g, "")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/!?\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target: string, label?: string) => label ?? target)
