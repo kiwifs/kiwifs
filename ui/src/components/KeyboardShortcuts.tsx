@@ -44,7 +44,7 @@ export function KeyboardShortcuts({ open, onOpenChange, bindings, conflicts = []
         )}
         <Command className="bg-transparent">
           <CommandInput placeholder="Filter shortcuts..." />
-          <CommandList>
+          <CommandList className="max-h-[70vh]">
             <CommandEmpty>No matching shortcuts.</CommandEmpty>
             {SHORTCUT_SECTIONS.map((s) => (
               <CommandGroup key={s.section} heading={s.section}>

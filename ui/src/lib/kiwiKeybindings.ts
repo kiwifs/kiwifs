@@ -226,5 +226,7 @@ export function isBareHelpKey(e: KeyboardEvent): boolean {
   const el = e.target as HTMLElement | null;
   if (!el || typeof el.tagName !== "string") return true;
   const tag = el.tagName.toLowerCase();
-  return tag !== "input" && tag !== "textarea" && tag !== "select" && !el.isContentEditable;
+  if (tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable) return false;
+  // Excalidraw opens its own help dialog on `?` without calling preventDefault.
+  return !el.closest?.(".excalidraw");
 }

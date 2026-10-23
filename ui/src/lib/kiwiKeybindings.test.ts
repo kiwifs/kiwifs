@@ -118,6 +118,11 @@ describe("isBareHelpKey", () => {
     expect(isBareHelpKey(ev({ tagName: "DIV", isContentEditable: true }))).toBe(false);
   });
 
+  it("leaves ? to Excalidraw inside a whiteboard", () => {
+    const canvas = { tagName: "CANVAS", isContentEditable: false, closest: (sel: string) => (sel === ".excalidraw" ? {} : null) };
+    expect(isBareHelpKey(ev(canvas))).toBe(false);
+  });
+
   it("ignores modified keys", () => {
     expect(isBareHelpKey(ev(null, { ctrlKey: true }))).toBe(false);
     expect(isBareHelpKey(ev(null, { key: "/" }))).toBe(false);
