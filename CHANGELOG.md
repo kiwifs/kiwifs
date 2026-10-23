@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.19.79](https://github.com/kiwifs/kiwifs/compare/v0.19.78...v0.19.79) (2026-10-23)
+
+
+### Features
+
+* **ui:** open shortcut sheet with ? and make it searchable ([#546](https://github.com/kiwifs/kiwifs/issues/546)) ([c1d537a](https://github.com/kiwifs/kiwifs/commit/c1d537a355ff36391b22db3fcb8c8fe047b2795b))
+* **ui:** preview wiki-link targets on hover ([#543](https://github.com/kiwifs/kiwifs/issues/543)) ([20d2413](https://github.com/kiwifs/kiwifs/commit/20d241342070f9ab1b4d10a7522ce588b04b2fff))
+
+
+### Bug Fixes
+
+* **ui:** leave ? to Excalidraw and let the shortcut sheet grow ([#548](https://github.com/kiwifs/kiwifs/issues/548)) ([d06c4bc](https://github.com/kiwifs/kiwifs/commit/d06c4bce0d183230ca5c664695f594aefc26271b))
+* **ui:** tighten wiki-link preview follow-ups ([#545](https://github.com/kiwifs/kiwifs/issues/545)) ([4cb2443](https://github.com/kiwifs/kiwifs/commit/4cb2443243854b34ebf76674fb8932267bc7c88d))
+
 ## [0.19.78](https://github.com/kiwifs/kiwifs/compare/v0.19.77...v0.19.78) (2026-10-19)
 
 
