@@ -176,6 +176,69 @@ rebase_before_push = true
 	}
 }
 
+func TestSpacesBackupTOML(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	body := `
+[backup]
+remote = "git@example.com:primary.git"
+
+[[spaces]]
+name = "agent-a"
+root = "spaces/agent-a"
+[spaces.backup]
+remote = "${AGENT_A_REMOTE}"
+interval = "10m"
+rebase_before_push = false
+
+[[spaces]]
+name = "agent-b"
+root = "spaces/agent-b"
+`
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+	t.Setenv("AGENT_A_REMOTE", "git@example.com:agent-a.git")
+	t.Setenv("KIWI_BACKUP_REMOTE", "git@example.com:env.git")
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(cfg.Spaces) != 2 {
+		t.Fatalf("spaces = %+v", cfg.Spaces)
+	}
+	a := cfg.Spaces[0].Backup
+	if a == nil || a.Remote != "git@example.com:agent-a.git" || a.Interval != "10m" || a.IsRebaseBeforePush() {
+		t.Fatalf("agent-a backup = %+v", a)
+	}
+	if cfg.Spaces[1].Backup != nil {
+		t.Fatalf("agent-b backup = %+v, want nil", cfg.Spaces[1].Backup)
+	}
+	if cfg.Backup.Remote != "git@example.com:env.git" {
+		t.Fatalf("primary remote = %q, want the env override", cfg.Backup.Remote)
+	}
+}
+
+func TestLoadBackupIgnoresPrimaryEnvOverrides(t *testing.T) {
+	root := t.TempDir()
+	cfgDir := filepath.Join(root, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte("[backup]\nremote = \"git@example.com:space.git\"\n"), 0644)
+	t.Setenv("KIWI_BACKUP_REMOTE", "git@example.com:env.git")
+	t.Setenv("KIWI_BACKUP_REBASE_BEFORE_PUSH", "false")
+	b, err := LoadBackup(root)
+	if err != nil {
+		t.Fatalf("LoadBackup: %v", err)
+	}
+	if b.Remote != "git@example.com:space.git" || !b.IsRebaseBeforePush() {
+		t.Fatalf("LoadBackup = %+v", b)
+	}
+
+	empty, err := LoadBackup(t.TempDir())
+	if err != nil || empty.Remote != "" {
+		t.Fatalf("missing file: %+v, %v", empty, err)
+	}
+}
+
 func TestVersioningMaxVersionsTOML(t *testing.T) {
 	root := t.TempDir()
 	cfgDir := filepath.Join(root, ".kiwi")

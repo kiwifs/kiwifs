@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +18,16 @@ const (
 	remoteName      = "backup"
 	cmdTimeout      = 60 * time.Second
 )
+
+// RequireRepoRoot errors unless root has its own .git. Without one, git walks
+// up to the enclosing repository, so a space nested inside the primary root
+// would push the primary's history to the space's remote.
+func RequireRepoRoot(root string) error {
+	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
+		return fmt.Errorf("%s is not a git repository (backup needs versioning = \"git\")", root)
+	}
+	return nil
+}
 
 // BackupStatus reports the result of the most recent backup push.
 type BackupStatus struct {
@@ -97,7 +109,7 @@ func (s *Syncer) run() {
 	defer s.done.Done()
 
 	if err := s.ensureRemote(); err != nil {
-		log.Printf("backup: setup remote: %v", err)
+		log.Printf("backup %s: setup remote: %v", s.remote, err)
 		return
 	}
 
@@ -163,7 +175,7 @@ func (s *Syncer) Push(branch string) error {
 func (s *Syncer) push(branch string) error {
 	if s.rebaseBeforePush {
 		if err := s.rebaseRemoteBranch(branch); err != nil {
-			log.Printf("backup: rebase before push failed: %v", err)
+			log.Printf("backup %s: rebase before push failed: %v", s.remote, err)
 			s.recordStatus(false, err)
 			return err
 		}
@@ -171,16 +183,16 @@ func (s *Syncer) push(branch string) error {
 
 	err := s.cmd("git", "push", remoteName, branch)
 	if err != nil {
-		log.Printf("backup: push failed: %v", err)
+		log.Printf("backup %s: push failed: %v", s.remote, err)
 		s.recordStatus(false, err)
 		return err
 	}
 	if verr := s.verifyPush(branch); verr != nil {
-		log.Printf("backup: push to %s/%s verification failed: %v", remoteName, branch, verr)
+		log.Printf("backup %s: push to %s verification failed: %v", s.remote, branch, verr)
 		s.recordStatus(true, nil)
 		return nil
 	}
-	log.Printf("backup: pushed + verified %s/%s", remoteName, branch)
+	log.Printf("backup %s: pushed + verified %s", s.remote, branch)
 	s.recordStatus(true, nil)
 	return nil
 }
@@ -222,12 +234,15 @@ func (s *Syncer) rebaseRemoteBranch(branch string) error {
 		_ = s.cmd("git", "rebase", "--abort")
 		return fmt.Errorf("rebase %s: %w", upstream, err)
 	}
-	log.Printf("backup: rebased local branch onto %s before push", upstream)
+	log.Printf("backup %s: rebased local branch onto %s before push", s.remote, upstream)
 	return nil
 }
 
 func (s *Syncer) isWorktreeClean() (bool, error) {
-	status, err := s.output("git", "status", "--porcelain")
+	// Untracked files can't be lost by a rebase, and every KiwiFS root has
+	// some (.gitattributes, .kiwi/state), so counting them blocked every push
+	// after the first. A rebase that would overwrite one fails and is aborted.
+	status, err := s.output("git", "status", "--porcelain", "--untracked-files=no")
 	if err != nil {
 		return false, fmt.Errorf("git status: %w", err)
 	}

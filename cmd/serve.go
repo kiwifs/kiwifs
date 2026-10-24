@@ -313,9 +313,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("invalid --space %q (want name=path)", spec)
 		}
 		spacePath = spaces.ResolveRoot(root, spacePath)
-		sub := *cfg
-		sub.Storage.Root = spacePath
-		filtered := spaces.FilterKeysForSpace(&sub, name)
+		sub := spaces.SubConfig(cfg, spacePath, nil)
+		filtered := spaces.FilterKeysForSpace(sub, name)
 		if err := spaceMgr.AddSpace(name, spacePath, filtered); err != nil {
 			return fmt.Errorf("add space %q: %w", name, err)
 		}
@@ -334,9 +333,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		spacePath := spaces.ResolveRoot(root, sc.Root)
-		sub := *cfg
-		sub.Storage.Root = spacePath
-		filtered := spaces.FilterKeysForSpace(&sub, sc.Name)
+		sub := spaces.SubConfig(cfg, spacePath, sc.Backup)
+		filtered := spaces.FilterKeysForSpace(sub, sc.Name)
 		if err := spaceMgr.AddSpace(sc.Name, spacePath, filtered); err != nil {
 			return fmt.Errorf("add config space %q: %w", sc.Name, err)
 		}

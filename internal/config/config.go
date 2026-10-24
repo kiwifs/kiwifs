@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -556,6 +558,11 @@ type SpaceConfig struct {
 	Name       string `toml:"name"`
 	Root       string `toml:"root"`
 	Visibility string `toml:"visibility"` // private | unlisted | public (default: private)
+	// Backup, from [spaces.backup], takes precedence over the [backup]
+	// section in the space's own .kiwi/config.toml. Spaces never inherit
+	// the primary [backup]: pushing unrelated repos to one remote would
+	// clobber each other.
+	Backup *BackupConfig `toml:"backup"`
 }
 
 // SpaceSettingsConfig holds per-space settings loaded from the space's
@@ -744,6 +751,26 @@ func Load(root string) (*Config, error) {
 	applyBackupEnv(&cfg)
 	normalizeConfig(&cfg)
 	return &cfg, nil
+}
+
+// LoadBackup reads only the [backup] section of root's .kiwi/config.toml,
+// for spaces other than the primary. ${VAR} references are expanded, but the
+// KIWI_BACKUP_* overrides are not applied: they configure the primary space,
+// and applying them here would point every space at the same remote. A
+// missing file yields an empty BackupConfig.
+func LoadBackup(root string) (BackupConfig, error) {
+	var file struct {
+		Backup BackupConfig `toml:"backup"`
+	}
+	path := filepath.Join(root, ".kiwi", "config.toml")
+	if _, err := toml.DecodeFile(path, &file); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return BackupConfig{}, nil
+		}
+		return BackupConfig{}, err
+	}
+	expandAllEnv(&file.Backup)
+	return file.Backup, nil
 }
 
 func normalizeConfig(cfg *Config) {

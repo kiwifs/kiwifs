@@ -75,7 +75,7 @@ func TestPushRefusesRebaseWithDirtyWorktree(t *testing.T) {
 	runGit(t, other, "commit", "-m", "other change")
 	runGit(t, other, "push", "origin", "main")
 
-	writeFile(t, work, "dirty.md", "not committed\n")
+	writeFile(t, work, "initial.md", "edited but not committed\n")
 
 	syncer, err := New(work, remote, "main", "", true)
 	if err != nil {
@@ -84,6 +84,94 @@ func TestPushRefusesRebaseWithDirtyWorktree(t *testing.T) {
 	err = syncer.Push("main")
 	if err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
 		t.Fatalf("expected dirty worktree error, got %v", err)
+	}
+}
+
+// Every KiwiFS root carries untracked files (.gitattributes, .kiwi/state).
+// They used to count as a dirty worktree, so only the first push succeeded.
+func TestPushRebasesWithUntrackedFiles(t *testing.T) {
+	root := t.TempDir()
+	remote := filepath.Join(root, "remote.git")
+	seed := filepath.Join(root, "seed")
+	work := filepath.Join(root, "work")
+	other := filepath.Join(root, "other")
+
+	runGit(t, root, "init", "--bare", remote)
+	cloneAndConfigure(t, remote, seed)
+	writeFile(t, seed, "initial.md", "initial\n")
+	runGit(t, seed, "add", ".")
+	runGit(t, seed, "commit", "-m", "initial")
+	runGit(t, seed, "push", "origin", "HEAD:main")
+
+	cloneAndConfigure(t, remote, work)
+	cloneAndConfigure(t, remote, other)
+
+	writeFile(t, other, "from-other.md", "other\n")
+	runGit(t, other, "add", ".")
+	runGit(t, other, "commit", "-m", "other change")
+	runGit(t, other, "push", "origin", "main")
+
+	writeFile(t, work, ".gitattributes", "* -text\n")
+	writeFile(t, work, filepath.Join(".kiwi", "state", "index.db"), "derived\n")
+	writeFile(t, work, "from-kiwifs.md", "kiwifs\n")
+	runGit(t, work, "add", "from-kiwifs.md")
+	runGit(t, work, "commit", "-m", "kiwifs change")
+
+	syncer, err := New(work, remote, "main", "", true)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := syncer.Push("main"); err != nil {
+		t.Fatalf("Push with untracked files: %v", err)
+	}
+	if got := runGitOutput(t, work, "log", "--format=%s", "-2"); !strings.Contains(got, "other change") {
+		t.Fatalf("not rebased onto remote:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(work, ".kiwi", "state", "index.db")); err != nil {
+		t.Fatalf("untracked file lost: %v", err)
+	}
+}
+
+func TestRebaseAbortsWhenUpstreamWouldOverwriteUntracked(t *testing.T) {
+	root := t.TempDir()
+	remote := filepath.Join(root, "remote.git")
+	seed := filepath.Join(root, "seed")
+	work := filepath.Join(root, "work")
+	other := filepath.Join(root, "other")
+
+	runGit(t, root, "init", "--bare", remote)
+	cloneAndConfigure(t, remote, seed)
+	writeFile(t, seed, "initial.md", "initial\n")
+	runGit(t, seed, "add", ".")
+	runGit(t, seed, "commit", "-m", "initial")
+	runGit(t, seed, "push", "origin", "HEAD:main")
+
+	cloneAndConfigure(t, remote, work)
+	cloneAndConfigure(t, remote, other)
+
+	writeFile(t, other, "notes.md", "theirs\n")
+	runGit(t, other, "add", ".")
+	runGit(t, other, "commit", "-m", "other adds notes.md")
+	runGit(t, other, "push", "origin", "main")
+
+	writeFile(t, work, "notes.md", "local untracked\n")
+	writeFile(t, work, "mine.md", "mine\n")
+	runGit(t, work, "add", "mine.md")
+	runGit(t, work, "commit", "-m", "local change")
+
+	syncer, err := New(work, remote, "main", "", true)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := syncer.Push("main"); err == nil {
+		t.Fatal("expected the rebase to refuse overwriting an untracked file")
+	}
+	data, err := os.ReadFile(filepath.Join(work, "notes.md"))
+	if err != nil || string(data) != "local untracked\n" {
+		t.Fatalf("untracked file changed: %q, %v", data, err)
+	}
+	if _, statErr := os.Stat(filepath.Join(work, ".git", "rebase-merge")); statErr == nil {
+		t.Fatal("rebase left in progress")
 	}
 }
 
@@ -153,6 +241,9 @@ func runGitMaybe(dir string, args ...string) error {
 func writeFile(t *testing.T, dir, name, content string) {
 	t.Helper()
 	path := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}

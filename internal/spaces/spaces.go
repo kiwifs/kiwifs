@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/api"
+	"github.com/kiwifs/kiwifs/internal/backup"
 	"github.com/kiwifs/kiwifs/internal/bootstrap"
 	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/workspace"
@@ -144,6 +145,8 @@ type Space struct {
 	// callers retain ownership of the lifetime — typical for the
 	// default space that already has its own defer chain in serve.go.
 	ownStack bool
+
+	backup *backup.Syncer
 }
 
 // NewManager creates a new space manager. baseCfg is used as the template
@@ -183,9 +186,33 @@ func (m *Manager) AddSpace(name, root string, cfg *config.Config) error {
 		Server:   stack.Server,
 		Stack:    stack,
 		ownStack: true,
+		backup:   startBackup(name, root, cfg.Backup, stack.Server),
 	}
 	m.order = append(m.order, name)
 	return nil
+}
+
+// startBackup launches the space's push loop when it has a remote. Failures
+// are logged rather than returned so a bad remote doesn't keep the space
+// from serving.
+func startBackup(name, root string, cfg config.BackupConfig, server *api.Server) *backup.Syncer {
+	if cfg.Remote == "" {
+		return nil
+	}
+	if err := backup.RequireRepoRoot(root); err != nil {
+		log.Printf("space %q: backup disabled: %v", name, err)
+		return nil
+	}
+	syncer, err := backup.New(root, cfg.Remote, cfg.Branch, cfg.Interval, cfg.IsRebaseBeforePush())
+	if err != nil {
+		log.Printf("space %q: backup disabled: %v", name, err)
+		return nil
+	}
+	if server != nil {
+		server.SetBackupStatus(func() any { return syncer.Status() })
+	}
+	syncer.Start()
+	return syncer
 }
 
 // RegisterStack registers a pre-built bootstrap.Stack under a space
@@ -235,6 +262,22 @@ func (m *Manager) GetSpace(name string) (*Space, bool) {
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// Each syncer makes a final push on Close; run them in parallel so one
+	// slow remote doesn't multiply shutdown time by the number of spaces.
+	var wg sync.WaitGroup
+	for _, sp := range m.spaces {
+		if sp.backup != nil {
+			wg.Add(1)
+			go func(s *backup.Syncer) {
+				defer wg.Done()
+				s.Close()
+			}(sp.backup)
+			sp.backup = nil
+		}
+	}
+	wg.Wait()
+
 	var firstErr error
 	for _, name := range m.order {
 		sp, ok := m.spaces[name]
@@ -278,6 +321,9 @@ func (m *Manager) RemoveSpace(name string) error {
 	m.saveDynamic()
 	m.mu.Unlock()
 
+	if sp.backup != nil {
+		sp.backup.Close()
+	}
 	if sp.Stack != nil && sp.ownStack {
 		_ = sp.Stack.Close()
 	}
@@ -377,15 +423,67 @@ func ResolveRoot(primaryRoot, spaceRoot string) string {
 // spaceCfg derives a config for a new space from the base config.
 func (m *Manager) spaceCfg(root string) *config.Config {
 	if m.baseCfg != nil {
-		sub := *m.baseCfg
-		sub.Storage.Root = root
-		return &sub
+		return SubConfig(m.baseCfg, root, nil)
 	}
 	return &config.Config{
 		Storage:    config.StorageConfig{Root: root},
 		Search:     config.SearchConfig{Engine: "sqlite"},
 		Versioning: config.VersioningConfig{Strategy: "git"},
+		Backup:     spaceBackup(root, nil),
 	}
+}
+
+// SubConfig copies base for a space rooted at root. The primary [backup] is
+// never inherited; the space's backup comes from override ([spaces.backup])
+// or else from the [backup] section of the space's own .kiwi/config.toml.
+func SubConfig(base *config.Config, root string, override *config.BackupConfig) *config.Config {
+	sub := *base
+	sub.Storage.Root = root
+	sub.Backup = spaceBackup(root, override)
+	return &sub
+}
+
+// LookupBackup finds the space called name, configured either by [[spaces]]
+// in cfg or by a CreateSpace call persisted to primaryRoot's
+// .kiwi/spaces.json, and returns its root and backup settings as serve
+// would resolve them.
+func LookupBackup(primaryRoot string, cfg *config.Config, name string) (string, config.BackupConfig, error) {
+	if cfg != nil {
+		for _, sc := range cfg.Spaces {
+			if sc.Name == name && sc.Root != "" {
+				root := ResolveRoot(primaryRoot, sc.Root)
+				return root, spaceBackup(root, sc.Backup), nil
+			}
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(primaryRoot, ".kiwi", "spaces.json"))
+	if err != nil && !os.IsNotExist(err) {
+		return "", config.BackupConfig{}, err
+	}
+	if err == nil {
+		var entries []persistedEntry
+		if err := json.Unmarshal(data, &entries); err != nil {
+			return "", config.BackupConfig{}, fmt.Errorf("parse spaces.json: %w", err)
+		}
+		for _, e := range entries {
+			if e.Name == name && e.Root != "" {
+				return e.Root, spaceBackup(e.Root, nil), nil
+			}
+		}
+	}
+	return "", config.BackupConfig{}, fmt.Errorf("space %q not found in [[spaces]] or .kiwi/spaces.json", name)
+}
+
+func spaceBackup(root string, override *config.BackupConfig) config.BackupConfig {
+	if override != nil {
+		return *override
+	}
+	b, err := config.LoadBackup(root)
+	if err != nil {
+		log.Printf("space at %s: ignoring [backup] (%v)", root, err)
+		return config.BackupConfig{}
+	}
+	return b
 }
 
 // FilterKeysForSpace returns a copy of cfg with Auth.APIKeys filtered to

@@ -258,6 +258,19 @@ Your knowledge base is a folder of markdown files with a `.git` directory. You c
 - `aws s3 sync` via the S3 protocol
 - Plain `rsync` or `cp` since the files are the truth
 
+**Spaces** (multi-space mode) are backed up separately, each to its own remote. A space never inherits the primary `[backup]` section or the `KIWI_BACKUP_*` variables, because pushing unrelated repositories to one remote would overwrite each other. Give a space a remote in `[[spaces]]`:
+
+```toml
+[[spaces]]
+name = "agent-a"
+root = "spaces/agent-a"
+[spaces.backup]
+remote = "git@github.com:me/agent-a-memory.git"
+interval = "10m"
+```
+
+Alternatively, put a `[backup]` section in the space's own `.kiwi/config.toml`. That also works for spaces added with `--space` or created through the API, and `[spaces.backup]` wins when both are set. Each space reports its status at `/api/kiwi/{space}/backup/status`, and `kiwifs backup --root <primary root> --space agent-a` pushes one space on demand. A space needs its own git repository (`versioning = "git"`, the default); otherwise backup stays off for it.
+
 ### Can I migrate from Obsidian / Notion / Confluence?
 
 Yes. `kiwifs import` supports all three:
