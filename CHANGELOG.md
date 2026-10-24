@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.80](https://github.com/kiwifs/kiwifs/compare/v0.19.79...v0.19.80) (2026-10-24)
+
+
+### Features
+
+* **spaces:** back up each space to its own remote ([#550](https://github.com/kiwifs/kiwifs/issues/550)) ([ebcd8ab](https://github.com/kiwifs/kiwifs/commit/ebcd8abfdbaf6ec2f186390db204e323e425e099))
+
 ## [0.19.79](https://github.com/kiwifs/kiwifs/compare/v0.19.78...v0.19.79) (2026-10-23)
 
 
