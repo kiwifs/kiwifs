@@ -171,6 +171,7 @@
     "@types/three": "^0.184.0",
     "@vitejs/plugin-react": "^4.3.4",
     "esbuild": "^0.25.12",
+    "happy-dom": "^21.0.4",
     "storybook": "^8.6.18",
     "typescript": "^5.7.2",
     "vite": "^5.4.11",
