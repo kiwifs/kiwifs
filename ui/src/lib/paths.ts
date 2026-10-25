@@ -67,3 +67,13 @@ export function breadcrumbs(p: string): { label: string; path: string }[] {
     };
   });
 }
+
+// Rendered markdown hrefs arrive percent-encoded; navigation encodes again,
+// so internal link targets must be decoded first.
+export function decodeHref(href: string): string {
+  try {
+    return decodeURIComponent(href);
+  } catch {
+    return href;
+  }
+}
