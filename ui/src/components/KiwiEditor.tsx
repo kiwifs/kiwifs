@@ -406,6 +406,11 @@ function EditorInner({
   const [sourceText, setSourceText] = useState(initialMd);
   const [fenceUnderCursor, setFenceUnderCursor] = useState<FencePreviewTarget | null>(null);
   const syncedMdRef = useRef(initialMd);
+  const editRevisionRef = useRef(0);
+  const savedRevisionRef = useRef(0);
+  // The component can load another document without remounting.
+  const saveLifecycleRef = useRef<object | null>(null);
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
   const editorModeRef = useRef(editorMode);
   editorModeRef.current = editorMode;
 
@@ -454,14 +459,27 @@ function EditorInner({
   }, []);
 
   useEffect(() => {
+    const lifecycle = {};
+    saveLifecycleRef.current = lifecycle;
     syncedMdRef.current = initialMd;
+    editRevisionRef.current = 0;
+    savedRevisionRef.current = 0;
     setSourceText(initialMd);
     setEditorMode(loadEditorModePreference());
     setFmText(frontmatterToText(frontmatterSplit.frontmatter));
     setVisualParseBody(initialVisualBody);
     setSaveStatus("clean");
+    setSaving(false);
     setVisualParseError(null);
-  }, [path, initialMd, frontmatterSplit.frontmatter, initialVisualBody]);
+    return () => {
+      saveLifecycleRef.current = null;
+      saveInFlightRef.current = null;
+      if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
+      if (savedFlashTimer.current) window.clearTimeout(savedFlashTimer.current);
+      autoSaveTimer.current = null;
+      savedFlashTimer.current = null;
+    };
+  }, [path, initialMd, frontmatterSplit.frontmatter, initialVisualBody, setSaving]);
 
   useEffect(() => {
     if (!editorModePref) return;
@@ -555,12 +573,23 @@ function EditorInner({
   }, [editor, editorMode, visualParseBody]);
 
   const onSaveRef = useRef<(opts?: { close?: boolean }) => Promise<boolean>>(async () => false);
-  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
+  const scheduleAutoSave = useCallback(() => {
+    const lifecycle = saveLifecycleRef.current;
+    if (!lifecycle) return;
+    if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = window.setTimeout(() => {
+      if (saveLifecycleRef.current !== lifecycle) return;
+      autoSaveTimer.current = null;
+      void onSaveRef.current();
+    }, 2000);
+  }, []);
   onSaveRef.current = async (opts) => {
-    if (saveInFlightRef.current) return saveInFlightRef.current;
-    if (editorMode === "visual" && !editor) return false;
+    const lifecycle = saveLifecycleRef.current;
+    if (!lifecycle || (editorMode === "visual" && !editor)) return false;
+    const isCurrent = () => saveLifecycleRef.current === lifecycle;
 
-    const savePromise = (async () => {
+    const savePromise = saveInFlightRef.current ?? (async () => {
+      const revision = editRevisionRef.current;
       if (autoSaveTimer.current) {
         window.clearTimeout(autoSaveTimer.current);
         autoSaveTimer.current = null;
@@ -576,49 +605,64 @@ function EditorInner({
           const body = await editor!.blocksToMarkdownLossy(editor!.document);
           md = joinFrontmatter(fmText, body);
         }
+        if (!isCurrent()) return false;
         const res = await api.writeFile(path, md, etagRef.current || undefined);
+        if (!isCurrent()) return false;
         etagRef.current = res.etag ? `"${res.etag}"` : null;
+        // A save acknowledges a snapshot, not a new document to load. Replacing
+        // live state here loses transient blocks, selection, and newer edits.
         syncedMdRef.current = md;
-        setSourceText(md);
-        const { fmText: nextFm, body: nextBody } = sourceToVisualParts(md);
-        setFmText(nextFm);
-        setVisualParseBody(nextBody);
-        setSaveStatus("saved");
+        savedRevisionRef.current = revision;
         setLastEdit({ author: "you", date: new Date().toISOString() });
         if (savedFlashTimer.current) window.clearTimeout(savedFlashTimer.current);
-        savedFlashTimer.current = window.setTimeout(() => setSaveStatus("clean"), 2000);
-        if (opts?.close) onSaved(path);
+        if (editRevisionRef.current === revision) {
+          setSaveStatus("saved");
+          savedFlashTimer.current = window.setTimeout(() => {
+            if (isCurrent()) setSaveStatus("clean");
+          }, 2000);
+        } else {
+          setSaveStatus("dirty");
+          // A debounce can expire while this request is still in flight.
+          if (!autoSaveTimer.current) scheduleAutoSave();
+        }
         return true;
       } catch (e) {
-        setSaveStatus("error");
-        setError(String(e));
+        if (isCurrent()) {
+          setSaveStatus("error");
+          setError(String(e));
+        }
         return false;
       } finally {
-        setSaving(false);
-        saveInFlightRef.current = null;
+        if (isCurrent()) {
+          setSaving(false);
+          saveInFlightRef.current = null;
+        }
       }
     })();
 
     saveInFlightRef.current = savePromise;
-    return savePromise;
+    const ok = await savePromise;
+    if (!isCurrent()) return false;
+    if (ok && opts?.close) {
+      if (editRevisionRef.current !== savedRevisionRef.current) {
+        return onSaveRef.current(opts);
+      }
+      onSaved(path);
+    }
+    return ok;
   };
+
+  const markVisualTitleDirty = useCallback(() => {
+    editRevisionRef.current += 1;
+    if (savedFlashTimer.current) window.clearTimeout(savedFlashTimer.current);
+    setSaveStatus("dirty");
+    scheduleAutoSave();
+  }, [scheduleAutoSave]);
 
   const markDirty = useCallback(() => {
     if (editorMode === "visual" && !ready) return;
-    setSaveStatus("dirty");
-    if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = window.setTimeout(() => {
-      onSaveRef.current();
-    }, 2000);
-  }, [ready, editorMode]);
-
-  const markVisualTitleDirty = useCallback(() => {
-    setSaveStatus("dirty");
-    if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = window.setTimeout(() => {
-      onSaveRef.current();
-    }, 2000);
-  }, []);
+    markVisualTitleDirty();
+  }, [ready, editorMode, markVisualTitleDirty]);
 
   const performModeSwitch = useCallback(
     async (target: EditorMode, opts?: { discard?: boolean }) => {
@@ -673,7 +717,10 @@ function EditorInner({
     setModeSwitchOpen(false);
     setPendingSwitchTarget(null);
     const ok = await onSaveRef.current();
-    if (ok) await performModeSwitch(target);
+    // Stay in the current mode if the save did not include the latest edits.
+    if (ok && editRevisionRef.current === savedRevisionRef.current) {
+      await performModeSwitch(target);
+    }
   }, [pendingSwitchTarget, performModeSwitch]);
 
   const handleModeSwitchDiscard = useCallback(() => {
@@ -683,13 +730,6 @@ function EditorInner({
     setPendingSwitchTarget(null);
     void performModeSwitch(target, { discard: true });
   }, [pendingSwitchTarget, performModeSwitch]);
-
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
-      if (savedFlashTimer.current) window.clearTimeout(savedFlashTimer.current);
-    };
-  }, []);
 
   useEffect(() => {
     if (!saveRef) return;

@@ -12,7 +12,7 @@ import Zoom from "react-medium-image-zoom";
 import "react-medium-image-zoom/dist/styles.css";
 import { AlertTriangle, BookOpen, Bug, Calendar, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Crosshair, Edit, Eye, File, FileAxis3D, FileQuestion, Flame, Folder, HelpCircle, History as HistoryIcon, Info, Lightbulb, Link2, List, ListChecks, MessageSquareQuote, NotebookPen, Pin, Plus, Quote, ScrollText, ShieldAlert, Star, Tag, TriangleAlert, Type, User, XCircle, Zap } from "lucide-react";
 import { api, type TreeEntry } from "@kw/lib/api";
-import { dirOf, isCanvasFile, isExcalidrawFile, normalizePath, titleize } from "@kw/lib/paths";
+import { decodeHref, dirOf, isCanvasFile, isExcalidrawFile, normalizePath, titleize } from "@kw/lib/paths";
 import { readingTime } from "@kw/lib/readingTime";
 import { useRawUrl } from "@kw/lib/rawUrl";
 import { HostPageActions } from "./HostPageActions";
@@ -976,7 +976,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                     a: ({ href, children, node: _node, ...rest }) => {
                       const h = href ?? "";
                       if (h.startsWith("#kiwi:")) {
-                        const raw = h.slice("#kiwi:".length);
+                        const raw = decodeHref(h.slice("#kiwi:".length));
                         const hashIdx = raw.indexOf("#");
                         const pagePath = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
                         const anchor = hashIdx >= 0 ? raw.slice(hashIdx) : "";
@@ -1009,7 +1009,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                         );
                       }
                       if (h.startsWith("#kiwi-missing:")) {
-                        const target = h.slice("#kiwi-missing:".length);
+                        const target = decodeHref(h.slice("#kiwi-missing:".length));
                         return (
                           <WikiLinkPreview path={`${target}.md`} missing>
                             <a
@@ -1051,7 +1051,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
 
                       const mdMatch = /^([^#]*\.md)(?:#(.+))?$/.exec(h);
                       if (mdMatch && !h.startsWith("http")) {
-                        const relPage = mdMatch[1];
+                        const relPage = decodeHref(mdMatch[1]);
                         const anchor = mdMatch[2] ?? "";
                         const dir = dirOf(path);
                         const joined = dir ? `${dir}/${relPage}` : relPage;
