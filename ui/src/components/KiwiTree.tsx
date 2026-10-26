@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -851,70 +853,69 @@ export const KiwiTree = forwardRef<KiwiTreeHandle, Props>(function KiwiTree(
         </div>
       )}
 
-      <Tree<FlatNode>
-        ref={treeRef}
-        data={data}
-        idAccessor="id"
-        childrenAccessor="children"
-        openByDefault={false}
-        initialOpenState={initialOpenState}
-        width="100%"
-        height={containerHeight || 400}
-        rowHeight={ROW_HEIGHT}
-        rowClassName="kiwi-tree-item"
-        indent={TREE_INDENT}
-        paddingTop={2}
-        paddingBottom={8}
-        selection={activePath || undefined}
-        selectionFollowsFocus
-        searchTerm={filterQuery.trim()}
-        searchMatch={treeSearchMatch}
-        disableDrag={(data) => enableKanbanDrag && !data.isDir && isMarkdown(data.id)}
-        disableDrop={({ parentNode, dragNodes }) =>
-          dragNodes.some((dragNode) => {
-            const dragId = stripTrailingSlash(dragNode.id);
-            const parentId = parentNode?.id ? stripTrailingSlash(parentNode.id) : "";
-            return dragNode.data.virtualDir || (dragNode.data.isDir && parentId.startsWith(`${dragId}/`));
-          })
-        }
-        disableEdit={(d) => isKiwiConfig(d.name) || !!d.virtualDir}
-        renderCursor={DropCursor}
-        onMove={handleMove}
-        onRename={handleRename}
-        onDelete={handleDelete}
-        onActivate={(node) => {
-          if (node.data.isDir && !node.data.virtualDir) {
-            node.toggle();
-            return;
+      <TreeNodeContext.Provider value={{
+        activePath,
+        revealRequest,
+        onSelect,
+        onCreateChild,
+        openDupDialog,
+        onMoved,
+        onDeleted,
+        openPromptDialog,
+        openConfirmDialog,
+        enableKanbanDrag,
+        pushOp,
+        root,
+        fileDragActive,
+        onNodeDragOver: handleNodeDragOver,
+        onNodeDrop: handleNodeDrop,
+        onFolderAltClick: (data) => openFolderRecursive(treeRef.current, data),
+        publishedPaths,
+        onPublishedChanged,
+      }}>
+        <Tree<FlatNode>
+          ref={treeRef}
+          data={data}
+          idAccessor="id"
+          childrenAccessor="children"
+          openByDefault={false}
+          initialOpenState={initialOpenState}
+          width="100%"
+          height={containerHeight || 400}
+          rowHeight={ROW_HEIGHT}
+          rowClassName="kiwi-tree-item"
+          indent={TREE_INDENT}
+          paddingTop={2}
+          paddingBottom={8}
+          selection={activePath || undefined}
+          selectionFollowsFocus
+          searchTerm={filterQuery.trim()}
+          searchMatch={treeSearchMatch}
+          disableDrag={(data) => enableKanbanDrag && !data.isDir && isMarkdown(data.id)}
+          disableDrop={({ parentNode, dragNodes }) =>
+            dragNodes.some((dragNode) => {
+              const dragId = stripTrailingSlash(dragNode.id);
+              const parentId = parentNode?.id ? stripTrailingSlash(parentNode.id) : "";
+              return dragNode.data.virtualDir || (dragNode.data.isDir && parentId.startsWith(`${dragId}/`));
+            })
           }
-          if (node.data.virtualDir || isMarkdown(node.id)) onSelect(node.id);
-          else if (!node.data.isDir) onSelect(node.id);
-        }}
-      >
-        {(props) => (
-          <TreeNode
-            {...props}
-            activePath={activePath}
-            revealRequest={revealRequest}
-            onSelect={onSelect}
-            onCreateChild={onCreateChild}
-            openDupDialog={openDupDialog}
-            onMoved={onMoved}
-            onDeleted={onDeleted}
-            openPromptDialog={openPromptDialog}
-            openConfirmDialog={openConfirmDialog}
-            enableKanbanDrag={enableKanbanDrag}
-            pushOp={pushOp}
-            root={root}
-            fileDragActive={fileDragActive}
-            onNodeDragOver={handleNodeDragOver}
-            onNodeDrop={handleNodeDrop}
-            onFolderAltClick={(data) => openFolderRecursive(treeRef.current, data)}
-            publishedPaths={publishedPaths}
-            onPublishedChanged={onPublishedChanged}
-          />
-        )}
-      </Tree>
+          disableEdit={(d) => isKiwiConfig(d.name) || !!d.virtualDir}
+          renderCursor={DropCursor}
+          onMove={handleMove}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          onActivate={(node) => {
+            if (node.data.isDir && !node.data.virtualDir) {
+              node.toggle();
+              return;
+            }
+            if (node.data.virtualDir || isMarkdown(node.id)) onSelect(node.id);
+            else if (!node.data.isDir) onSelect(node.id);
+          }}
+        >
+          {TreeNodeRenderer}
+        </Tree>
+      </TreeNodeContext.Provider>
 
       <KiwiTreeDialogs onDuplicate={handleDuplicate} />
     </div>
@@ -946,6 +947,18 @@ type TreeNodeProps = NodeRendererProps<FlatNode> & {
   publishedPaths?: Set<string>;
   onPublishedChanged?: () => void;
 };
+
+const TreeNodeContext = createContext<
+  Omit<TreeNodeProps, keyof NodeRendererProps<FlatNode>> | null
+>(null);
+
+// Arborist renders this function as a component. Context keeps its identity
+// stable when tree callbacks or other row props change.
+function TreeNodeRenderer(props: NodeRendererProps<FlatNode>) {
+  const context = useContext(TreeNodeContext);
+  if (!context) throw new Error("TreeNodeRenderer requires TreeNodeContext");
+  return <TreeNode {...props} {...context} />;
+}
 
 function FrontmatterWarning({ path, error }: { path: string; error?: string }) {
   if (!error) return null;
@@ -982,6 +995,29 @@ function TreeNode({
   publishedPaths,
   onPublishedChanged,
 }: TreeNodeProps) {
+  const pendingRenameRef = useRef(false);
+  useEffect(() => () => {
+    pendingRenameRef.current = false;
+  }, []);
+
+  const handleMenuOpenChange = (open: boolean) => {
+    if (open) pendingRenameRef.current = false;
+  };
+  const handleRenameSelect = () => {
+    pendingRenameRef.current = node.isEditable;
+  };
+  const handleMenuCloseAutoFocus = (event: Event) => {
+    if (!pendingRenameRef.current) return;
+    event.preventDefault();
+    // Closing animations keep the menu mounted. Even here, Radix removes its
+    // focus scope only after this callback returns, so defer the new input.
+    queueMicrotask(() => {
+      if (!pendingRenameRef.current) return;
+      pendingRenameRef.current = false;
+      node.edit();
+    });
+  };
+
   const canPublish = useUIConfigStore((s) => s.features.publish);
   const path = node.id;
   const isActive = activePath === path;
@@ -1037,7 +1073,7 @@ function TreeNode({
   if (node.data.isDir) {
     const isVirtual = !!node.data.virtualDir;
     return (
-      <ContextMenu>
+      <ContextMenu onOpenChange={handleMenuOpenChange}>
         <ContextMenuTrigger asChild>
           <div ref={dragHandle} className="h-full w-full">
             <TreeRowShell
@@ -1130,7 +1166,7 @@ function TreeNode({
             </TreeRowShell>
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent>
+        <ContextMenuContent onCloseAutoFocus={handleMenuCloseAutoFocus} onKeyDown={(event) => event.stopPropagation()}>
           {!isVirtual && (
             <>
               <ContextMenuItem onClick={() => onCreateChild?.(path)}>
@@ -1222,7 +1258,7 @@ function TreeNode({
             </>
           )}
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => node.edit()}>
+          <ContextMenuItem onSelect={handleRenameSelect}>
             <Move className="h-3.5 w-3.5" />
             Rename
           </ContextMenuItem>
@@ -1292,7 +1328,7 @@ function TreeNode({
   // Canvas files open in the canvas view
   if (isCanvasFile(path)) {
     return (
-      <ContextMenu>
+      <ContextMenu onOpenChange={handleMenuOpenChange}>
         <ContextMenuTrigger asChild>
           <div ref={dragHandle} className="h-full w-full">
             <TreeRowShell
@@ -1309,12 +1345,12 @@ function TreeNode({
             </TreeRowShell>
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent>
+        <ContextMenuContent onCloseAutoFocus={handleMenuCloseAutoFocus} onKeyDown={(event) => event.stopPropagation()}>
           <ContextMenuItem onClick={() => onSelect(path)}>
             <FileAxis3D className="h-3.5 w-3.5" /> Open
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => node.edit()}>
+          <ContextMenuItem onSelect={handleRenameSelect}>
             <Move className="h-3.5 w-3.5" /> Rename
           </ContextMenuItem>
           <ContextMenuItem onClick={() => {
@@ -1360,7 +1396,7 @@ function TreeNode({
   // Excalidraw whiteboard files open in the whiteboard view
   if (isExcalidrawFile(path)) {
     return (
-      <ContextMenu>
+      <ContextMenu onOpenChange={handleMenuOpenChange}>
         <ContextMenuTrigger asChild>
           <div ref={dragHandle} className="h-full w-full">
             <TreeRowShell
@@ -1377,12 +1413,12 @@ function TreeNode({
             </TreeRowShell>
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent>
+        <ContextMenuContent onCloseAutoFocus={handleMenuCloseAutoFocus} onKeyDown={(event) => event.stopPropagation()}>
           <ContextMenuItem onClick={() => onSelect(path)}>
             <PenTool className="h-3.5 w-3.5" /> Open
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => node.edit()}>
+          <ContextMenuItem onSelect={handleRenameSelect}>
             <Move className="h-3.5 w-3.5" /> Rename
           </ContextMenuItem>
           <ContextMenuItem onClick={() => {
@@ -1428,7 +1464,7 @@ function TreeNode({
   // Non-markdown asset
   if (!isMarkdown(path)) {
     return (
-      <ContextMenu>
+      <ContextMenu onOpenChange={handleMenuOpenChange}>
         <ContextMenuTrigger asChild>
           <div ref={dragHandle} className="h-full w-full">
             <TreeRowShell
@@ -1452,8 +1488,8 @@ function TreeNode({
             </TreeRowShell>
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onClick={() => node.edit()}>
+        <ContextMenuContent onCloseAutoFocus={handleMenuCloseAutoFocus} onKeyDown={(event) => event.stopPropagation()}>
+          <ContextMenuItem onSelect={handleRenameSelect}>
             <Move className="h-3.5 w-3.5" />
             Rename
           </ContextMenuItem>
@@ -1508,7 +1544,7 @@ function TreeNode({
 
   // Markdown page
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={handleMenuOpenChange}>
       <ContextMenuTrigger asChild>
         <div
           ref={(el) => {
@@ -1553,7 +1589,7 @@ function TreeNode({
           </TreeRowShell>
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent>
+      <ContextMenuContent onCloseAutoFocus={handleMenuCloseAutoFocus} onKeyDown={(event) => event.stopPropagation()}>
         <ContextMenuItem onClick={() => onSelect(path)}>
           <File className="h-3.5 w-3.5" />
           Open
@@ -1608,7 +1644,7 @@ function TreeNode({
           <Copy className="h-3.5 w-3.5" />
           Duplicate
         </ContextMenuItem>
-        <ContextMenuItem onClick={() => node.edit()}>
+        <ContextMenuItem onSelect={handleRenameSelect}>
           <Move className="h-3.5 w-3.5" />
           Rename
         </ContextMenuItem>
