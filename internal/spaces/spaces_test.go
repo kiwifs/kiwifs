@@ -543,3 +543,26 @@ func TestResolveRoot(t *testing.T) {
 		t.Fatalf("relative = %q, want %q", got, want)
 	}
 }
+
+func TestFilterKeysForSpaceKeepsScopeAndPrefix(t *testing.T) {
+	cfg := minimalCfg()
+	cfg.Auth.Type = "perspace"
+	cfg.Auth.APIKeys = []config.APIKeyEntry{
+		{Key: "a-read", Space: "a", Actor: "alice", Scope: "read", Prefix: "docs/"},
+		{Key: "b-admin", Space: "b"},
+		{Key: "global", Scope: "write"},
+	}
+	got := FilterKeysForSpace(cfg, "a").Auth.APIKeys
+	want := []config.APIKeyEntry{
+		{Key: "a-read", Actor: "alice", Scope: "read", Prefix: "docs/"},
+		{Key: "global", Scope: "write"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("key %d: got %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}

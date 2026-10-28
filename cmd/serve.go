@@ -21,6 +21,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/lockdir"
 	"github.com/kiwifs/kiwifs/internal/mcpserver"
 	kiwinfs "github.com/kiwifs/kiwifs/internal/nfs"
+	"github.com/kiwifs/kiwifs/internal/protoauth"
 	kiwis3 "github.com/kiwifs/kiwifs/internal/s3"
 	"github.com/kiwifs/kiwifs/internal/spaces"
 	"github.com/kiwifs/kiwifs/internal/watcher"
@@ -149,8 +150,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// default stack so its auth middleware is correctly configured.
 	spaceSpecs, _ := cmd.Flags().GetStringSlice("space")
 	primaryName := cfg.PrimarySpaceName()
+	multiSpace := len(spaceSpecs) > 0 || len(cfg.Spaces) > 0
+	primaryAuth := func(c *config.Config) config.AuthConfig {
+		if multiSpace {
+			return spaces.FilterKeysForSpace(c, primaryName).Auth
+		}
+		return c.Auth
+	}
 	defaultCfg := cfg
-	if len(spaceSpecs) > 0 || len(cfg.Spaces) > 0 {
+	if multiSpace {
 		defaultCfg = spaces.FilterKeysForSpace(cfg, primaryName)
 	}
 	stack, err := bootstrap.Build(primaryName, root, defaultCfg)
@@ -200,6 +208,34 @@ func runServe(cmd *cobra.Command, args []string) error {
 	nfsPort, _ := cmd.Flags().GetInt("nfs-port")
 	wantS3, _ := cmd.Flags().GetBool("s3")
 	s3Port, _ := cmd.Flags().GetInt("s3-port")
+
+	// S3 and WebDAV expose the whole tree, so they must enforce the same
+	// [auth] as REST or refuse to start; serving them open would bypass it.
+	var protoAuths []protoAuthBinding
+	protocolAuth := func(label string, authFor func(*config.Config) config.AuthConfig) (*protoauth.Checker, error) {
+		auth := authFor(cfg)
+		c, err := protoauth.New(auth)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w — disable it or use auth.type = \"apikey\" or \"perspace\"", label, err)
+		}
+		if c.IsOpen() {
+			log.Printf("WARNING: %s accepts unauthenticated reads and writes (auth.type=%q)", label, auth.Type)
+		}
+		protoAuths = append(protoAuths, protoAuthBinding{label: label, authFor: authFor, checker: c})
+		return c, nil
+	}
+	var davAuth, s3Auth *protoauth.Checker
+	if wantWebDAV {
+		if davAuth, err = protocolAuth("WebDAV", primaryAuth); err != nil {
+			return err
+		}
+	}
+	if wantS3 && len(spaceSpecs) == 0 {
+		if s3Auth, err = protocolAuth("S3 API", primaryAuth); err != nil {
+			return err
+		}
+	}
+
 	stack.Server.SetProtocolHealth([]api.ProtocolHealthProbe{
 		serveProtocolProbe("s3", wantS3, cfg.Server.Host, s3Port),
 		serveProtocolProbe("webdav", wantWebDAV, cfg.Server.Host, webdavPort),
@@ -237,7 +273,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	if wantWebDAV {
 		addr := fmt.Sprintf("%s:%d", cfg.Server.Host, webdavPort)
-		handler := kiwidav.New(root, stack.Pipeline, "webdav", cfg.Auth.APIKey).Handler("")
+		handler := kiwidav.New(root, stack.Pipeline, "webdav", davAuth).Handler("")
 		runHTTP("KiwiFS WebDAV", &http.Server{Addr: addr, Handler: handler})
 	}
 
@@ -363,17 +399,24 @@ func runServe(cmd *cobra.Command, args []string) error {
 				if sp == nil || sp.Stack == nil {
 					continue
 				}
+				bucketAuth, err := protocolAuth(fmt.Sprintf("S3 bucket %q", name), func(c *config.Config) config.AuthConfig {
+					return spaces.FilterKeysForSpace(c, name).Auth
+				})
+				if err != nil {
+					return err
+				}
 				buckets[name] = kiwis3.SpaceBackend{
 					Store: sp.Stack.Store,
 					Pipe:  sp.Stack.Pipeline,
+					Auth:  bucketAuth,
 				}
 			}
-			s3Srv = kiwis3.NewMultiSpace(buckets, order, cfg.Auth.APIKey)
+			s3Srv = kiwis3.NewMultiSpace(buckets, order)
 			for _, name := range order {
 				log.Printf("  aws s3 ls s3://%s/ --endpoint-url http://%s:%d", name, cfg.Server.Host, s3Port)
 			}
 		} else {
-			s3Srv = kiwis3.New(root, stack.Pipeline, stack.Store, cfg.Auth.APIKey)
+			s3Srv = kiwis3.New(root, stack.Pipeline, stack.Store, s3Auth)
 			log.Printf("  aws s3 ls s3://knowledge/ --endpoint-url http://%s:%d", cfg.Server.Host, s3Port)
 			log.Printf("  aws s3 cp file.md s3://knowledge/path/ --endpoint-url http://%s:%d", cfg.Server.Host, s3Port)
 		}
@@ -418,6 +461,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 					filtered := spaces.FilterKeysForSpace(newCfg, name)
 					sp.Server.ReloadAuth(&filtered.Auth)
 				}
+				for _, p := range protoAuths {
+					if err := p.checker.Reload(p.authFor(newCfg)); err != nil {
+						log.Printf("sighup: %s now rejects every request: %v", p.label, err)
+					}
+				}
 				log.Printf("sighup: auth reloaded for %d space(s)", len(spaceMgr.ListSpaces()))
 			}
 		}
@@ -446,4 +494,12 @@ func wireMCPHTTP(stack *bootstrap.Stack) error {
 	}
 	stack.Server.SetMCPHandler(mcpserver.StreamableHTTPHandler(mcpSrv, mcpserver.AuthTokenFromConfig(stack.Config)))
 	return nil
+}
+
+// protoAuthBinding ties a protocol server's credential checker to the
+// slice of [auth] it enforces, so SIGHUP reloads rotate its keys too.
+type protoAuthBinding struct {
+	label   string
+	authFor func(*config.Config) config.AuthConfig
+	checker *protoauth.Checker
 }

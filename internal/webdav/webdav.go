@@ -5,7 +5,6 @@ package webdav
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,16 +14,17 @@ import (
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/pipeline"
+	"github.com/kiwifs/kiwifs/internal/protoauth"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"golang.org/x/net/webdav"
 )
 
 // FS implements webdav.FileSystem on top of a local root directory.
 type FS struct {
-	root   string
-	pipe   *pipeline.Pipeline
-	actor  string
-	apiKey string // empty = auth disabled
+	root  string
+	pipe  *pipeline.Pipeline
+	actor string
+	auth  *protoauth.Checker
 }
 
 type actorContextKey struct{}
@@ -39,13 +39,14 @@ func (f *FS) actorFor(ctx context.Context) string {
 }
 
 // New builds a WebDAV filesystem rooted at `root`. Writes fan out through
-// `pipe`; `actor` is attributed to the resulting git commits. apiKey, if
-// non-empty, requires Basic or Bearer auth on every request.
-func New(root string, pipe *pipeline.Pipeline, actor, apiKey string) *FS {
+// `pipe`; `actor` is attributed to the resulting git commits. Unless auth
+// is open, every request needs Basic or Bearer credentials; a nil auth
+// denies everything.
+func New(root string, pipe *pipeline.Pipeline, actor string, auth *protoauth.Checker) *FS {
 	if actor == "" {
 		actor = "webdav"
 	}
-	return &FS{root: root, pipe: pipe, actor: actor, apiKey: apiKey}
+	return &FS{root: root, pipe: pipe, actor: actor, auth: auth}
 }
 
 // Handler wires the FS into an http.Handler with an in-memory lock system.
@@ -58,12 +59,8 @@ func (f *FS) Handler(prefix string) http.Handler {
 
 	// X-Actor attribution is independent of KiwiFS API-key authentication.
 	// The gateway may authenticate the user while KiwiFS auth is disabled, so
-	// the actor context must still be installed when apiKey is empty.
-	var next http.Handler = f.withActor(h)
-	if f.apiKey != "" {
-		next = f.auth(next)
-	}
-	return next
+	// the actor context must still be installed when auth is open.
+	return f.authenticate(f.withActor(h))
 }
 
 // withActor copies the trusted gateway identity into the request context used
@@ -80,29 +77,30 @@ func (f *FS) withActor(next http.Handler) http.Handler {
 	})
 }
 
-// auth gates every WebDAV request behind Bearer-token or Basic auth.
-// Most WebDAV clients (macOS Finder, Windows Explorer) speak Basic; CLI
-// tools speak Bearer. Both map to the same shared secret.
-func (f *FS) auth(next http.Handler) http.Handler {
-	expectedBearer := []byte("Bearer " + f.apiKey)
+// authenticate gates every WebDAV request behind Bearer-token or Basic
+// auth. Most WebDAV clients (macOS Finder, Windows Explorer) speak Basic
+// with the API key as the password; CLI tools speak Bearer.
+func (f *FS) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authz := r.Header.Get("Authorization")
-		if authz != "" {
-			if subtle.ConstantTimeCompare([]byte(authz), expectedBearer) == 1 {
-				next.ServeHTTP(w, r)
-				return
-			}
-			// Basic auth: any username, password must match the API key.
-			if _, pass, ok := r.BasicAuth(); ok {
-				if subtle.ConstantTimeCompare([]byte(pass), []byte(f.apiKey)) == 1 {
-					next.ServeHTTP(w, r)
-					return
-				}
-			}
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok {
+			_, token, _ = r.BasicAuth()
+		}
+		if f.auth.Allow(token, isWriteMethod(r.Method)) {
+			next.ServeHTTP(w, r)
+			return
 		}
 		w.Header().Set("WWW-Authenticate", `Basic realm="kiwifs"`)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	})
+}
+
+func isWriteMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, "PROPFIND":
+		return false
+	}
+	return true
 }
 
 // abs resolves a WebDAV path (always slash-separated, may have leading '/')

@@ -15,6 +15,7 @@ import (
 
 	"github.com/johannesboyne/gofakes3"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
+	"github.com/kiwifs/kiwifs/internal/protoauth"
 	"github.com/kiwifs/kiwifs/internal/storage"
 )
 
@@ -31,6 +32,8 @@ const defaultBucket = "knowledge"
 type SpaceBackend struct {
 	Store storage.Storage
 	Pipe  *pipeline.Pipeline
+	// Auth gates requests to this bucket. A nil Auth denies everything.
+	Auth *protoauth.Checker
 }
 
 // adapter implements gofakes3.Backend on top of one or more KiwiFS

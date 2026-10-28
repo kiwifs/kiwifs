@@ -94,8 +94,8 @@ func escapeRawPath(p string) string {
 	return strings.Join(segs, "/")
 }
 
-// authEnforced mirrors authMiddleware: a mode without credentials configured
-// (or OIDC whose provider failed to load) lets every request through.
+// authEnforced mirrors authMiddleware: a key mode without keys configured
+// lets every request through, while OIDC always gates requests.
 func (s *Server) authEnforced() bool {
 	la := s.auth.Load()
 	if la == nil {
@@ -107,7 +107,7 @@ func (s *Server) authEnforced() bool {
 	case "perspace":
 		return len(la.keys) > 0
 	case "oidc":
-		return la.oidcMW != nil
+		return true
 	}
 	return false
 }

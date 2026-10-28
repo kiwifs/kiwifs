@@ -499,7 +499,7 @@ func FilterKeysForSpace(cfg *config.Config, spaceName string) *config.Config {
 	for _, k := range cfg.Auth.APIKeys {
 		if k.Space == spaceName || k.Space == "" {
 			out.Auth.APIKeys = append(out.Auth.APIKeys, config.APIKeyEntry{
-				Key: k.Key, Actor: k.Actor,
+				Key: k.Key, Actor: k.Actor, Scope: k.Scope, Prefix: k.Prefix,
 			})
 		}
 	}

@@ -1035,3 +1035,35 @@ func TestHandler_Query_FormatTable(t *testing.T) {
 		t.Errorf("expected Alpha in table output, got:\n%s", body)
 	}
 }
+
+// TestOIDCFailsClosed guards against OIDC degrading to no auth when the
+// issuer is missing or its discovery endpoint is unreachable.
+func TestOIDCFailsClosed(t *testing.T) {
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "down", http.StatusInternalServerError)
+	}))
+	t.Cleanup(down.Close)
+
+	for name, issuer := range map[string]string{"no issuer": "", "unreachable issuer": down.URL} {
+		t.Run(name, func(t *testing.T) {
+			dir, pipe, cstore := buildTestPipeline(t)
+			cfg := &config.Config{}
+			cfg.Storage.Root = dir
+			cfg.Auth.Type = "oidc"
+			cfg.Auth.OIDC.Issuer = issuer
+			s := NewServer(cfg, pipe, nil, cstore, nil, nil, nil)
+
+			for _, method := range []string{http.MethodGet, http.MethodPut} {
+				req := httptest.NewRequest(method, "/api/kiwi/file?path=note.md", strings.NewReader("# hi\n"))
+				rec := httptest.NewRecorder()
+				s.echo.ServeHTTP(rec, req)
+				if rec.Code != http.StatusServiceUnavailable {
+					t.Fatalf("%s: got %d, want 503 (%s)", method, rec.Code, rec.Body.String())
+				}
+			}
+			if !s.authEnforced() {
+				t.Fatal("authEnforced must report true for oidc")
+			}
+		})
+	}
+}

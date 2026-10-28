@@ -14,7 +14,6 @@
 package s3
 
 import (
-	"crypto/subtle"
 	"fmt"
 	"mime"
 	"net/http"
@@ -24,6 +23,7 @@ import (
 
 	"github.com/johannesboyne/gofakes3"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
+	"github.com/kiwifs/kiwifs/internal/protoauth"
 	"github.com/kiwifs/kiwifs/internal/storage"
 )
 
@@ -33,27 +33,26 @@ import (
 // thin Bearer-token auth layer.
 type Server struct {
 	handler http.Handler
-	apiKey  string
+	auth    map[string]*protoauth.Checker
 }
 
 // New wires the gofakes3 server to a Backend serving the default
-// single-space bucket "knowledge". apiKey, if non-empty, gates every
-// request behind a Bearer token — matches the REST API's auth=none /
-// auth=apikey distinction.
+// single-space bucket "knowledge". auth gates every request; a nil auth
+// denies everything.
 //
 // Use NewMultiSpace when --space entries are configured so each space
 // is addressable as its own bucket.
-func New(_ string, pipe *pipeline.Pipeline, store storage.Storage, apiKey string) *Server {
+func New(_ string, pipe *pipeline.Pipeline, store storage.Storage, auth *protoauth.Checker) *Server {
 	return NewMultiSpace(map[string]SpaceBackend{
-		defaultBucket: {Store: store, Pipe: pipe},
-	}, []string{defaultBucket}, apiKey)
+		defaultBucket: {Store: store, Pipe: pipe, Auth: auth},
+	}, []string{defaultBucket})
 }
 
 // NewMultiSpace wires the gofakes3 server with one bucket per space.
 // `order` controls the order ListBuckets returns names — it should match
 // the registration order from spaces.Manager so the bucket list is
 // deterministic across restarts.
-func NewMultiSpace(buckets map[string]SpaceBackend, order []string, apiKey string) *Server {
+func NewMultiSpace(buckets map[string]SpaceBackend, order []string) *Server {
 	be := newAdapter(buckets, order)
 	g := gofakes3.New(be,
 		// AutoBucket spares clients an explicit CreateBucket on first
@@ -65,22 +64,24 @@ func NewMultiSpace(buckets map[string]SpaceBackend, order []string, apiKey strin
 		// correctness.
 		gofakes3.WithTimeSkewLimit(0),
 	)
-	return &Server{handler: g.Server(), apiKey: apiKey}
+	auth := make(map[string]*protoauth.Checker, len(buckets))
+	for name, b := range buckets {
+		auth[name] = b.Auth
+	}
+	return &Server{handler: g.Server(), auth: auth}
 }
 
 // Handler returns the http.Handler suitable for mounting at /s3 (or
-// wherever the serve command exposes it). When apiKey is set, every
-// request must carry `Authorization: Bearer <apiKey>` — gofakes3
-// otherwise speaks unauthenticated S3, which would expose the entire
-// knowledge tree to anyone who can reach the port.
+// wherever the serve command exposes it). Unless a bucket's auth is
+// open, every request must carry `Authorization: Bearer <key>` —
+// gofakes3 otherwise speaks unauthenticated S3, which would expose the
+// entire knowledge tree to anyone who can reach the port.
 func (s *Server) Handler() http.Handler {
-	if s.apiKey == "" {
-		return s.handler
-	}
-	expected := []byte("Bearer " + s.apiKey)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got := []byte(r.Header.Get("Authorization"))
-		if subtle.ConstantTimeCompare(got, expected) != 1 {
+		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		write := r.Method != http.MethodGet && r.Method != http.MethodHead
+		bucket, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
+		if !s.allow(bucket, token, write) {
 			// gofakes3's response framing is XML; replicate so a denied
 			// client sees the same error shape it would for any other
 			// failure rather than a free-form text body that breaks
@@ -92,6 +93,21 @@ func (s *Server) Handler() http.Handler {
 		}
 		s.handler.ServeHTTP(w, r)
 	})
+}
+
+// allow checks the bucket's own credentials. Requests that name no known
+// bucket (ListBuckets, or a typo that should surface as NoSuchBucket)
+// pass if the token is good for any bucket.
+func (s *Server) allow(bucket, token string, write bool) bool {
+	if c, ok := s.auth[bucket]; ok {
+		return c.Allow(token, write)
+	}
+	for _, c := range s.auth {
+		if c.Allow(token, write) {
+			return true
+		}
+	}
+	return false
 }
 
 // weakETag derives a cheap tag from size+mtime. Suitable for HEAD and
