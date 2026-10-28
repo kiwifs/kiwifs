@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.19.81](https://github.com/kiwifs/kiwifs/compare/v0.19.80...v0.19.81) (2026-10-28)
+
+
+### Bug Fixes
+
+* **auth:** enforce configured auth on S3 and WebDAV ([#557](https://github.com/kiwifs/kiwifs/issues/557)) ([dfcfb3d](https://github.com/kiwifs/kiwifs/commit/dfcfb3d5e18eaad1d3656c1dcadc0976a836828b))
+* **ui:** preserve live editor state after autosave ([#552](https://github.com/kiwifs/kiwifs/issues/552)) ([8597fd4](https://github.com/kiwifs/kiwifs/commit/8597fd4dc898d8b220d482ce5d756c57c5286b2a))
+* **ui:** preserve sidebar rename focus after menu close ([#553](https://github.com/kiwifs/kiwifs/issues/553)) ([4c3b765](https://github.com/kiwifs/kiwifs/commit/4c3b765291131c323d8f45219a6852014d2ce4bc))
+* **ui:** stop double-encoding spaces in page link URLs ([#554](https://github.com/kiwifs/kiwifs/issues/554)) ([93e90da](https://github.com/kiwifs/kiwifs/commit/93e90da6a6d270a4cf84ab91d758d7683548c210))
+
 ## [0.19.80](https://github.com/kiwifs/kiwifs/compare/v0.19.79...v0.19.80) (2026-10-24)
 
 
