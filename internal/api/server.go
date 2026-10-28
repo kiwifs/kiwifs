@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -157,11 +158,41 @@ type Server struct {
 }
 
 type liveAuth struct {
-	typ     string
-	global  string
-	keys    []config.APIKeyEntry
-	oidcMW  echo.MiddlewareFunc
-	oidcIss string
+	typ    string
+	global string
+	keys   []config.APIKeyEntry
+	oidc   *lazyOIDC
+}
+
+// oidcRetryInterval bounds how often a failed OIDC discovery is retried;
+// until one succeeds every request is rejected rather than let through.
+const oidcRetryInterval = 30 * time.Second
+
+type lazyOIDC struct {
+	issuer   string
+	clientID string
+
+	mu      sync.Mutex
+	mw      echo.MiddlewareFunc
+	lastTry time.Time
+}
+
+func (o *lazyOIDC) middleware() echo.MiddlewareFunc {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.mw != nil || o.issuer == "" || (!o.lastTry.IsZero() && time.Since(o.lastTry) < oidcRetryInterval) {
+		return o.mw
+	}
+	o.lastTry = time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	p, err := oidc.NewProvider(ctx, o.issuer)
+	if err != nil {
+		log.Printf("warning: OIDC provider setup failed (%v) — rejecting requests until it succeeds", err)
+		return nil
+	}
+	o.mw = oidcMiddleware(p.Verifier(&oidc.Config{ClientID: o.clientID}))
+	return o.mw
 }
 
 func (s *Server) SetJanitorScheduler(sched *janitor.Scheduler) {
@@ -354,10 +385,11 @@ func (s *Server) authMiddleware() echo.MiddlewareFunc {
 				}
 				return perSpaceKeyHandler(la.keys)(next)(c)
 			case "oidc":
-				if la.oidcMW == nil {
-					return next(c)
+				mw := la.oidc.middleware()
+				if mw == nil {
+					return echo.NewHTTPError(http.StatusServiceUnavailable, "OIDC authentication is unavailable")
 				}
-				return la.oidcMW(next)(c)
+				return mw(next)(c)
 			}
 			return next(c)
 		}
@@ -370,18 +402,18 @@ func (s *Server) ReloadAuth(cfg *config.AuthConfig) {
 }
 
 func (s *Server) installAuth(cfg *config.AuthConfig) {
-	next := &liveAuth{typ: cfg.Type, global: cfg.APIKey, keys: cfg.APIKeys, oidcIss: cfg.OIDC.Issuer}
-	if cur := s.auth.Load(); cur != nil && cur.oidcIss == next.oidcIss && cur.oidcMW != nil {
-		next.oidcMW = cur.oidcMW
-	} else if cfg.Type == "oidc" && cfg.OIDC.Issuer != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		p, err := oidc.NewProvider(ctx, cfg.OIDC.Issuer)
-		if err != nil {
-			log.Printf("warning: OIDC provider setup failed (%v) — auth disabled", err)
+	next := &liveAuth{typ: cfg.Type, global: cfg.APIKey, keys: cfg.APIKeys}
+	if cfg.Type == "oidc" {
+		cur := s.auth.Load()
+		if cur != nil && cur.oidc != nil && cur.oidc.issuer == cfg.OIDC.Issuer && cur.oidc.clientID == cfg.OIDC.ClientID {
+			next.oidc = cur.oidc
 		} else {
-			verifier := p.Verifier(&oidc.Config{ClientID: cfg.OIDC.ClientID})
-			next.oidcMW = oidcMiddleware(verifier)
+			next.oidc = &lazyOIDC{issuer: cfg.OIDC.Issuer, clientID: cfg.OIDC.ClientID}
+			if cfg.OIDC.Issuer == "" {
+				log.Printf("warning: auth.type = \"oidc\" without [auth.oidc] issuer — rejecting every request")
+			} else {
+				next.oidc.middleware()
+			}
 		}
 	}
 	s.auth.Store(next)

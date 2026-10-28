@@ -24,6 +24,7 @@ import (
 
 	"github.com/kiwifs/kiwifs/internal/events"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
+	"github.com/kiwifs/kiwifs/internal/protoauth"
 	kiwis3 "github.com/kiwifs/kiwifs/internal/s3"
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/storage"
@@ -46,7 +47,7 @@ func newTestServer(t *testing.T) (*httptest.Server, storage.Storage) {
 	ver := versioning.NewNoop()
 	hub := events.NewHub()
 	pipe := pipeline.New(store, ver, searcher, nil, hub, nil, dir)
-	srv := kiwis3.New(dir, pipe, store, "")
+	srv := kiwis3.New(dir, pipe, store, protoauth.None())
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, store
@@ -54,7 +55,7 @@ func newTestServer(t *testing.T) (*httptest.Server, storage.Storage) {
 
 // s3PutObject issues a raw S3 PUT against the test server. We send the
 // minimal wire payload (no signing, no ACL) because the adapter doesn't
-// enforce either when apiKey is empty.
+// enforce either when auth is open.
 func s3PutObject(t *testing.T, ts *httptest.Server, key string, body []byte) {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPut, ts.URL+"/"+testBucket+"/"+key, bytes.NewReader(body))

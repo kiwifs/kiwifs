@@ -121,9 +121,12 @@ When the header is empty or missing, the fallback depends on the protocol:
 
 `X-Actor` is trusted input, so it only carries the identity you can vouch for.
 On REST, the scoped-token and OIDC middleware overwrite the header with the
-authenticated identity, so a client cannot forge it. WebDAV auth is a single
-shared API key that carries no identity, so KiwiFS takes `X-Actor` at face
-value — anyone holding that key can attribute a write to any actor. Terminate
+authenticated identity, so a client cannot forge it. WebDAV and S3 accept the
+`apikey` key, or any `perspace` key that isn't limited to a folder or prefix
+(`scope = "read"` keys are read-only there); with `auth.type = "oidc"` they
+refuse to start, since their clients can't log in through OIDC. Those keys
+carry no identity, so KiwiFS takes `X-Actor` at face value — anyone holding a
+key can attribute a write to any actor. Terminate
 authentication at a gateway that sets `X-Actor` itself and strips any
 client-supplied value before forwarding.
 

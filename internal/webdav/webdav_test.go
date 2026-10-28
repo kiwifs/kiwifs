@@ -15,6 +15,7 @@ import (
 
 	"github.com/kiwifs/kiwifs/internal/events"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
+	"github.com/kiwifs/kiwifs/internal/protoauth"
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/kiwifs/kiwifs/internal/versioning"
@@ -29,7 +30,7 @@ func newWebDAVTestServer(t *testing.T) (*httptest.Server, string) {
 		t.Fatalf("storage: %v", err)
 	}
 	pipe := pipeline.New(store, versioning.NewNoop(), search.NewGrep(root), nil, events.NewHub(), nil, root)
-	srv := httptest.NewServer(New(root, pipe, "test", "").Handler("/dav"))
+	srv := httptest.NewServer(New(root, pipe, "test", protoauth.None()).Handler("/dav"))
 	t.Cleanup(srv.Close)
 	return srv, root
 }
@@ -107,7 +108,7 @@ func TestRequestActorContext(t *testing.T) {
 	}
 	hub := events.NewHub()
 	pipe := pipeline.New(store, versioning.NewNoop(), search.NewGrep(root), nil, hub, nil, root)
-	fs := New(root, pipe, "webdav", "")
+	fs := New(root, pipe, "webdav", protoauth.None())
 	messages, err := hub.Subscribe()
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
