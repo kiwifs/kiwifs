@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { action } from "@storybook/addon-actions";
-import { within } from "@storybook/test";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { action } from "storybook/actions";
+import { within } from "storybook/test";
 import { KiwiBases } from "./KiwiBases";
 import { MockApiProvider, type MockOverrides } from "./__mocks__/apiMock";
 import { mockBasesViews } from "./__mocks__/data";
@@ -54,7 +54,7 @@ export const TableView: Story = {
     const canvas = within(canvasElement);
     await canvas.findByText("Bases");
     await canvas.findByText("Frontmatter Guide");
-    await canvas.findByText("published");
+    await canvas.findAllByText("published");
   },
 };
 

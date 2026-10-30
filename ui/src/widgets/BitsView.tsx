@@ -60,8 +60,11 @@ export interface BitsViewProps {
   why?: Record<string, string>;
   /** Name for the inspect bus. */
   widgetId?: string;
+  /** Side of one bit cell in px. Default 40. */
   cellSize?: number;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
   /** Accessible name. Defaults to a summary of the value and set bits. */
   ariaLabel?: string;

@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: ${{ needs.changes.outputs.ui == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.infra == 'true' }}
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
@@ -81,6 +81,37 @@ jobs:
       - name: build storybook
         if: ${{ needs.changes.outputs.ui == 'true' }}
         run: npm run build-storybook
+        working-directory: ui
+
+      - name: read playwright version
+        id: playwright
+        if: ${{ needs.changes.outputs.ui == 'true' || needs.changes.outputs.infra == 'true' }}
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/playwright'].version")" >> "$GITHUB_OUTPUT"
+        working-directory: ui
+
+      - name: cache playwright browsers
+        id: playwright-cache
+        if: ${{ needs.changes.outputs.ui == 'true' || needs.changes.outputs.infra == 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: install chromium for story tests
+        if: ${{ (needs.changes.outputs.ui == 'true' || needs.changes.outputs.infra == 'true') && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        run: npx playwright install --with-deps chromium
+        working-directory: ui
+
+      - name: install chromium system deps
+        if: ${{ (needs.changes.outputs.ui == 'true' || needs.changes.outputs.infra == 'true') && steps.playwright-cache.outputs.cache-hit == 'true' }}
+        run: npx playwright install-deps chromium
+        working-directory: ui
+
+      # A story that fails to render, its play function or an a11y check it opts
+      # into breaks the PR here, not the deploy to demo.kiwifs.com/storybook.
+      - name: run story tests
+        if: ${{ needs.changes.outputs.ui == 'true' || needs.changes.outputs.infra == 'true' }}
+        run: npm run test-storybook
         working-directory: ui
 
       - name: build demo

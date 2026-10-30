@@ -190,7 +190,7 @@ export function CodeRunner({ source, lang }: Props) {
           {isModified && (
             <button
               onClick={handleReset}
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors"
+              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
               title="Reset to original"
             >
               <RotateCcw className="h-3 w-3" />
@@ -236,6 +236,7 @@ export function CodeRunner({ source, lang }: Props) {
           spellCheck={false}
           autoCapitalize="off"
           autoCorrect="off"
+          aria-label={`${langLabel} code`}
           className="absolute inset-0 w-full h-full p-4 font-mono text-sm bg-transparent text-transparent caret-foreground resize-none outline-none overflow-auto"
           style={{ tabSize: 4, WebkitTextFillColor: "transparent" }}
         />
@@ -251,7 +252,7 @@ export function CodeRunner({ source, lang }: Props) {
               {error && <span className="text-destructive">{error}</span>}
             </>
           ) : (
-            <span className="text-muted-foreground/30 select-none text-xs">
+            <span className="text-muted-foreground select-none text-xs">
               ▸ output appears here
             </span>
           )}

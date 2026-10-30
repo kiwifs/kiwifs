@@ -176,7 +176,7 @@ export function PlaybackControls({ pb, ...props }: Props) {
         {onCycleSpeed && (
           <button
             onClick={onCycleSpeed}
-            className="ml-1 text-[10px] font-medium text-muted-foreground hover:text-foreground bg-muted rounded px-1.5 py-0.5 tabular-nums transition-colors"
+            className="ml-1 text-[10px] font-medium text-foreground/75 hover:text-foreground bg-muted rounded px-1.5 py-0.5 tabular-nums transition-colors"
             title="Cycle speed"
           >
             {speed}x

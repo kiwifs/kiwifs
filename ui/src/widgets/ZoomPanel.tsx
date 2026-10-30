@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 export interface ZoomPanelProps {
+  /** Content to zoom and pan. */
   children: ReactNode;
+  /** Smallest zoom factor. Default 0.5. */
   minZoom?: number;
+  /** Largest zoom factor. Default 4. */
   maxZoom?: number;
   /** Fixed viewport height in px. Default: the content's own height. */
   height?: number;

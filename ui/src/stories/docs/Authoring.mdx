@@ -1,0 +1,20 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { MockApiProvider } from "../../components/__mocks__/apiMock";
+import { Example } from "./Example";
+import { AUTHORING_EXAMPLES } from "./authoringExamples";
+
+<Meta title="Authoring" />
+
+# Writing it in markdown
+
+Every block a page can hold, as an author types it, rendered through the same pipeline as a real page. Copy from the left; the right is what readers get.
+
+<MockApiProvider>
+  {AUTHORING_EXAMPLES.map((ex) => (
+    <section key={ex.title} id={ex.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}>
+      <h2>{ex.title}</h2>
+      <p>{ex.note}</p>
+      <Example md={ex.md} />
+    </section>
+  ))}
+</MockApiProvider>

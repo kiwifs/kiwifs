@@ -244,8 +244,9 @@ export function formatQuantity(value: number): string {
   if (!Number.isFinite(value)) return "—";
   const abs = Math.abs(value);
   if (abs === 0) return "0";
-  // Bytes: if it looks like a round binary size, say so.
-  if (abs >= 1024 && Number.isInteger(value)) {
+  // Bytes: if it looks like a round binary size, say so. A round decimal
+  // count (`10 million`) is also a multiple of 64, so it is checked first.
+  if (abs >= 1024 && Number.isInteger(value) && abs % 1000 !== 0) {
     for (const [label, size] of [["PiB", 1024 ** 5], ["TiB", 1024 ** 4], ["GiB", 1024 ** 3], ["MiB", 1024 ** 2], ["KiB", 1024]] as const) {
       if (abs >= size && abs % (size / 16) < 1e-6) {
         return `${formatGrouped(value / size, 2)} ${label}`;

@@ -26,7 +26,7 @@ import { api } from "@kw/lib/api";
 import { figureClassName } from "@kw/lib/figureLayout";
 import { playbackKeyAction, usePlayback, type Step } from "@kw/widgets/usePlayback";
 import { PlaybackControls } from "@kw/widgets/PlaybackControls";
-import { currentHostTheme, subscribeHostTheme, type HostTheme } from "./kiwiApp/hostTheme";
+import { currentHostTheme, readHostTheme, subscribeHostTheme, type HostTheme } from "./kiwiApp/hostTheme";
 import { buildSrcDoc } from "./kiwiApp/srcdoc";
 import { parseAppMeta, resolveAppSrc } from "./kiwiApp/meta";
 
@@ -138,8 +138,10 @@ export function KiwiApp({ source, meta, pagePath }: KiwiAppProps) {
   }, []);
 
   const postTheme = useCallback((theme: HostTheme) => post("theme", { vars: theme.vars, dark: theme.dark }), [post]);
+  // The page-wide reading says something changed; each app re-reads where it sits.
+  const postOwnTheme = useCallback(() => postTheme(readHostTheme(figureRef.current)), [postTheme]);
 
-  useEffect(() => subscribeHostTheme(postTheme), [postTheme]);
+  useEffect(() => subscribeHostTheme(postOwnTheme), [postOwnTheme]);
 
   useEffect(() => {
     if (registration) post("steps:set", { index: pb.currentStep });
@@ -197,9 +199,10 @@ export function KiwiApp({ source, meta, pagePath }: KiwiAppProps) {
 
   const onLoad = useCallback(() => {
     setLoaded(true);
-    // The theme may have changed between building the srcdoc and the load.
-    postTheme(currentHostTheme());
-  }, [postTheme]);
+    // The theme may have changed between building the srcdoc and the load,
+    // and the srcdoc was built before the figure existed to read it from.
+    postOwnTheme();
+  }, [postOwnTheme]);
 
   const copySource = useCallback(async () => {
     const text = html ?? source;

@@ -38,7 +38,7 @@ import { decodeHref, dirOf, isCanvasFile, isExcalidrawFile, normalizePath } from
 import { useRawUrl } from "./rawUrl";
 import type { FigureWidth } from "./figureLayout";
 import { kiwiSanitizeSchema } from "./kiwiSanitizeSchema";
-import { remarkMark, remarkInlineTags, remarkPageControls, rehypeCodeMeta } from "./remarkPlugins";
+import { remarkMark, remarkInlineTags, remarkPageControls, rehypeCodeMeta, rehypeTaskListLabels } from "./remarkPlugins";
 import { remarkKiwiDirectives } from "./remarkDirectives";
 import { remarkKiwiQuiz } from "./remarkQuiz";
 import { remarkWikiLinks, type LinkResolver } from "./wikiLinks";
@@ -78,6 +78,7 @@ export function kiwiRehypePlugins({ autolinkHeadings = true }: RehypeOptions = {
     rehypeCodeMeta,
     rehypeRaw,
     [rehypeSanitize, kiwiSanitizeSchema],
+    rehypeTaskListLabels,
     rehypeKatex,
     rehypeSlug,
   ];

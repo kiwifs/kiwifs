@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { action } from "@storybook/addon-actions";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { action } from "storybook/actions";
 import { BasesMap } from "./BasesMap";
 import { mockBasesRows } from "../__mocks__/data";
 import type { ViewRow } from "./BasesTable";

@@ -84,6 +84,7 @@ Use these instead of colours. Each one reads the host theme and falls back to a 
 | `--k-dim` | Secondary text. |
 | `--k-line` | Borders and rules. |
 | `--k-soft` | A 5% wash of the text colour, for fills. |
+| `--k-dim-soft` | Secondary text that sits on `--k-soft` (segmented buttons, `.k-code`); `--k-dim` is under AA there. |
 | `--k-card` | Card surface. |
 | `--k-accent`, `--k-accent-fg` | The workspace primary and the text that sits on it. |
 | `--k-ok`, `--k-bad`, `--k-warn`, `--k-info`, `--k-violet` | Semantic tones, mapped onto the widget accents. |

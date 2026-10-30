@@ -7,7 +7,7 @@ Thanks for your interest in contributing to KiwiFS — the markdown filesystem f
 ### Prerequisites
 
 - Go 1.27+
-- Node.js 20+ (for the web UI)
+- Node.js 22+ (for the web UI and Storybook)
 - Git
 
 ### Local development
@@ -94,6 +94,14 @@ Open a [GitHub issue](https://github.com/kiwifs/kiwifs/issues/new?template=featu
 2. Make your changes. Add tests if you're touching backend code.
 3. Run `go test ./... -race` and `go vet ./...` — CI will check these too.
 4. Open a pull request. Describe what you changed and why.
+
+### Stories for UI work
+
+Every new widget, fence, `kiwi-*` block or directive needs a Storybook story, so reviewers (and the published Storybook) see it in light, dark and every palette.
+
+- Fences are enforced: `ui/src/fences/storiesCoverage.test.ts` fails when a registered fence has no story in `ui/src/fences/Fences.stories.tsx`.
+- A block an author writes in markdown also gets an entry in `ui/src/stories/docs/authoringExamples.ts`, which renders it on the Authoring page.
+- Run Storybook with `cd ui && npm run storybook`. `npm run test-storybook` renders every story and runs its play function in headless Chromium (run `npx playwright install chromium` once); CI runs it on every UI change.
 
 ### Code style
 

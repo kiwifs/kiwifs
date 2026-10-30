@@ -140,6 +140,7 @@ export interface WidgetPanelProps {
   minWidth?: number;
   /** Optional label above the panel; also the tab caption. */
   title?: string;
+  /** Panel content. */
   children: ReactNode;
 }
 

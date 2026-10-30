@@ -25,8 +25,11 @@ export interface CallStackViewProps {
   growth?: "top" | "bottom";
   /** Scroll past this height rather than growing the page. Default 320. */
   maxHeight?: number;
+  /** Caption above the stack. */
   title?: string;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
   /** Message shown when the stack is empty. */
   empty?: string;
@@ -67,6 +70,14 @@ interface FrameRowProps {
 function FrameRow({ frame, depth, active, faded, activeColor, highlightColor }: FrameRowProps) {
   const entries = Object.entries(frame.state ?? {});
   const hasReturn = frame.returns !== undefined;
+  // Faded rows dim their text rather than the whole row: opacity takes the
+  // label under AA contrast. On the active tint the pure highlight does too.
+  const textColor = faded ? DEFAULTS.dimColor : DEFAULTS.text;
+  const returnColor = faded
+    ? DEFAULTS.dimColor
+    : active
+      ? `color-mix(in srgb, ${highlightColor} 70%, ${DEFAULTS.text})`
+      : highlightColor;
 
   return (
     <div
@@ -74,7 +85,6 @@ function FrameRow({ frame, depth, active, faded, activeColor, highlightColor }: 
         display: "flex",
         alignItems: "stretch",
         gap: 8,
-        opacity: faded ? 0.45 : 1,
         transition: "all 0.2s ease",
       }}
     >
@@ -110,7 +120,7 @@ function FrameRow({ frame, depth, active, faded, activeColor, highlightColor }: 
               fontFamily: "ui-monospace, SFMono-Regular, monospace",
               fontSize: "0.8rem",
               fontWeight: 700,
-              color: DEFAULTS.text,
+              color: textColor,
             }}
           >
             <WidgetText text={frame.label} />
@@ -135,7 +145,7 @@ function FrameRow({ frame, depth, active, faded, activeColor, highlightColor }: 
                 fontFamily: "ui-monospace, SFMono-Regular, monospace",
                 fontSize: "0.7rem",
                 fontWeight: 700,
-                color: highlightColor,
+                color: returnColor,
               }}
             >
               → <WidgetText text={renderValue(frame.returns)} />
@@ -156,7 +166,7 @@ function FrameRow({ frame, depth, active, faded, activeColor, highlightColor }: 
               >
                 {key}
                 <span style={{ opacity: 0.6 }}>=</span>
-                <span style={{ color: DEFAULTS.text }}><WidgetText text={renderValue(value)} /></span>
+                <span style={{ color: textColor }}><WidgetText text={renderValue(value)} /></span>
               </span>
             ))}
           </div>

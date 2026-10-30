@@ -16,6 +16,7 @@ export function useClockId(): string | null {
 export interface PlaybackClockProps {
   /** Clock name. Scoped to the page; the same name elsewhere is unrelated. */
   id: string;
+  /** Every playback inside steps on this clock. */
   children: ReactNode;
 }
 

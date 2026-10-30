@@ -48,6 +48,7 @@ export interface TimelineMark {
 }
 
 export interface TimelineViewProps {
+  /** Spans to draw. `start === end` draws a point event. */
   intervals: TimelineInterval[];
   /**
    * Named lanes in the order they should be drawn, labelled in the gutter.
@@ -70,8 +71,11 @@ export interface TimelineViewProps {
   sweepLabel?: string;
   /** Extra vertical marks: query points, event coordinates. */
   marks?: TimelineMark[];
+  /** Interval ids emphasised this step. */
   activeIds?: Many<string | number>;
+  /** Secondary-highlighted interval ids. */
   highlightIds?: Many<string | number>;
+  /** Dimmed interval ids. */
   dimIds?: Many<string | number>;
   /** Axis range. Defaults to the extent of the data. */
   min?: number;
@@ -79,10 +83,15 @@ export interface TimelineViewProps {
   /** Values to label on the axis. Defaults to the distinct endpoints when
    *  there are few enough of them. */
   ticks?: number[];
+  /** Draw the time axis. Default true. */
   showAxis?: boolean;
+  /** Canvas width in px. Default 560. */
   width?: number;
+  /** Height of one lane in px. Default 26. */
   laneHeight?: number;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
   /** Accessible name. Defaults to a summary of the intervals and span. */
   ariaLabel?: string;

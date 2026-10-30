@@ -46,8 +46,11 @@ export interface LinkedListViewProps {
   edges?: LinkedListEdge[];
   /** Whether to show a null terminator. Default true. */
   showNull?: boolean;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
+  /** Width of one node box in px. Default 56. */
   nodeWidth?: number;
   /** Accessible name. Defaults to a summary of the nodes and pointers. */
   ariaLabel?: string;

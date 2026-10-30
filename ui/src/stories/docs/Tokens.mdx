@@ -1,0 +1,31 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { PALETTES, TokenSwatches } from "./Tokens";
+
+<Meta title="Tokens" />
+
+# Theme tokens
+
+Every variable declared in `ui/src/styles/kiwi-theme.css`, read from the stylesheet, so a new token appears here on its own. Components use these through Tailwind utilities or `var(--…)`; `kiwi-app` blocks receive them too, and the kit maps them onto its `--k-*` tokens.
+
+## Light
+
+<TokenSwatches mode="light" />
+
+## Dark
+
+<TokenSwatches mode="dark" />
+
+## Palettes
+
+Workspace palettes override a subset of the tokens. Each is shown in light and dark.
+
+<div>
+  {PALETTES.map((p) => (
+    <section key={p.id}>
+      <h3>{p.name}</h3>
+      <p>{p.description}</p>
+      <TokenSwatches mode="light" palette={p.id} />
+      <TokenSwatches mode="dark" palette={p.id} />
+    </section>
+  ))}
+</div>

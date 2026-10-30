@@ -46,6 +46,7 @@ export interface TreeNode {
 }
 
 export interface TreeViewProps {
+  /** A single tree, as nested nodes. */
   root?: TreeNode | null;
   /**
    * Build a complete binary heap from an array: node ids are array indices,
@@ -125,12 +126,15 @@ export interface TreeViewProps {
   showNulls?: boolean;
   /** Glide nodes to their new positions when the tree changes. Default true. */
   animate?: boolean;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
   /** Horizontal gap between sibling subtrees in px. */
   hGap?: number;
   /** Vertical gap between levels in px. */
   vGap?: number;
+  /** Diameter of a node in px. Default 40. */
   nodeSize?: number;
   /** Accessible name. Defaults to a summary of the tree's size and shape. */
   ariaLabel?: string;
@@ -335,7 +339,7 @@ export function TreeView({
   );
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
+    <div tabIndex={0} style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
       <svg
         width={width}
         height={height}

@@ -190,3 +190,26 @@ describe("queryRowsToKanbanColumns", () => {
     expect(queryRowsToKanbanColumns([], "status")).toEqual([]);
   });
 });
+
+describe("parseKanbanBlockConfig with several cards per lane", () => {
+  it("keeps every card, not only the last", () => {
+    const config = parseKanbanBlockConfig(`title: Board
+columns:
+  - name: Now
+    cards:
+      - id: a
+        title: First
+      - id: b
+        title: Second
+      - id: c
+        title: Third
+  - name: Next
+    cards:
+      - id: d
+        title: Fourth`);
+    expect(config.columns.map((c) => c.cards.map((card) => card.title))).toEqual([
+      ["First", "Second", "Third"],
+      ["Fourth"],
+    ]);
+  });
+});

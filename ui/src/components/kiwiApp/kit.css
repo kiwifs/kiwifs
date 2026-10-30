@@ -12,13 +12,15 @@
     --k-dim: var(--muted-foreground, light-dark(#737373, #a3a3a3));
     --k-line: var(--border, light-dark(#e5e5e5, #2e2e2e));
     --k-soft: color-mix(in srgb, var(--k-fg) 5%, transparent);
+    /* Text on --k-soft: --k-dim there is 4.3:1 in light, under AA. */
+    --k-dim-soft: color-mix(in srgb, var(--k-fg) 70%, var(--k-bg));
     --k-card: var(--card, var(--k-bg));
     --k-accent: var(--primary, #c8e03a);
     --k-accent-fg: var(--primary-foreground, #171717);
     --k-radius: var(--radius, .625rem);
     --k-mono: var(--font-mono, ui-monospace, "Cascadia Code", monospace);
     --k-sans: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
-    --k-ok: var(--kw-widget-highlight, light-dark(#16a34a, #22c55e));
+    --k-ok: var(--kw-widget-highlight, light-dark(#15803d, #22c55e));
     --k-bad: var(--kw-widget-accent-red, light-dark(#dc2626, #f87171));
     --k-warn: var(--kw-widget-accent-amber, light-dark(#b45309, #f59e0b));
     --k-info: var(--kw-widget-accent-blue, light-dark(#2563eb, #60a5fa));
@@ -26,7 +28,7 @@
     --k-ease: cubic-bezier(.2, .7, .2, 1);
   }
 
-  *, *::before, *::after { box-sizing: border-box; }
+  *, ::before, ::after { box-sizing: border-box; }
   body {
     margin: 0;
     background: var(--k-bg);
@@ -35,7 +37,7 @@
     -webkit-font-smoothing: antialiased;
   }
   p, li { text-wrap: pretty; }
-  h1, h2, h3, h4 { text-wrap: balance; line-height: 1.25; }
+  :is(h1, h2, h3, h4) { text-wrap: balance; line-height: 1.25; }
   button, input, select, textarea { font: inherit; color: inherit; }
 
   .k-app { padding: 16px; container-type: inline-size; display: grid; gap: 12px; }
@@ -61,23 +63,24 @@
     background: none;
     padding: 4px 10px;
     border-radius: calc(var(--k-radius) - 3px);
-    color: var(--k-dim);
+    color: var(--k-dim-soft);
     cursor: pointer;
-    transition: background-color .15s var(--k-ease), color .15s var(--k-ease);
+    transition: background .15s var(--k-ease), color .15s var(--k-ease);
   }
-  .k-seg > button[aria-pressed="true"] { background: var(--k-bg); color: var(--k-fg); box-shadow: 0 1px 2px #0002; }
+  .k-seg > button[aria-pressed=true] { background: var(--k-bg); color: var(--k-fg); box-shadow: 0 1px 2px #0002; }
 
   .k-pill {
-    --tone: var(--k-dim);
+    --tone: var(--k-dim); /* also .muted */
     display: inline-flex;
     align-items: center;
     gap: 4px;
     padding: 1px 8px;
     border-radius: 999px;
     font: 600 11px/1.6 var(--k-mono);
-    color: var(--tone);
+    /* Pure tone text is 2.8:1 for ok in light; pulled 40% toward the text colour it clears AA everywhere. */
+    color: color-mix(in srgb, var(--tone) 60%, var(--k-fg));
     background: color-mix(in srgb, var(--tone) 14%, transparent);
-    transition: color .2s, background-color .2s, opacity .2s;
+    transition: color .2s, background .2s, opacity .2s;
     @starting-style { opacity: 0; }
   }
   .k-pill.ok { --tone: var(--k-ok); }
@@ -85,7 +88,6 @@
   .k-pill.warn { --tone: var(--k-warn); }
   .k-pill.info { --tone: var(--k-info); }
   .k-pill.violet { --tone: var(--k-violet); }
-  .k-pill.muted { --tone: var(--k-dim); }
 
   .k-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .k-btn {
@@ -94,7 +96,7 @@
     padding: 5px 12px;
     border-radius: calc(var(--k-radius) - 2px);
     cursor: pointer;
-    transition: background-color .15s var(--k-ease), opacity .15s var(--k-ease);
+    transition: background .15s var(--k-ease), opacity .15s var(--k-ease);
   }
   .k-btn:hover { background: var(--k-soft); }
   .k-btn.primary { background: var(--k-accent); color: var(--k-accent-fg); border-color: transparent; }
@@ -118,8 +120,8 @@
 
   .k-steps { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; color: var(--k-dim); }
   .k-steps li { transition: color .2s var(--k-ease); }
-  .k-steps li.on { color: var(--k-fg); }
-  .k-steps li.now { color: var(--k-fg); font-weight: 600; }
+  .k-steps li:is(.on, .now) { color: var(--k-fg); }
+  .k-steps li.now { font-weight: 600; }
   .k-steps li.now::marker { color: var(--k-violet); }
 
   .k-lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
@@ -146,7 +148,7 @@
     background: var(--k-soft);
     font: 12px/1.55 var(--k-mono);
     white-space: pre-wrap;
-    color: var(--k-dim);
+    color: var(--k-dim-soft);
   }
   .k-code b { color: var(--k-fg); font-weight: 600; }
 
@@ -154,17 +156,16 @@
   .k-bar {
     --tone: var(--k-info);
     position: absolute;
-    top: 4px;
-    bottom: 4px;
+    inset-block: 4px;
     border-radius: 4px;
     background: color-mix(in srgb, var(--tone) 35%, transparent);
     border: 1px solid var(--tone);
     transition: left .3s var(--k-ease), width .3s var(--k-ease), opacity .2s;
   }
-  .k-now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--k-fg); transition: left .3s var(--k-ease); }
+  .k-now { position: absolute; inset-block: -2px; width: 2px; background: var(--k-fg); transition: left .3s var(--k-ease); }
 
   .k-dots { display: flex; gap: 4px; }
-  .k-dots > i { flex: 1; height: 4px; border-radius: 2px; background: var(--k-line); transition: background-color .2s var(--k-ease); }
+  .k-dots > i { flex: 1; height: 4px; border-radius: 2px; background: var(--k-line); transition: background .2s var(--k-ease); }
   .k-dots > i.on { background: var(--k-violet); }
 
   .k-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }

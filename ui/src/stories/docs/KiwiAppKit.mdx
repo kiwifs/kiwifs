@@ -1,0 +1,11 @@
+import { Markdown, Meta } from "@storybook/addon-docs/blocks";
+import apps from "../../../../docs/APPS.md?raw";
+import { Example } from "./Example";
+
+<Meta title="Blocks/KiwiApp Kit" />
+
+<Markdown>{apps}</Markdown>
+
+## Try it
+
+<Example md={"```kiwi-app id=kit-demo controls=host\n<div class=\"k-app\">\n  <div class=\"k-eyebrow\">Lease</div>\n  <ol class=\"k-steps\" id=\"list\"></ol>\n  <div class=\"k-ctl\"><button class=\"k-btn\" onclick=\"kiwi.prev()\">Back</button><button class=\"k-btn primary\" onclick=\"kiwi.next()\">Next</button></div>\n</div>\n<script>\n  var s = [\"Acquire\", \"Pause\", \"Expire\", \"Reject stale write\"];\n  kiwi.steps({ count: s.length, onStep: function (i) {\n    document.getElementById(\"list\").innerHTML = s.map(function (t, j) { return '<li class=\"' + (j < i ? 'on' : j === i ? 'now' : '') + '\">' + t + '</li>'; }).join(\"\");\n  } });\n</script>\n```"} />

@@ -167,8 +167,12 @@ export function ShikiCode({ code, lang, title, highlightLines }: Props) {
     return (
       <div className="kiwi-shiki my-4 text-sm rounded-lg overflow-hidden">
         {headerEl}
+        {/* Focusable so a long line can be scrolled from the keyboard. */}
         <div
-          className="[&>pre]:p-4 [&>pre]:overflow-x-auto"
+          className="overflow-x-auto [&>pre]:p-4"
+          tabIndex={0}
+          role="region"
+          aria-label={title || langLabel || "Code"}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       </div>
@@ -177,7 +181,7 @@ export function ShikiCode({ code, lang, title, highlightLines }: Props) {
   return (
     <div className="kiwi-shiki my-4 text-sm rounded-lg overflow-hidden">
       {headerEl}
-      <pre className="p-4 overflow-x-auto">
+      <pre className="p-4 overflow-x-auto" tabIndex={0} aria-label={title || langLabel || "Code"}>
         <code>{source}</code>
       </pre>
     </div>

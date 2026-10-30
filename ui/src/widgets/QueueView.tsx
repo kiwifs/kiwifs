@@ -39,8 +39,11 @@ export interface QueueViewProps {
    * that window as stale rather than live.
    */
   size?: number;
+  /** Slots being enqueued or dequeued this step. */
   activeIndices?: Many<number>;
+  /** Secondary-highlighted slots. */
   highlightIndices?: Many<number>;
+  /** Dimmed slots. */
   dimIndices?: Many<number>;
   /** Named markers beside slots, beyond `front` and `back`. */
   pointers?: QueuePointer[];
@@ -50,18 +53,27 @@ export interface QueueViewProps {
   frontLabel?: string;
   /** Label on the tail end. Default "back". */
   backLabel?: string;
+  /** Caption above the queue. */
   title?: string;
+  /** Text shown when the queue is empty. Default "(empty)". */
   empty?: string;
+  /** Side of one slot in px. Default 44. */
   slotSize?: number;
   /** Ring radius in px. Defaults to whatever fits the slots, at least 86. */
   radius?: number;
+  /** Reported when the reader selects a slot. */
   onSelect?: (ref: InspectRef) => void;
+  /** Slot index → explanation, revealed on select. */
   why?: Record<string, string>;
   /** Controlled selection, as slot indices. */
   selected?: Many<string | number>;
+  /** Name for the inspect bus. Defaults to "queue". */
   widgetId?: string;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
+  /** Accessible name. Defaults to a summary of the slots. */
   ariaLabel?: string;
 }
 

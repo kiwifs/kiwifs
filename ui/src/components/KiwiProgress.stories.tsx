@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react";
+import type { Meta, StoryObj } from "@storybook/react-vite";
 import { KiwiProgress } from "./KiwiProgress";
 
 const meta: Meta<typeof KiwiProgress> = {

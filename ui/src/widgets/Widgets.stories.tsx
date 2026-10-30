@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Meta, StoryObj } from "@storybook/react";
+import type { Meta, StoryObj } from "@storybook/react-vite";
 
 import { ActivityGrid } from "./ActivityGrid";
 import { AnnotationBar } from "./AnnotationBar";
@@ -689,12 +689,38 @@ function Gallery() {
   );
 }
 
-const meta: Meta<typeof Gallery> = {
+const meta: Meta<typeof ArrayView> = {
   title: "Widgets/Gallery",
-  component: Gallery,
-  parameters: { layout: "fullscreen" },
+  component: ArrayView,
+  subcomponents: {
+    ActivityGrid,
+    AnnotationBar,
+    ArrayStack,
+    BarView,
+    BitsView,
+    CallStackView,
+    CodeHighlight,
+    DateField,
+    GraphView,
+    InputPanel,
+    LinkedListView,
+    MatrixView,
+    PlaybackControls,
+    PlotView,
+    PropertyBar,
+    SequenceView,
+    StackView,
+    StateInspector,
+    TimelineView,
+    TreeView,
+    WidgetLayout,
+    WidgetPanel,
+  },
+  tags: ["autodocs"],
+  parameters: { layout: "fullscreen", a11y: { test: "error" } },
+  render: () => <Gallery />,
 };
 
 export default meta;
 
-export const AllWidgets: StoryObj<typeof Gallery> = {};
+export const AllWidgets: StoryObj<typeof ArrayView> = {};

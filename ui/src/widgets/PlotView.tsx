@@ -81,6 +81,7 @@ export interface PlotRegion {
 }
 
 export interface PlotViewProps {
+  /** Curves to draw, as point lists or formulas. */
   series: PlotSeries[];
   /** Shaded areas from a predicate — the half-plane where a bound holds. */
   regions?: PlotRegion[];
@@ -89,25 +90,45 @@ export interface PlotViewProps {
    * walkthrough can sweep a parameter.
    */
   bind?: Record<string, number>;
+  /** Filled bands between two x values, under a series or as a rectangle. */
   shades?: PlotShade[];
+  /** Dashed reference lines at a fixed x or y. */
   guides?: PlotGuide[];
+  /** Labelled dots at a coordinate, or on the x axis when `y` is omitted. */
   marks?: PlotMark[];
+  /** Series ids emphasised this step. */
   activeIds?: Set<string | number>;
+  /** Secondary-highlighted series ids. */
   highlightIds?: Set<string | number>;
+  /** Dimmed series ids. */
   dimIds?: Set<string | number>;
+  /** Left end of the x axis. Defaults to the data's extent. */
   xMin?: number;
+  /** Right end of the x axis. Defaults to the data's extent. */
   xMax?: number;
+  /** Bottom of the y axis. Defaults to the data's extent. */
   yMin?: number;
+  /** Top of the y axis. Defaults to the data's extent. */
   yMax?: number;
+  /** Explicit x tick values. Omit for automatic ticks. */
   xTicks?: number[];
+  /** Explicit y tick values. Omit for automatic ticks. */
   yTicks?: number[];
+  /** Caption on the x axis. Supports inline math. */
   xLabel?: string;
+  /** Caption on the y axis. Supports inline math. */
   yLabel?: string;
+  /** Draw the axes and ticks. Default true. */
   showAxes?: boolean;
+  /** Show the series legend. Default: when any series has a label. */
   showLegend?: boolean;
+  /** Canvas width in px. Default 560. */
   width?: number;
+  /** Canvas height in px. Default 280. */
   height?: number;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
   /** Accessible name. Defaults to a summary of the series and axes. */
   ariaLabel?: string;

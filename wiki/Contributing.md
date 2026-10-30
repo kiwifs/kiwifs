@@ -18,7 +18,7 @@ go run . serve --root ./knowledge --port 3333
 go test ./... -race
 ```
 
-**Prerequisites:** Go 1.25+, Node.js 20+, Git
+**Prerequisites:** Go 1.25+, Node.js 22+, Git
 
 ## Finding Work
 
@@ -83,6 +83,10 @@ kiwifs/
 - **Frontend** — UI polish, accessibility, Storybook stories
 - **Search** — FTS5 ranking improvements, vector search UX
 - **Importers** — testing and improving import fidelity
+
+## Stories
+
+Every new widget, fence or block needs a story. Fences are enforced by `ui/src/fences/storiesCoverage.test.ts`, which fails when a registered fence has no story. Run Storybook with `cd ui && npm run storybook`, and `npm run test-storybook` to render every story in headless Chromium.
 
 ## License
 

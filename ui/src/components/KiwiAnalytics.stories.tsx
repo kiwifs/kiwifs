@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { action } from "@storybook/addon-actions";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { action } from "storybook/actions";
 import { KiwiAnalytics } from "./KiwiAnalytics";
 import { MockApiProvider } from "./__mocks__/apiMock";
 

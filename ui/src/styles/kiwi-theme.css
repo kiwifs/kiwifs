@@ -30,15 +30,16 @@
   --secondary-hover: hsl(0 0% 91%);
 
   --muted: hsl(0 0% 96%);
-  --muted-foreground: hsl(0 0% 45%);
+  /* 40%, not 45%: on --muted it has to clear 4.5:1 for the small labels. */
+  --muted-foreground: hsl(0 0% 40%);
 
   --accent: hsl(0 0% 96%);
   --accent-foreground: hsl(0 0% 9%);
   --accent-hover: hsl(0 0% 91%);
 
-  --destructive: hsl(0 84% 60%);
+  --destructive: hsl(0 72% 51%);
   --destructive-foreground: hsl(0 0% 98%);
-  --destructive-hover: hsl(0 84% 52%);
+  --destructive-hover: hsl(0 74% 42%);
 
   --border: hsl(0 0% 90%);
   --input: hsl(0 0% 90%);
@@ -84,13 +85,13 @@
 
   /* Widgets (ArrayView, MatrixView, TreeView, … — see ui/src/widgets) */
   --kw-widget-text: hsl(0 0% 9%);
-  --kw-widget-dim: hsl(215 16% 47%);
+  --kw-widget-dim: hsl(215 19% 38%);
   --kw-widget-border: hsl(240 5% 84%);
   /* Accents double as fills and as label text, so they need enough weight to
      read against the page, and a paired foreground for text drawn on top. */
   --kw-widget-active: #7c3aed;
   --kw-widget-active-foreground: #ffffff;
-  --kw-widget-highlight: #16a34a;
+  --kw-widget-highlight: #15803d;
   --kw-widget-water: #0284c7;
   --kw-widget-bar: #94a3b8;
   /* StateInspector value types */

@@ -84,7 +84,9 @@ export interface GraphPacket {
 }
 
 export interface GraphViewProps {
+  /** Vertices. Nodes without `x`/`y` are placed by `layout`. */
   nodes: GraphNode[];
+  /** Connections between node ids. */
   edges: GraphEdge[];
   /** Set of node IDs that are currently active. */
   activeNodes?: Many<string | number>;
@@ -152,8 +154,11 @@ export interface GraphViewProps {
   hoverPredecessors?: boolean;
   /** Name for the inspect bus, so a `link:` can address this graph. */
   widgetId?: string;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
+  /** Diameter of a circle node in px. Default 36. */
   nodeSize?: number;
   /**
    * Canvas width. Default 400 (for "dagre": the laid-out width). The diagram
@@ -182,6 +187,7 @@ export interface GraphViewProps {
    * body — which is the point: sketching is faster than typing coordinates.
    */
   editable?: boolean;
+  /** With `editable`, receives the whole graph after each change. */
   onChange?: (nodes: GraphNode[], edges: GraphEdge[]) => void;
 }
 

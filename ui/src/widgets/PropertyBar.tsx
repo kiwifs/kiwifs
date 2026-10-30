@@ -11,6 +11,7 @@ export interface PropertyEntry {
 }
 
 export interface PropertyBarProps {
+  /** Name/value pairs, shown in order. */
   entries: PropertyEntry[];
   /** Optional title above the table. */
   title?: string;
