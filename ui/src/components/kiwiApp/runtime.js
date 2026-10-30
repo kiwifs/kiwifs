@@ -24,10 +24,24 @@
     parentWin.postMessage(msg, "*");
   }
 
-  // The root's box, not its scrollHeight: scrollHeight never drops below the
-  // iframe's own height, so the frame could grow but never shrink.
+  // The root's box, not its scrollHeight: the root's scrollHeight never drops
+  // below the iframe's own height, so the frame could grow but never shrink.
+  // The body's scrollHeight catches `html, body { height: 100% }`, where the
+  // root box is pinned to the iframe and content overflows it. In quirks mode
+  // body.scrollHeight is the viewport's, so it is left out there.
   function height() {
-    return Math.ceil(document.documentElement.getBoundingClientRect().height);
+    var h = document.documentElement.getBoundingClientRect().height;
+    var body = document.body;
+    if (body && document.compatMode !== "BackCompat") {
+      var cs = window.getComputedStyle(body);
+      var content = body.scrollHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+      if (content > h) h = content;
+    }
+    return Math.ceil(h);
+  }
+
+  function isArray(x) {
+    return Object.prototype.toString.call(x) === "[object Array]";
   }
 
   var lastHeight = -1;
@@ -105,10 +119,13 @@
       stepsCfg = { count: count, onStep: cfg && cfg.onStep };
       post("steps:register", {
         count: count,
-        labels: cfg && cfg.labels ? cfg.labels.slice(0, count).map(String) : null,
-        durations: cfg && cfg.durations ? cfg.durations.slice(0, count) : null
+        labels: cfg && isArray(cfg.labels) ? cfg.labels.slice(0, count).map(String) : null,
+        durations: cfg && isArray(cfg.durations) ? cfg.durations.slice(0, count) : null
       });
-      setStep(Math.min(stepIndex, count - 1));
+      // Under a host the first step comes back as steps:set; rendering step 0
+      // here would flash it ahead of a deep-linked step.
+      if (standalone) setStep(Math.min(stepIndex, count - 1));
+      else kiwi.step = stepIndex = Math.min(stepIndex, count - 1);
     },
     next: function () { intent("next"); },
     prev: function () { intent("prev"); },
@@ -130,12 +147,13 @@
     var d = e.data;
     if (!d || d.source !== "kiwi-app" || d.v !== V) return;
     if (d.type === "theme") applyTheme(d.vars || {}, d.dark);
-    else if (d.type === "steps:set" && typeof d.index === "number") setStep(d.index);
+    else if (d.type === "steps:set" && typeof d.index === "number" && isFinite(d.index)) setStep(Math.floor(d.index));
   });
 
   // Keys pressed in here never reach the host page, so the playback keys are
-  // forwarded — but only once there is something to step.
-  var KEYS = { ArrowLeft: 1, ArrowRight: 1, " ": 1, Home: 1, End: 1 };
+  // forwarded — but only once there is something to step. Keep in step with
+  // PLAYBACK_KEYS in widgets/usePlayback.ts.
+  var KEYS = { " ": 1, ArrowRight: 1, ArrowLeft: 1, Home: 1, End: 1, r: 1 };
   document.addEventListener("keydown", function (e) {
     if (!stepsCfg || standalone || !KEYS[e.key] || e.defaultPrevented) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;

@@ -40,9 +40,19 @@ export function parseAppMeta(meta: string | undefined): AppMeta {
   };
 }
 
-/** `src=` is relative to the page's folder; a leading `/` means the workspace root. */
-export function resolveAppSrc(pagePath: string | undefined, src: string): string {
-  if (src.startsWith("/")) return normalizePath(src);
-  const dir = pagePath ? dirOf(pagePath) : "";
-  return normalizePath(dir ? `${dir}/${src}` : src);
+/**
+ * `src=` is relative to the page's folder; a leading `/` means the workspace
+ * root. Null for a path that climbs above the root or names no file: clamping
+ * it would quietly load some other file.
+ */
+export function resolveAppSrc(pagePath: string | undefined, src: string): string | null {
+  const dir = !src.startsWith("/") && pagePath ? dirOf(pagePath) : "";
+  const joined = dir ? `${dir}/${src}` : src;
+  let depth = 0;
+  for (const seg of joined.split("/")) {
+    if (seg === "..") depth--;
+    else if (seg !== "" && seg !== ".") depth++;
+    if (depth < 0) return null;
+  }
+  return normalizePath(joined) || null;
 }

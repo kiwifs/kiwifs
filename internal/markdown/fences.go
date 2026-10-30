@@ -1217,12 +1217,8 @@ func StripWidgetFencesWithOptions(content string, opts FenceOptions, render func
 
 // AppFenceBlock is a ```kiwi-app fence: sandboxed HTML a static reader cannot run.
 type AppFenceBlock struct {
-	Meta    string
 	Title   string
 	Caption string
-	// Src is the `src=` file the app loads instead of, or ahead of, its body.
-	Src    string
-	Source string
 }
 
 // StripAppFences replaces every ```kiwi-app fence with render's output. An
@@ -1234,11 +1230,8 @@ func StripAppFences(content string, render func(AppFenceBlock) string) string {
 		}
 		attrs := parseFenceMeta(span.meta)
 		return render(AppFenceBlock{
-			Meta:    span.meta,
 			Title:   attrs["title"],
 			Caption: attrs["caption"],
-			Src:     attrs["src"],
-			Source:  strings.Join(span.body, "\n"),
 		})
 	})
 }

@@ -2,6 +2,8 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { parse } from "acorn";
+import { Window as HappyWindow } from "happy-dom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +11,12 @@ import { KiwiApp } from "./KiwiApp";
 import { KIWI_APP_TOKENS, type HostTheme } from "./kiwiApp/hostTheme";
 import { parseAppMeta, resolveAppSrc } from "./kiwiApp/meta";
 import { buildSrcDoc, kitCss, runtimeJs } from "./kiwiApp/srcdoc";
+import { applyKiwiTheme, removeKiwiTheme } from "@kw/lib/kiwiTheme";
 import { resetClocks } from "@kw/widgets/playbackClock";
+import { PLAYBACK_KEYS } from "@kw/widgets/usePlayback";
+
+const { readFile } = vi.hoisted(() => ({ readFile: vi.fn() }));
+vi.mock("@kw/lib/api", () => ({ api: { readFile } }));
 
 const LIGHT: HostTheme = { vars: { "--background": "white" }, dark: false };
 
@@ -31,6 +38,7 @@ afterEach(() => {
   resetClocks();
   window.location.hash = "";
   vi.useRealTimers();
+  readFile.mockReset();
 });
 
 async function render(el: React.ReactElement) {
@@ -83,8 +91,39 @@ describe("KiwiApp theme", () => {
   });
 
   it("no longer hard-codes a body background", () => {
-    const doc = buildSrcDoc("<p>x</p>", { kit: false, theme: LIGHT });
+    const doc = buildSrcDoc("<p>x</p>", { kit: true, theme: LIGHT });
+    expect(doc).toMatch(/body\{[^}]*background:var\(--k-bg\)/);
     expect(doc).not.toContain("#1a1a2e");
+  });
+
+  it("posts one theme message a frame after applyKiwiTheme", async () => {
+    const { posted } = await render(<KiwiApp source="<p>hi</p>" />);
+    await nextFrame();
+    posted.length = 0;
+    try {
+      applyKiwiTheme({ light: { background: "hsl(10 50% 50%)" } });
+      expect(posted.filter((m) => m.type === "theme")).toHaveLength(0);
+      await nextFrame();
+      const themes = posted.filter((m) => m.type === "theme");
+      expect(themes).toHaveLength(1);
+      expect((themes[0]!.vars as Record<string, string>)["--background"]).toBe("hsl(10 50% 50%)");
+    } finally {
+      removeKiwiTheme();
+    }
+  });
+
+  it("coalesces several .dark toggles within a frame into one message", async () => {
+    const { posted } = await render(<KiwiApp source="<p>hi</p>" />);
+    await nextFrame();
+    posted.length = 0;
+    const cls = document.documentElement.classList;
+    cls.add("dark");
+    cls.remove("dark");
+    cls.add("dark");
+    await nextFrame();
+    const themes = posted.filter((m) => m.type === "theme");
+    expect(themes).toHaveLength(1);
+    expect(themes[0]).toMatchObject({ dark: true });
   });
 });
 
@@ -136,10 +175,100 @@ describe("runtime.js", () => {
   });
 
   it("uses no ES2015+ syntax", () => {
-    const code = runtimeJs.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-    expect(code).not.toMatch(/\b(?:let|const|class)\s/);
-    expect(code).not.toMatch(/=>/);
-    expect(code).not.toMatch(/`/);
+    expect(() => parse(runtimeJs, { ecmaVersion: 5 })).not.toThrow();
+  });
+});
+
+/** Run the runtime in a window of its own, under a stub parent unless standalone. */
+function bootRuntime({ standalone = false } = {}) {
+  const win = new HappyWindow();
+  const toParent: Record<string, unknown>[] = [];
+  const parent = { postMessage: (msg: Record<string, unknown>) => toParent.push(msg) };
+  if (!standalone) Object.defineProperty(win, "parent", { value: parent, configurable: true });
+  new Function("window", "document", "ResizeObserver", runtimeJs)(win, win.document, undefined);
+  const kiwi = (win as unknown as { kiwi: Record<string, (...a: unknown[]) => unknown> & { step: number } }).kiwi;
+  const send = (data: Record<string, unknown>, source: unknown = parent) =>
+    win.dispatchEvent(
+      new win.MessageEvent("message", { data: { source: "kiwi-app", v: 1, ...data }, source: source as never }),
+    );
+  const key = (k: string, target: EventTarget = win.document.body as unknown as EventTarget) =>
+    target.dispatchEvent(new win.KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }) as unknown as Event);
+  const sent = (type: string) => toParent.filter((m) => m.type === type);
+  return { win, kiwi, send, key, sent };
+}
+
+describe("runtime.js in its own window", () => {
+  it("applies a theme from the parent", () => {
+    const { win, kiwi, send } = bootRuntime();
+    send({ type: "theme", vars: { "--background": "red" }, dark: true });
+    expect(win.document.querySelector("style[data-kiwi-theme]")?.textContent).toContain("--background: red;");
+    expect(win.document.documentElement.classList.contains("dark")).toBe(true);
+    expect(kiwi.theme).toEqual({ vars: { "--background": "red" }, dark: true });
+  });
+
+  it("ignores messages whose source is not the parent", () => {
+    const { win, kiwi, send } = bootRuntime();
+    send({ type: "theme", vars: { "--background": "red" }, dark: true }, win);
+    send({ type: "theme", vars: { "--background": "red" }, dark: true }, { postMessage() {} });
+    expect(win.document.querySelector("style[data-kiwi-theme]")).toBeNull();
+    expect(win.document.documentElement.classList.contains("dark")).toBe(false);
+    expect(kiwi.theme).toEqual({ vars: {}, dark: false });
+  });
+
+  it("forwards the playback keys once steps exist, but not while an input has focus", () => {
+    const { win, kiwi, key, sent } = bootRuntime();
+    key("ArrowRight");
+    expect(sent("key")).toHaveLength(0);
+
+    kiwi.steps({ count: 3 });
+    for (const k of PLAYBACK_KEYS) key(k);
+    expect(sent("key").map((m) => m.key)).toEqual([...PLAYBACK_KEYS]);
+
+    const input = win.document.createElement("input");
+    win.document.body.appendChild(input);
+    input.focus();
+    key("ArrowRight", input as unknown as EventTarget);
+    key(" ", input as unknown as EventTarget);
+    expect(sent("key")).toHaveLength(PLAYBACK_KEYS.length);
+  });
+
+  it("waits for the host's steps:set before rendering a step", () => {
+    const { kiwi, send, sent } = bootRuntime();
+    const onStep = vi.fn();
+    kiwi.steps({ count: 5, labels: "not an array", durations: { 0: 1 }, onStep });
+    expect(sent("steps:register")[0]).toMatchObject({ count: 5, labels: null, durations: null });
+    expect(onStep).not.toHaveBeenCalled();
+
+    send({ type: "steps:set", index: Number.NaN });
+    send({ type: "steps:set", index: Infinity });
+    expect(onStep).not.toHaveBeenCalled();
+
+    send({ type: "steps:set", index: 3 });
+    expect(onStep).toHaveBeenCalledExactlyOnceWith(3);
+    expect(kiwi.step).toBe(3);
+  });
+
+  it("measures a body that overflows a root pinned to the frame", () => {
+    const { win, kiwi, sent } = bootRuntime();
+    const body = win.document.body;
+    body.style.margin = "8px 0 12px";
+    win.document.documentElement.getBoundingClientRect = () => ({ height: 300 }) as never;
+    Object.defineProperty(body, "scrollHeight", { configurable: true, value: 900 });
+    kiwi.resize();
+    expect(sent("resize").at(-1)).toMatchObject({ height: 920 });
+
+    Object.defineProperty(body, "scrollHeight", { configurable: true, value: 100 });
+    kiwi.resize();
+    expect(sent("resize").at(-1)).toMatchObject({ height: 300 });
+  });
+
+  it("steps locally when opened on its own", () => {
+    const { kiwi } = bootRuntime({ standalone: true });
+    const onStep = vi.fn();
+    kiwi.steps({ count: 3, onStep });
+    expect(onStep).toHaveBeenLastCalledWith(0);
+    kiwi.next();
+    expect(onStep).toHaveBeenLastCalledWith(1);
   });
 });
 
@@ -172,6 +301,52 @@ describe("parseAppMeta", () => {
     expect(resolveAppSrc("guides/queue.md", "../shared/a.html")).toBe("shared/a.html");
     expect(resolveAppSrc("guides/queue.md", "/apps/a.html")).toBe("apps/a.html");
     expect(resolveAppSrc(undefined, "a.html")).toBe("a.html");
+  });
+
+  it("refuses a src= that climbs above the workspace root", () => {
+    expect(resolveAppSrc("guides/queue.md", "../../a.html")).toBeNull();
+    expect(resolveAppSrc("queue.md", "../a.html")).toBeNull();
+    expect(resolveAppSrc("guides/queue.md", "/../a.html")).toBeNull();
+    expect(resolveAppSrc("guides/queue.md", "apps/../../../a.html")).toBeNull();
+    expect(resolveAppSrc("guides/queue.md", "..")).toBeNull();
+  });
+});
+
+describe("KiwiApp src=", () => {
+  const meta = "src=apps/a.html";
+  const page = "guides/queue.md";
+
+  it("shows the fence body while the file loads", async () => {
+    readFile.mockReturnValue(new Promise(() => {}));
+    await act(async () => root.render(<KiwiApp source="Loading fallback" meta={meta} pagePath={page} />));
+    expect(readFile).toHaveBeenCalledWith("guides/apps/a.html");
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(container.querySelector("[aria-busy]")?.textContent).toContain("Loading fallback");
+  });
+
+  it("renders the file in the iframe once it loads", async () => {
+    readFile.mockResolvedValue({ content: "<p>from the file</p>" });
+    await act(async () => root.render(<KiwiApp source="Loading fallback" meta={meta} pagePath={page} />));
+    const iframe = container.querySelector("iframe");
+    expect(iframe?.getAttribute("srcdoc")).toContain("<p>from the file</p>");
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("shows an error card with the resolved path when the file is missing", async () => {
+    readFile.mockRejectedValue(new Error("not found"));
+    await act(async () => root.render(<KiwiApp source="Loading fallback" meta={meta} pagePath={page} />));
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("guides/apps/a.html");
+    expect(alert?.textContent).toContain("not found");
+    expect(alert?.textContent).toContain("Loading fallback");
+    expect(container.querySelector("iframe")).toBeNull();
+  });
+
+  it("shows the error card, without reading anything, for a path above the root", async () => {
+    await act(async () => root.render(<KiwiApp source="<p>body</p>" meta="src=../../x.html" pagePath={page} />));
+    expect(readFile).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("../../x.html");
+    expect(container.querySelector("iframe")).toBeNull();
   });
 });
 
@@ -223,6 +398,42 @@ describe("KiwiApp rendering", () => {
 
     // controls=host puts the transport under the app.
     expect(container.querySelector("figure.kiwi-app button[aria-label]")).not.toBeNull();
+  });
+
+  it("shows no host transport without controls=host", async () => {
+    const { win } = await render(<KiwiApp source="<p>x</p>" meta="id=bare" />);
+    await fromApp(win, { type: "steps:register", count: 5 });
+    expect(container.querySelector("figure.kiwi-app button[aria-label]")).toBeNull();
+  });
+
+  it("ignores non-finite numbers from the app", async () => {
+    const { iframe, win, posted } = await render(<KiwiApp source="<p>x</p>" meta="id=finite" />);
+    await fromApp(win, { type: "steps:register", count: 5, durations: [Infinity, Number.NaN, 200] });
+    await fromApp(win, { type: "steps:seek", index: 2 });
+    await fromApp(win, { type: "steps:seek", index: Number.NaN });
+    await fromApp(win, { type: "steps:seek", index: Infinity });
+    await fromApp(win, { type: "steps:seek", index: "3" });
+    expect(posted.filter((m) => m.type === "steps:set").at(-1)).toMatchObject({ index: 2 });
+
+    const start = iframe.style.height;
+    await fromApp(win, { type: "resize", height: Infinity });
+    await fromApp(win, { type: "resize", height: Number.NaN });
+    expect(iframe.style.height).toBe(start);
+  });
+
+  it("answers the same playback keys usePlayback does", async () => {
+    const { win, posted } = await render(<KiwiApp source="<p>x</p>" meta="id=keys" />);
+    await fromApp(win, { type: "steps:register", count: 5 });
+    const last = () => posted.filter((m) => m.type === "steps:set").at(-1);
+    await fromApp(win, { type: "key", key: "End" });
+    expect(last()).toMatchObject({ index: 4 });
+    await fromApp(win, { type: "key", key: "Home" });
+    expect(last()).toMatchObject({ index: 0 });
+    await fromApp(win, { type: "key", key: "ArrowRight" });
+    await fromApp(win, { type: "key", key: "ArrowRight" });
+    expect(last()).toMatchObject({ index: 2 });
+    await fromApp(win, { type: "key", key: "r" });
+    expect(last()).toMatchObject({ index: 0 });
   });
 
   it("starts at the deep-linked step", async () => {

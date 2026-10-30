@@ -24,9 +24,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "@kw/lib/api";
 import { figureClassName } from "@kw/lib/figureLayout";
-import { usePlayback, type Step } from "@kw/widgets/usePlayback";
+import { playbackKeyAction, usePlayback, type Step } from "@kw/widgets/usePlayback";
 import { PlaybackControls } from "@kw/widgets/PlaybackControls";
-import { setClockPlaying, playClock, clockSnapshot } from "@kw/widgets/playbackClock";
 import { currentHostTheme, subscribeHostTheme, type HostTheme } from "./kiwiApp/hostTheme";
 import { buildSrcDoc } from "./kiwiApp/srcdoc";
 import { parseAppMeta, resolveAppSrc } from "./kiwiApp/meta";
@@ -83,7 +82,7 @@ function readRegistration(d: Record<string, unknown>): StepsRegistration | null 
     count: capped,
     labels: Array.isArray(d.labels) ? d.labels.slice(0, capped).map((l) => String(l ?? "")) : null,
     durations: Array.isArray(d.durations)
-      ? d.durations.slice(0, capped).map((n) => (typeof n === "number" && n > 0 ? n : null))
+      ? d.durations.slice(0, capped).map((n) => (Number.isFinite(n) && (n as number) > 0 ? (n as number) : null))
       : null,
   };
 }
@@ -99,7 +98,9 @@ export function KiwiApp({ source, meta, pagePath }: KiwiAppProps) {
 
   const srcPath = opts.src ? resolveAppSrc(pagePath, opts.src) : null;
   const remote = useAppFile(srcPath);
-  const html = srcPath ? (remote.status === "ok" ? remote.content : null) : source;
+  const html = opts.src ? (remote.status === "ok" ? remote.content : null) : source;
+  const srcError =
+    opts.src && !srcPath ? "the path leads outside the workspace" : remote.status === "error" ? remote.message : null;
 
   // Deliberately keyed on the HTML and the kit flag alone. The theme is read
   // for first paint and then travels by message.
@@ -155,8 +156,8 @@ export function KiwiApp({ source, meta, pagePath }: KiwiAppProps) {
       const p = pbRef.current;
       switch (d.type) {
         case "resize":
-          if (!fixedHeight && typeof d.height === "number" && Number.isFinite(d.height)) {
-            setMeasured(Math.max(MIN_HEIGHT, Math.min(Math.ceil(d.height), MAX_HEIGHT)));
+          if (!fixedHeight && Number.isFinite(d.height)) {
+            setMeasured(Math.max(MIN_HEIGHT, Math.min(Math.ceil(d.height as number), MAX_HEIGHT)));
           }
           break;
         case "ready":
@@ -174,7 +175,7 @@ export function KiwiApp({ source, meta, pagePath }: KiwiAppProps) {
           p.stepBack();
           break;
         case "steps:seek":
-          if (typeof d.index === "number") p.setCurrentStep(d.index);
+          if (Number.isFinite(d.index)) p.setCurrentStep(Math.floor(d.index as number));
           break;
         case "steps:reset":
           p.reset();
@@ -186,7 +187,7 @@ export function KiwiApp({ source, meta, pagePath }: KiwiAppProps) {
           p.stop();
           break;
         case "key":
-          forwardKey(String(d.key), p.clockId, p);
+          playbackKeyAction(String(d.key), p.clockId);
           break;
       }
     }
@@ -222,12 +223,12 @@ export function KiwiApp({ source, meta, pagePath }: KiwiAppProps) {
   const fallbackText = source.trim();
 
   let body: ReactNode;
-  if (srcPath && remote.status === "error") {
+  if (srcError != null) {
     body = (
       <div className="kiwi-app-error px-4 py-3 text-sm" role="alert">
         <div className="font-medium text-destructive">Could not load app</div>
         <div className="mt-1 text-xs text-muted-foreground">
-          <code className="font-mono">{srcPath}</code> — {remote.message}
+          <code className="font-mono">{srcPath ?? opts.src}</code> — {srcError}
         </div>
         {fallbackText && <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">{fallbackText}</p>}
       </div>
@@ -297,33 +298,4 @@ export function KiwiApp({ source, meta, pagePath }: KiwiAppProps) {
       {opts.caption && <figcaption className="kiwi-figcaption">{opts.caption}</figcaption>}
     </figure>
   );
-}
-
-/** The same keys, with the same meaning, as usePlayback's own handler. */
-function forwardKey(
-  key: string,
-  clockId: string,
-  p: Pick<ReturnType<typeof usePlayback>, "stepForward" | "stepBack" | "setCurrentStep" | "totalSteps">,
-) {
-  if (!clockId) return;
-  switch (key) {
-    case "ArrowRight":
-      setClockPlaying(clockId, false);
-      p.stepForward();
-      break;
-    case "ArrowLeft":
-      setClockPlaying(clockId, false);
-      p.stepBack();
-      break;
-    case " ":
-      if (clockSnapshot(clockId).playing) setClockPlaying(clockId, false);
-      else playClock(clockId);
-      break;
-    case "Home":
-      p.setCurrentStep(0);
-      break;
-    case "End":
-      p.setCurrentStep(p.totalSteps - 1);
-      break;
-  }
 }

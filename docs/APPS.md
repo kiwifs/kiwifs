@@ -66,7 +66,7 @@ Written on the opening line, after `kiwi-app`. The first seven mean exactly what
 | `chrome=minimal\|full\|none` | `minimal` (default): a framed app with a copy button on hover. `full`: a header bar with the title. `none`: no frame at all, so the app sits on the page. |
 | `kit=off` | Skip the kit stylesheet. The runtime is still injected. |
 | `controls=host` | Render the standard playback transport under the app once it calls `kiwi.steps`. Without it, transport is left to the app's own buttons; keys and deep links work either way. |
-| `src=path.html` | Load the HTML from a file, relative to the page's folder (a leading `/` means the workspace root). The fence body becomes optional; if present, it is shown while loading and if the file is missing. |
+| `src=path.html` | Load the HTML from a file, relative to the page's folder (a leading `/` means the workspace root); a path that climbs above the root shows an error instead of loading. The fence body becomes optional; if present, it is shown while loading and if the file is missing. |
 
 The older nested form, `kiwi-app meta="height=300"`, still sets the height.
 
@@ -157,7 +157,7 @@ Transitions are on colour, opacity and transform only, and switch off under `pre
 
 Opened on its own (no host), `kiwi.steps` still works: `next`/`prev`/`seek` move locally.
 
-Keys pressed inside an app never reach the page, so the runtime forwards ←, →, Space, Home and End to the host once steps are registered, unless an input, textarea, select or editable element has focus.
+Keys pressed inside an app never reach the page, so the runtime forwards ←, →, Space, Home, End and R (reset) to the host — the same keys every other widget answers to — once steps are registered, unless an input, textarea, select or editable element has focus.
 
 A theme change does **not** reload the app. Toggling dark mode on step 7 leaves the reader on step 7.
 

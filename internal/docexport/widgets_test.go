@@ -146,3 +146,37 @@ func TestRewriteWidgetFencesReplacesKiwiApps(t *testing.T) {
 		t.Errorf("the app's HTML should not reach the export:\n%s", got)
 	}
 }
+
+func TestRewriteWidgetFencesEscapesKiwiAppMeta(t *testing.T) {
+	page := "```kiwi-app title=\"<img src=x onerror=alert(1)> **bold**\" caption=\"1. a [link](http://x) `code` _em_ & \\\\\"\n" +
+		"<p>x</p>\n" +
+		"```\n"
+	got := string(RewriteWidgetFences([]byte(page)))
+	for _, want := range []string{
+		"> **&lt;img src=x onerror=alert(1)&gt; \\*\\*bold\\*\\***",
+		"> 1\\. a \\[link\\](http://x) \\`code\\` \\_em\\_ &amp; \\\\",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "<img") {
+		t.Errorf("raw HTML from the meta reached the export:\n%s", got)
+	}
+}
+
+func TestEscapeInline(t *testing.T) {
+	for in, want := range map[string]string{
+		"A lease, outlived": "A lease, outlived",
+		"- not a list":      `\- not a list`,
+		"+ nor this":        `\+ nor this`,
+		"12) nor this":      `12\) nor this`,
+		"2026 report":       "2026 report",
+		"a | b ~ c # $x$":   `a \| b \~ c \# \$x\$`,
+		"two\nlines":        "two lines",
+	} {
+		if got := escapeInline(in); got != want {
+			t.Errorf("escapeInline(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

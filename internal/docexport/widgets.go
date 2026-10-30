@@ -26,13 +26,37 @@ func RewriteWidgetFences(content []byte) []byte {
 func renderStaticApp(block markdown.AppFenceBlock) string {
 	var buf strings.Builder
 	if block.Title != "" {
-		buf.WriteString("> **" + block.Title + "**\n>\n")
+		buf.WriteString("> **" + escapeInline(block.Title) + "**\n>\n")
 	}
 	if block.Caption != "" {
-		buf.WriteString("> " + block.Caption + "\n>\n")
+		buf.WriteString("> " + escapeInline(block.Caption) + "\n>\n")
 	}
 	buf.WriteString("> *Interactive app — open this page in KiwiFS to use it.*\n")
 	return buf.String()
+}
+
+// HTML specials become entities rather than backslash escapes: not every
+// renderer behind the export (mkdocs' Python-Markdown) honours `\<`.
+var inlineEscaper = strings.NewReplacer(
+	"&", "&amp;", "<", "&lt;", ">", "&gt;",
+	`\`, `\\`, "`", "\\`", "*", `\*`, "_", `\_`, "[", `\[`, "]", `\]`,
+	"#", `\#`, "|", `\|`, "~", `\~`, "$", `\$`,
+)
+
+// escapeInline makes fence meta, written by whoever wrote the page, print as
+// the text it is instead of as markup in the exported document.
+func escapeInline(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	s = inlineEscaper.Replace(s)
+	// A leading list marker would turn the caption line into a list.
+	if strings.HasPrefix(s, "-") || strings.HasPrefix(s, "+") {
+		return `\` + s
+	}
+	digits := len(s) - len(strings.TrimLeft(s, "0123456789"))
+	if digits > 0 && digits < len(s) && (s[digits] == '.' || s[digits] == ')') {
+		return s[:digits] + `\` + s[digits:]
+	}
+	return s
 }
 
 func renderStaticFence(block markdown.WidgetFenceBlock) string {
