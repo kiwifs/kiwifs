@@ -183,7 +183,7 @@ func (h *Handlers) ReadFile(c echo.Context) error {
 		tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindLinkResolve, Path: path, Detail: "wiki-links resolved"})
 	}
 
-	return c.Blob(http.StatusOK, detectContentType(path, content), content)
+	return serveWorkspaceBlob(c, path, content)
 }
 
 // setFileCacheHeaders keeps markdown reads fresh while allowing immutable-ish assets
@@ -750,17 +750,12 @@ func (h *Handlers) ServeRawFile(c echo.Context) error {
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	ct := detectContentType(path, content)
-	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
-	if ct == "image/svg+xml" {
-		c.Response().Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
-	}
 	cacheScope := "public"
 	if private, _ := c.Get(rawPrivateCtxKey).(bool); private {
 		cacheScope = "private"
 	}
 	c.Response().Header().Set("Cache-Control", cacheScope+", max-age=3600, must-revalidate")
-	return c.Blob(http.StatusOK, ct, content)
+	return serveWorkspaceBlob(c, path, content)
 }
 
 func parseSize(s string) (int64, error) {

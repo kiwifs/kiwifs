@@ -16,6 +16,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/kiwifs/kiwifs/internal/links"
+	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/storage"
 )
 
@@ -689,13 +690,20 @@ func resolve(idx *links.PathIndex, kind linkKind, ref, from string) string {
 }
 
 // resolveFirm is resolve plus whether the match is firm (see
-// links.PathIndex.ResolveLinkFirm). Markdown links name a path outright, so
-// they are always firm.
+// links.PathIndex.ResolveLinkFirm). Markdown links and kiwi-app src= name a
+// path outright, so they are always firm.
 func resolveFirm(idx *links.PathIndex, kind linkKind, ref, from string) (string, bool) {
-	if kind == kindWiki {
+	var p string
+	switch kind {
+	case kindWiki:
 		return idx.ResolveLinkFirm(ref, from)
+	case kindAppSrc:
+		if target, ok := markdown.ResolveAppSrc(from, ref); ok && target != "" {
+			p = idx.LookupExact(target)
+		}
+	default:
+		p = resolveMarkdown(idx, ref, from)
 	}
-	p := resolveMarkdown(idx, ref, from)
 	return p, p != ""
 }
 
@@ -723,6 +731,20 @@ func trimMD(p string) string {
 func (p *planner) respell(r linkRef, oldTarget, target, from string) (string, bool) {
 	ok := func(c string) bool { return resolve(p.post, r.Kind, c, from) == target }
 	orig := r.Path
+
+	if r.Kind == kindAppSrc {
+		c := relPath(dirOf(from), target)
+		switch {
+		case strings.HasPrefix(orig, "/"):
+			c = "/" + target
+		case strings.HasPrefix(orig, "./") && !strings.HasPrefix(c, "../"):
+			c = "./" + c
+		}
+		if !ok(c) {
+			return c, false
+		}
+		return quoteAppSrc(c, r.Quote)
+	}
 
 	if r.Kind == kindMarkdown {
 		dec := decodeHref(orig)

@@ -618,3 +618,67 @@ next-review: 2040-01-01
 		t.Fatalf("expected execution-stale with default date_field, got %+v", res.Issues)
 	}
 }
+
+func TestScan_FlagsBrokenKiwiAppSrc(t *testing.T) {
+	store, root := buildStore(t, map[string]string{
+		"guides/queue.md": "# Queue\n\n" +
+			"```kiwi-app src=apps/lease.html\n```\n\n" +
+			"```kiwi-app src=\"apps/gone.html\"\nfallback\n```\n\n" +
+			"```kiwi-app src=/shared/retry.html\n```\n",
+		"guides/apps/lease.html": "<div></div>\n",
+		"shared/retry.html":      "<div></div>\n",
+	})
+
+	res, err := New(root, store, nil, 90).Scan(context.Background())
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	broken := issuesByKind(res.Issues)[IssueBrokenAppSrc]
+	if len(broken) != 1 || broken[0].Path != "guides/queue.md" || broken[0].Related[0] != "guides/apps/gone.html" {
+		t.Fatalf("expected only guides/apps/gone.html flagged, got %+v", broken)
+	}
+}
+
+func TestScan_KiwiAppSrcClimbingAboveRoot(t *testing.T) {
+	store, root := buildStore(t, map[string]string{
+		"q.md": "# Q\n\n" +
+			"```kiwi-app src=../escape.html\n```\n\n" +
+			"```kiwi-app src=/../escape.html\n```\n\n" +
+			"```kiwi-app src=..foo.html\n```\n\n" +
+			"```kiwi-app src=.\n```\n\n" +
+			"```kiwi-app src=guides/../shared/ok.html\n```\n",
+		"shared/ok.html": "<div></div>\n",
+	})
+
+	res, err := New(root, store, nil, 90).Scan(context.Background())
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	broken := issuesByKind(res.Issues)[IssueBrokenAppSrc]
+	var climbing, rootDir, missing int
+	for _, is := range broken {
+		switch {
+		case strings.Contains(is.Message, "climbs above the workspace root"):
+			climbing++
+			if len(is.Related) != 0 {
+				t.Errorf("Related should be empty without a target, got %q", is.Related)
+			}
+		case strings.Contains(is.Message, "workspace root, not a file"):
+			rootDir++
+			if len(is.Related) != 0 {
+				t.Errorf("Related should be empty without a target, got %q", is.Related)
+			}
+		case strings.Contains(is.Message, "src=..foo.html doesn't resolve"):
+			// A name starting with ".." is a file in the folder, not a climb.
+			missing++
+			if len(is.Related) != 1 || is.Related[0] != "..foo.html" {
+				t.Errorf("Related = %q, want [..foo.html]", is.Related)
+			}
+		default:
+			t.Errorf("unexpected issue %+v", is)
+		}
+	}
+	if len(broken) != 4 || climbing != 2 || rootDir != 1 || missing != 1 {
+		t.Fatalf("want two climbing, one root and one missing issue, got %+v", broken)
+	}
+}

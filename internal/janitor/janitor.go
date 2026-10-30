@@ -17,16 +17,17 @@ import (
 const DefaultStaleDays = 90
 
 const (
-	IssueStale         = "stale"
-	IssueOrphan        = "orphan"
-	IssueDuplicate     = "duplicate"
-	IssueContradiction = "contradiction"
-	IssueMissingOwner  = "missing-owner"
-	IssueMissingStatus = "missing-status"
-	IssueEmptyPage     = "empty-page"
-	IssueBrokenLink    = "broken-link"
-	IssueNoReviewDate  = "no-review-date"
-	IssueDecisionFound = "decision-found"
+	IssueStale          = "stale"
+	IssueOrphan         = "orphan"
+	IssueDuplicate      = "duplicate"
+	IssueContradiction  = "contradiction"
+	IssueMissingOwner   = "missing-owner"
+	IssueMissingStatus  = "missing-status"
+	IssueEmptyPage      = "empty-page"
+	IssueBrokenLink     = "broken-link"
+	IssueBrokenAppSrc   = "broken-app-src"
+	IssueNoReviewDate   = "no-review-date"
+	IssueDecisionFound  = "decision-found"
 	IssueExpiredMemory  = "expired-memory"
 	IssueExecutionStale = "execution-stale"
 )
@@ -323,6 +324,12 @@ func (s *Scanner) checkPage(ctx context.Context, p pageInfo, existing map[string
 				Related:  []string{target},
 				Severity: "error",
 			})
+		}
+	}
+
+	for _, src := range markdown.AppSources(string(p.content)) {
+		if issue, broken := s.checkAppSrc(ctx, p.path, src); broken {
+			issues = append(issues, issue)
 		}
 	}
 
@@ -707,4 +714,27 @@ func fmDateField(fm map[string]any, key string) (time.Time, bool) {
 		return v, true
 	}
 	return time.Time{}, false
+}
+
+func (s *Scanner) checkAppSrc(ctx context.Context, pagePath, src string) (Issue, bool) {
+	issue := Issue{
+		Kind:       IssueBrokenAppSrc,
+		Path:       pagePath,
+		Severity:   "error",
+		Suggestion: "fix the path (it is relative to the page's folder) or restore the file",
+	}
+	target, ok := markdown.ResolveAppSrc(pagePath, src)
+	switch {
+	case !ok:
+		issue.Message = fmt.Sprintf("kiwi-app src=%s climbs above the workspace root", src)
+		issue.Suggestion = "point it at a file inside the workspace; a leading / starts at the root"
+	case target == "":
+		issue.Message = fmt.Sprintf("kiwi-app src=%s names the workspace root, not a file", src)
+	case !s.store.Exists(ctx, target):
+		issue.Message = fmt.Sprintf("kiwi-app src=%s doesn't resolve to any file", src)
+		issue.Related = []string{target}
+	default:
+		return Issue{}, false
+	}
+	return issue, true
 }
