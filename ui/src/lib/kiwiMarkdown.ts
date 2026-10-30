@@ -54,10 +54,9 @@ export const kiwiSanitizeSchema = {
       "data-footnotes", "data-footnote-ref", "data-footnote-backref",
       "data-tag", "metastring",
       "data-kiwi-directive", "data-quiz", "data-label", "data-ratio", "data-cols",
+      "data-control", "data-control-attrs", "data-var",
       "data-width", "data-pin", "data-caption",
       "data-kiwi-embed", "data-kiwi-target", "data-kiwi-width", "data-kiwi-pin",
-      // Claim provenance, shared with the copy of this schema in
-      // components/KiwiPage.tsx so the two cannot disagree.
       ...CLAIM_DATA_ATTRIBUTES,
       "aria-describedby", "aria-label"],
     a: [...withUnrestrictedClassName(defaultSchema.attributes?.a || []), "data-kiwi-target", "data-kiwi-missing"],
