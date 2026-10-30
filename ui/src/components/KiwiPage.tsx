@@ -1094,6 +1094,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                       <FenceBlock
                         {...props}
                         onNavigate={nav}
+                        pagePath={path}
                         isComputedView={parsed.meta?.["kiwi-view"] === true}
                         typedFences={typedFences}
                         typedFenceTags={typedFenceTags}
@@ -1339,6 +1340,7 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                               <FenceBlock
                                 {...props}
                                 onNavigate={nav}
+                                pagePath={path}
                                 typedFences={typedFences}
                                 typedFenceTags={typedFenceTags}
                               />

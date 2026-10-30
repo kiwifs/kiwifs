@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
@@ -20,6 +20,11 @@ export default defineConfig({
       "/api": "http://localhost:3333",
       "/health": "http://localhost:3333",
     },
+  },
+  test: {
+    // Vitest blanks CSS by default, `?raw` included; the kiwi-app kit is
+    // injected as text and its tests read it.
+    css: { include: [/kiwiApp\/kit\.css/] },
   },
   build: {
     outDir: "dist",

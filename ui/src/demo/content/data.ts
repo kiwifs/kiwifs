@@ -60,36 +60,21 @@ ${blk.chart({
   `### Rating histogram
 
 ${blk.kiwiApp(
-  240,
-  `<!DOCTYPE html>
-<html><head><style>
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: var(--card,#faf8f5); color: var(--foreground,#1c1917); }
-  h3 { font-size: 13px; font-weight: 600; margin: 0 0 12px; color: var(--muted-foreground,#78716c); text-transform: uppercase; letter-spacing: .06em; }
-  .bars { display: flex; align-items: flex-end; gap: 6px; height: 140px; padding-top: 8px; }
-  .bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .bar { width: 100%; border-radius: 4px 4px 0 0; background: linear-gradient(180deg, #c4a574 0%, #6f4e37 100%); min-height: 4px; transition: height .3s; }
-  .label { font-size: 10px; color: var(--muted-foreground); }
-  .count { font-size: 11px; font-weight: 600; }
-</style></head><body>
-  <h3>Rating distribution (9 shops)</h3>
+  `<div class="k-app">
+  <div class="k-eyebrow">Rating distribution (9 shops)</div>
   <div class="bars" id="bars"></div>
-  <script>
-    const data = [
-      { rating: "4.4", count: 1, pct: 11 },
-      { rating: "4.5", count: 1, pct: 11 },
-      { rating: "4.6", count: 2, pct: 22 },
-      { rating: "4.7", count: 2, pct: 22 },
-      { rating: "4.8", count: 2, pct: 22 },
-      { rating: "4.9", count: 1, pct: 11 },
-    ];
-    const max = Math.max(...data.map(d => d.count));
-    document.getElementById('bars').innerHTML = data.map(d =>
-      '<div class="bar-wrap"><div class="count">' + d.count + '</div>' +
-      '<div class="bar" style="height:' + (d.count / max * 120) + 'px"></div>' +
-      '<div class="label">' + d.rating + '</div></div>'
-    ).join('');
-  </script>
-</body></html>`,
+</div>
+<style>
+  .bars { display: flex; align-items: flex-end; gap: 6px; height: 150px; }
+  .bars > div { flex: 1; display: grid; justify-items: center; gap: 4px; font: 11px var(--k-mono); color: var(--k-dim); }
+  .bars i { width: 100%; border-radius: 4px 4px 0 0; background: color-mix(in srgb, var(--k-warn) 70%, var(--k-fg)); transition: height .3s var(--k-ease); }
+</style>
+<script>
+  var data = [["4.4", 1], ["4.5", 1], ["4.6", 2], ["4.7", 2], ["4.8", 2], ["4.9", 1]];
+  document.getElementById("bars").innerHTML = data.map(function (d) {
+    return "<div><b>" + d[1] + "</b><i style=\"height:" + d[1] * 55 + "px\"></i>" + d[0] + "</div>";
+  }).join("");
+</script>`,
 )}`,
 ])}
 

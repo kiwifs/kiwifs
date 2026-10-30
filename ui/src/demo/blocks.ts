@@ -105,8 +105,9 @@ export function mermaid(source: string): string {
   return `\`\`\`mermaid\n${source.trim()}\n\`\`\``;
 }
 
-export function kiwiApp(height: number, html: string): string {
-  return `\`\`\`kiwi-app meta="height=${height}"\n${html.trim()}\n\`\`\``;
+export function kiwiApp(html: string, meta = ""): string {
+  const opening = meta ? `kiwi-app ${meta}` : "kiwi-app";
+  return `\`\`\`${opening}\n${html.trim()}\n\`\`\``;
 }
 
 export function playground(opts: {
@@ -143,43 +144,50 @@ ${opts.after}
 \`\`\``;
 }
 
-export const counterApp = kiwiApp(
-  220,
-  `<!DOCTYPE html>
-<html><head><style>
-  body { font-family: system-ui; margin: 0; padding: 16px; background: var(--background,#fff); color: var(--foreground,#111); }
-  .row { display: flex; gap: 8px; align-items: center; }
-  button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border,#ccc); background: var(--card,#f8f8f8); cursor: pointer; }
-  .count { font-size: 2rem; font-weight: 700; min-width: 3ch; text-align: center; color: var(--primary,#84cc16); }
-</style></head><body>
-  <div class="row">
-    <button id="dec">−</button>
-    <div class="count" id="n">0</div>
-    <button id="inc">+</button>
+/**
+ * A stepped kiwi-app written the way docs/APPS.md recommends: kit classes for
+ * the look, `kiwi.steps` for the clock, so the reader gets arrow keys, the
+ * transport and a `#?step.write-path=N` link without the app writing any of it.
+ */
+export const pipelineApp = kiwiApp(
+  `<div class="k-app">
+  <div class="k-eyebrow">Write path</div>
+  <p class="k-lede" id="note"></p>
+  <div class="k-lanes" id="lanes"></div>
+  <div class="k-ctl">
+    <button class="k-btn" onclick="kiwi.prev()">Back</button>
+    <button class="k-btn primary" onclick="kiwi.next()">Next</button>
+    <span class="k-pill info" id="where"></span>
   </div>
-  <script>
-    let n = 0; const el = document.getElementById('n');
-    document.getElementById('inc').onclick = () => { n++; el.textContent = n; };
-    document.getElementById('dec').onclick = () => { n--; el.textContent = n; };
-  </script>
-</body></html>`,
+</div>
+<script>
+  var stages = ["Storage", "Git commit", "Index", "SSE broadcast"];
+  var notes = [
+    "The file lands on disk first. Everything after this can be rebuilt from it.",
+    "A commit records who wrote it and gives the write an ETag.",
+    "Search and metadata indexes catch up from the committed file.",
+    "Open tabs hear about the change and refresh."
+  ];
+  function render(i) {
+    document.getElementById("lanes").innerHTML = stages.map(function (s, j) {
+      return '<div class="k-lane ' + (j < i ? '' : j === i ? 'on' : 'dead') + '"><div class="k-eyebrow">' + (j + 1) + '</div>' + s + '</div>';
+    }).join("");
+    document.getElementById("note").textContent = notes[i];
+    document.getElementById("where").textContent = "step " + (i + 1) + " of " + stages.length;
+  }
+  kiwi.steps({ count: stages.length, labels: stages, onStep: render });
+</script>`,
+  'id=write-path controls=host caption="Every write goes through the same four stages, in order."',
 );
 
-export const eventCounterApp = kiwiApp(
-  160,
-  `<!DOCTYPE html>
-<html><head><style>
-  body { font-family: ui-monospace, monospace; margin: 0; padding: 12px 16px; background: var(--card); border-radius: 8px; }
-  .label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted-foreground); }
-  .value { font-size: 28px; font-weight: 700; color: var(--primary); }
-</style></head><body>
-  <div class="label">Events today</div>
-  <div class="value" id="v">47</div>
-  <script>
-    let n = 47;
-    setInterval(() => { n++; document.getElementById('v').textContent = n; }, 4000);
-  </script>
-</body></html>`,
+export const eventStatApp = kiwiApp(
+  `<div class="k-app">
+  <div class="k-stat"><span>Events today</span><b id="v">47</b></div>
+</div>
+<script>
+  var n = 47;
+  setInterval(function () { n++; document.getElementById("v").textContent = n; }, 4000);
+</script>`,
 );
 
 /**

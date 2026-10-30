@@ -116,6 +116,38 @@ function normalizeStep<T>(raw: unknown): Step<T> {
   return { state: raw as T, label: "" };
 }
 
+/** Every key a playback answers to. kiwi-app's runtime.js forwards this same set. */
+export const PLAYBACK_KEYS: readonly string[] = [" ", "ArrowRight", "ArrowLeft", "Home", "End", "r"];
+
+/**
+ * Apply a playback key to a clock. Returns false for a key that is not one,
+ * so the caller can leave the event alone. Focus checks are the caller's.
+ */
+export function playbackKeyAction(key: string, clockId: string): boolean {
+  if (!clockId) return false;
+  switch (key) {
+    case " ":
+      if (clockSnapshot(clockId).playing) setClockPlaying(clockId, false);
+      else playClock(clockId);
+      return true;
+    case "ArrowRight":
+    case "ArrowLeft":
+      setClockPlaying(clockId, false);
+      stepClock(clockId, key === "ArrowRight" ? 1 : -1, { persist: true });
+      return true;
+    case "Home":
+    case "End":
+      setClockPlaying(clockId, false);
+      seekClock(clockId, key === "Home" ? 0 : clockSnapshot(clockId).total - 1, { persist: true });
+      return true;
+    case "r":
+      setClockPlaying(clockId, false);
+      seekClock(clockId, 0, { persist: true });
+      return true;
+  }
+  return false;
+}
+
 function isRef(v: unknown): v is React.RefObject<HTMLElement | null> {
   return typeof v === "object" && v !== null && "current" in v && Object.keys(v).length === 1;
 }
@@ -274,31 +306,15 @@ export function usePlayback<T>(
       const root = scoped ?? widgetRoot?.current;
       const partFocused = root ? partHasFocus(root, ke.target) : false;
 
-      switch (ke.key) {
-        case " ":
-          if (tag === "BUTTON" || partFocused) return;
-          ke.preventDefault();
-          if (clockSnapshot(clockId).playing) setClockPlaying(clockId, false);
-          else playClock(clockId);
-          break;
-        case "ArrowRight":
-        case "ArrowLeft": {
-          if (partFocused) return;
-          ke.preventDefault();
-          setClockPlaying(clockId, false);
-          if (ke.key === "ArrowRight") stepForward();
-          else stepBack();
-          break;
-        }
-        case "r":
-          ke.preventDefault();
-          reset();
-          break;
-      }
+      if (!PLAYBACK_KEYS.includes(ke.key)) return;
+      if (partFocused && ke.key !== "r") return;
+      if (ke.key === " " && tag === "BUTTON") return;
+      ke.preventDefault();
+      playbackKeyAction(ke.key, clockId);
     };
     target.addEventListener("keydown", handler);
     return () => target.removeEventListener("keydown", handler);
-  }, [containerRef, widgetRoot, clockId, stepForward, stepBack, reset]);
+  }, [containerRef, widgetRoot, clockId]);
 
   const linkId = optedOut ? undefined : (clockId ?? undefined);
   const controls = useMemo<PlaybackControlsBinding>(() => ({

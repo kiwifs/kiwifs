@@ -105,6 +105,12 @@ All PRs must pass the `test` CI check (go vet, go test, UI build) before merge.
   `internal/markdown/fenceschemas/fences.json` from them, which the Go linter
   embeds and `kiwi_widget_reference` serves; CI fails if it drifts. Adding a
   widget means adding a spec, not touching the renderer.
+- **kiwi-app** blocks (sandboxed HTML) get a kit stylesheet
+  (`ui/src/components/kiwiApp/kit.css`) and a `kiwi` runtime
+  (`ui/src/components/kiwiApp/runtime.js`). When writing an app, use the `k-`
+  classes and tokens instead of hand-rolled CSS, and `kiwi.steps({count,
+  onStep})` instead of your own step counter, so the app gets keyboard
+  control, deep links and shared clocks. Reference: `docs/APPS.md`.
 - **DQL queries** go through the Pratt parser in `internal/dataview/parser.go` and evaluator in `internal/dataview/evaluator.go`.
 - **Workflows** are JSON state machines in `.kiwi/workflows/*.json`, managed by `internal/workflow/`.
 - **UI state** uses React context + localStorage. No global state library.

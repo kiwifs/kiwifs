@@ -81,6 +81,7 @@ Structured knowledge management across diverse use cases.
 - [x] **JSON Schema validation** — `.kiwi/schemas/*.json`, enforcement toggle, per-template schemas
 - [x] **Init templates** — 12 templates: `kb`, `wiki`, `memory`, `tasks`, `data`, `cms`, `runbook`, `adr`, `prompt`, `research`, `log`, `blank`
 - [x] **Widget system** — `kiwi-chart`, `kiwi-query`, `kiwi-kanban`, `kiwi-playground`, `kiwi-app`, `kiwi-diff`, `kiwi-progress`, `kiwi-color`, `kiwi-steps`, `kiwi-calc`, `widget:live`, `widget:code`, container directives (tabs, columns), callouts
+- [x] **kiwi-app kit** — sandboxed apps share a theme-aware `k-` stylesheet and a `kiwi` runtime that hands their stepping to the page's playback engine (keys, scrubber, shared clocks, deep links); `src=` loads the HTML from its own file. Reference: [APPS.md](APPS.md)
 - [x] **Widget fences** — pictures as data: `array`, `matrix`, `table`, `tree`, `graph`, `plot`, `bars`, `numberline`, `plane`, `map`, `timeline`, `list`, `stack`, `bits`, `sequence`. Schema-validated by `kiwi_lint`, documented by `kiwi_widget_reference`, shared playback clocks with linkable steps (`#?step.<id>=N`), click-a-cell explanations, accessible names, and prose fallbacks in PDF and search. Reference: [WIDGETS.md](WIDGETS.md)
 - [x] **Task orchestration** — `kiwi_task_create`, `kiwi_task_progress`, claims, Kanban, task template
 - [x] **Agent memory tools** — `kiwi_remember`, `kiwi_forget`, memory report, contradiction detection

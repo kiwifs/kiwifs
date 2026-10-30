@@ -122,3 +122,61 @@ func TestRewriteWidgetFencesUsesTheOpeningLineCaption(t *testing.T) {
 		t.Errorf("expected the opening-line caption first:\n%s", got)
 	}
 }
+
+func TestRewriteWidgetFencesReplacesKiwiApps(t *testing.T) {
+	page := "# Leases\n\n" +
+		"```kiwi-app id=lease title=\"Lease timeline\" caption=\"A paused worker outlives its lease\"\n" +
+		"<div class=\"k-app\"><script>kiwi.steps({count: 4})</script></div>\n" +
+		"```\n\n" +
+		"```array\nvalues: [1, 2]\n```\n\n" +
+		"After.\n"
+	got := string(RewriteWidgetFences([]byte(page)))
+	for _, want := range []string{
+		"> **Lease timeline**",
+		"> A paused worker outlives its lease",
+		"Interactive app — open this page in KiwiFS to use it.",
+		"Interactive array widget",
+		"After.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "kiwi.steps") || strings.Contains(got, "```kiwi-app") {
+		t.Errorf("the app's HTML should not reach the export:\n%s", got)
+	}
+}
+
+func TestRewriteWidgetFencesEscapesKiwiAppMeta(t *testing.T) {
+	page := "```kiwi-app title=\"<img src=x onerror=alert(1)> **bold**\" caption=\"1. a [link](http://x) `code` _em_ & \\\\\"\n" +
+		"<p>x</p>\n" +
+		"```\n"
+	got := string(RewriteWidgetFences([]byte(page)))
+	for _, want := range []string{
+		"> **&lt;img src=x onerror=alert(1)&gt; \\*\\*bold\\*\\***",
+		"> 1\\. a \\[link\\](http://x) \\`code\\` \\_em\\_ &amp; \\\\",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "<img") {
+		t.Errorf("raw HTML from the meta reached the export:\n%s", got)
+	}
+}
+
+func TestEscapeInline(t *testing.T) {
+	for in, want := range map[string]string{
+		"A lease, outlived": "A lease, outlived",
+		"- not a list":      `\- not a list`,
+		"+ nor this":        `\+ nor this`,
+		"12) nor this":      `12\) nor this`,
+		"2026 report":       "2026 report",
+		"a | b ~ c # $x$":   `a \| b \~ c \# \$x\$`,
+		"two\nlines":        "two lines",
+	} {
+		if got := escapeInline(in); got != want {
+			t.Errorf("escapeInline(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

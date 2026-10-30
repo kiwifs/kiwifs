@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { prerenderToNodeStream } from "react-dom/static";
+vi.mock("./KiwiApp", () => ({
+  KiwiApp: (props: { source: string; meta?: string; pagePath?: string }) => (
+    <pre data-app-meta={props.meta} data-app-page={props.pagePath}>{props.source}</pre>
+  ),
+}));
+
 import { FenceBlock, fenceLang, fenceMeta, parseLineRanges, resolveFence } from "./FenceBlock";
 
 describe("fenceLang", () => {
@@ -114,5 +121,30 @@ describe("FenceBlock", () => {
     const html = render("kiwi-array", "values: [1, 2]\n", { typedFences: false });
     expect(html).toContain("kiwi-fence");
     expect(render("array", "values: [1, 2]\n", { typedFences: false })).not.toContain("kiwi-fence");
+  });
+});
+
+describe("FenceBlock kiwi-app", () => {
+  async function renderAll(el: React.ReactElement): Promise<string> {
+    const { prelude } = await prerenderToNodeStream(el);
+    let out = "";
+    for await (const chunk of prelude) out += chunk;
+    return out;
+  }
+
+  it("hands the meta to KiwiApp unchanged", async () => {
+    const meta = 'id=x width=wide caption="Two leases, one lock"';
+    const html = await renderAll(
+      <FenceBlock className="language-kiwi-app" node={{ data: { meta } }} pagePath="guides/q.md">
+        {"<p>a</p>\n<p>b</p>\n"}
+      </FenceBlock>,
+    );
+    expect(html).toContain(`data-app-meta="id=x width=wide caption=&quot;Two leases, one lock&quot;"`);
+    expect(html).toContain('data-app-page="guides/q.md"');
+  });
+
+  it("routes a bodiless kiwi-app with src= to the app, not inline code", () => {
+    expect(resolveFence("kiwi-app", "", { meta: "src=apps/a.html" }).kind).toBe("app");
+    expect(resolveFence("kiwi-app", "", {}).kind).toBe("inline");
   });
 });

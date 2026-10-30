@@ -16,7 +16,47 @@ import (
 // `activeIndices`. Rendering a real picture needs a headless pass; this is the
 // honest text version until then.
 func RewriteWidgetFences(content []byte) []byte {
-	return []byte(markdown.StripWidgetFences(string(content), renderStaticFence))
+	out := markdown.StripWidgetFences(string(content), renderStaticFence)
+	return []byte(markdown.StripAppFences(out, renderStaticApp))
+}
+
+// renderStaticApp stands in for a kiwi-app. Its body is minified HTML and
+// script, which in a PDF is pages of noise; the title and caption are what a
+// reader can use.
+func renderStaticApp(block markdown.AppFenceBlock) string {
+	var buf strings.Builder
+	if block.Title != "" {
+		buf.WriteString("> **" + escapeInline(block.Title) + "**\n>\n")
+	}
+	if block.Caption != "" {
+		buf.WriteString("> " + escapeInline(block.Caption) + "\n>\n")
+	}
+	buf.WriteString("> *Interactive app — open this page in KiwiFS to use it.*\n")
+	return buf.String()
+}
+
+// HTML specials become entities rather than backslash escapes: not every
+// renderer behind the export (mkdocs' Python-Markdown) honours `\<`.
+var inlineEscaper = strings.NewReplacer(
+	"&", "&amp;", "<", "&lt;", ">", "&gt;",
+	`\`, `\\`, "`", "\\`", "*", `\*`, "_", `\_`, "[", `\[`, "]", `\]`,
+	"#", `\#`, "|", `\|`, "~", `\~`, "$", `\$`,
+)
+
+// escapeInline makes fence meta, written by whoever wrote the page, print as
+// the text it is instead of as markup in the exported document.
+func escapeInline(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	s = inlineEscaper.Replace(s)
+	// A leading list marker would turn the caption line into a list.
+	if strings.HasPrefix(s, "-") || strings.HasPrefix(s, "+") {
+		return `\` + s
+	}
+	digits := len(s) - len(strings.TrimLeft(s, "0123456789"))
+	if digits > 0 && digits < len(s) && (s[digits] == '.' || s[digits] == ')') {
+		return s[:digits] + `\` + s[digits:]
+	}
+	return s
 }
 
 func renderStaticFence(block markdown.WidgetFenceBlock) string {

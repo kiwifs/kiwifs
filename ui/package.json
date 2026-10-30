@@ -170,6 +170,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.184.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "acorn": "^8.19.0",
     "esbuild": "^0.25.12",
     "happy-dom": "^21.0.4",
     "storybook": "^8.6.18",

@@ -59,6 +59,8 @@ export interface FenceBlockProps {
   /** The hast node, carrying `data.meta` / `properties.metastring`. */
   node?: any;
   onNavigate?: (path: string) => void;
+  /** The page being rendered; `kiwi-app src=` resolves against its folder. */
+  pagePath?: string;
   /** `kiwi-view: true` in frontmatter — `kiwi-query` renders differently. */
   isComputedView?: boolean;
   /** Bare typed fences (```array, ```tree, …) are off when false. */
@@ -119,6 +121,8 @@ export type FenceRoute = { kind: "typed"; spec: FenceSpec } | { kind: BlockKind 
 export interface ResolveFenceOptions {
   typedFences?: boolean;
   typedFenceTags?: string[] | null;
+  /** The fence meta; a `kiwi-app src=` has no body to pass the guard with. */
+  meta?: string;
 }
 
 const EXACT: Record<string, BlockKind> = {
@@ -144,7 +148,7 @@ const AFTER_GUARD: Record<string, BlockKind> = { "kiwi-app": "app", "kiwi-diff":
 export function resolveFence(
   lang: string | undefined,
   raw: string,
-  { typedFences = true, typedFenceTags }: ResolveFenceOptions = {},
+  { typedFences = true, typedFenceTags, meta }: ResolveFenceOptions = {},
 ): FenceRoute {
   if (lang && Object.hasOwn(EXACT, lang)) return { kind: EXACT[lang]! };
   if (lang?.startsWith("widget:")) return { kind: "widget" };
@@ -171,6 +175,7 @@ export function resolveFence(
   }
 
   if (lang === "kiwi-steps") return { kind: "steps" };
+  if (lang === "kiwi-app" && meta && /(?:^|\s)src=/.test(meta)) return { kind: "app" };
   if (!lang || !raw.includes("\n")) return { kind: "inline" };
   return { kind: AFTER_GUARD[lang] ?? "code" };
 }
@@ -180,15 +185,16 @@ export function FenceBlock({
   children,
   node,
   onNavigate,
+  pagePath,
   isComputedView,
   typedFences = true,
   typedFenceTags,
   ...rest
 }: FenceBlockProps) {
   const lang = fenceLang(className);
-  const raw = String(children).replace(/\n$/, "");
-  const route = resolveFence(lang, raw, { typedFences, typedFenceTags });
+  const raw = String(children ?? "").replace(/\n$/, "");
   const meta = fenceMeta(node);
+  const route = resolveFence(lang, raw, { typedFences, typedFenceTags, meta });
 
   switch (route.kind) {
     case "typed":
@@ -236,7 +242,11 @@ export function FenceBlock({
         </code>
       );
     case "app":
-      return <Deferred><KiwiApp source={raw} meta={meta} /></Deferred>;
+      return (
+        <Deferred>
+          <KiwiApp source={raw} meta={meta} pagePath={pagePath} onNavigate={onNavigate} />
+        </Deferred>
+      );
     case "diff":
       return <KiwiDiff source={raw} meta={meta} />;
     case "code": {

@@ -9,8 +9,8 @@ import {
   kiwiApp,
   playground,
   diff,
-  counterApp,
-  eventCounterApp,
+  pipelineApp,
+  eventStatApp,
 } from "../blocks";
 import { demoBacklinks, demoComments, demoSearch, demoVersions } from "./mockExtras";
 
@@ -45,7 +45,7 @@ ${progress({
 
 ${queryTable('TABLE title, tags, status FROM "engineering/" WHERE status = "published" SORT title ASC')}
 
-${counterApp}
+${pipelineApp}
 
 > [!NOTE]
 > Prefer wiki links (\`[[page]]\`) over raw paths — backlinks and the graph view stay accurate. See [[engineering/search#wiki-links|search docs]] for how links are indexed.
@@ -100,7 +100,7 @@ Cross-read: [[engineering/search]], [[engineering/versioning]], [[engineering/mc
 2. **One binary** — no sidecar Postgres for core path (optional for pgvector).
 3. **Actor attribution** — every write carries \`X-Actor\` for git author mapping.
 
-${eventCounterApp}`,
+${eventStatApp}`,
 ])}
 
 ## Talking to KiwiFS
@@ -356,10 +356,9 @@ ${playground({
 
 Dogfood example: this page was last updated by \`cursor-agent\` in staging. Search details: [[engineering/search]] · Review gate: [[processes/code-review]].
 
-${kiwiApp(180, `<div style="font-family:system-ui;padding:12px">
-  <div style="font-size:11px;text-transform:uppercase;color:#64748b;letter-spacing:.06em">MCP tools online</div>
-  <div style="font-size:32px;font-weight:700;color:#84cc16">62</div>
-  <div style="font-size:13px;color:#475569">stdio + HTTP on cloud workspaces</div>
+${kiwiApp(`<div class="k-app">
+  <div class="k-stat"><span>MCP tools online</span><b>62</b></div>
+  <p class="k-lede">stdio + HTTP on cloud workspaces</p>
 </div>`)}
 `,
 

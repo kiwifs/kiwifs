@@ -9,8 +9,8 @@ import {
   kiwiApp,
   playground,
   diff,
-  counterApp,
-  eventCounterApp,
+  pipelineApp,
+  eventStatApp,
 } from "../blocks";
 import { demoBacklinks, demoComments, demoSearch } from "./mockExtras";
 import type { MockSavedView } from "@kw/components/__mocks__/data";
@@ -101,17 +101,16 @@ ${columns("1:1", [
 - Backend staging: \`api.pinch-dev.app\`
 - QA build: TestFlight **0.4.0-build.42**
 
-${counterApp}
+${pipelineApp}
 
 > [!WARNING]
 > Photo upload blocked until infra raises S3 presigned URL quota — track in [[tasks/photo-upload]].`,
 ])}
 
-${eventCounterApp}
+${eventStatApp}
 
-${kiwiApp(140, `<div style="font-family:system-ui;padding:8px 12px;display:flex;align-items:center;gap:12px">
-  <div style="width:10px;height:10px;border-radius:50%;background:#22c55e"></div>
-  <div><strong>Kanban</strong> · 9 cards · 1 blocked</div>
+${kiwiApp(`<div class="k-app k-ctl">
+  <span class="k-pill ok">Kanban</span> 9 cards <span class="k-pill bad">1 blocked</span>
 </div>`)}
 `,
 

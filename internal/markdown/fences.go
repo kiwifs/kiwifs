@@ -1206,6 +1206,39 @@ func StripWidgetFences(content string, render func(WidgetFenceBlock) string) str
 // StripWidgetFencesWithOptions is StripWidgetFences for a given workspace's
 // typed-fence settings.
 func StripWidgetFencesWithOptions(content string, opts FenceOptions, render func(WidgetFenceBlock) string) string {
+	return replaceFenceSpans(content, func(span fenceSpan) string {
+		block, ok := claimWidgetFence(span, opts)
+		if !ok {
+			return ""
+		}
+		return render(block)
+	})
+}
+
+// AppFenceBlock is a ```kiwi-app fence: sandboxed HTML a static reader cannot run.
+type AppFenceBlock struct {
+	Title   string
+	Caption string
+}
+
+// StripAppFences replaces every ```kiwi-app fence with render's output. An
+// empty result keeps the fence as written.
+func StripAppFences(content string, render func(AppFenceBlock) string) string {
+	return replaceFenceSpans(content, func(span fenceSpan) string {
+		if span.lang != "kiwi-app" {
+			return ""
+		}
+		attrs := parseFenceMeta(span.meta)
+		return render(AppFenceBlock{
+			Title:   attrs["title"],
+			Caption: attrs["caption"],
+		})
+	})
+}
+
+// replaceFenceSpans swaps each closed fence for replace's output, re-indented
+// to the fence's own margin. An empty replacement leaves the fence alone.
+func replaceFenceSpans(content string, replace func(fenceSpan) string) string {
 	lines := strings.Split(content, "\n")
 	spans := scanFenceSpans(lines)
 	if len(spans) == 0 {
@@ -1218,11 +1251,7 @@ func StripWidgetFencesWithOptions(content string, opts FenceOptions, render func
 			// Unclosed; lintFences reports it. Keep what we have verbatim.
 			break
 		}
-		block, ok := claimWidgetFence(span, opts)
-		if !ok {
-			continue
-		}
-		replacement := render(block)
+		replacement := replace(span)
 		if replacement == "" {
 			continue
 		}

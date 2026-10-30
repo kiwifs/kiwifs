@@ -102,6 +102,17 @@ export interface KiwiThemeOverrides {
 const STYLE_ID = "kiwi-theme-overrides";
 const CUSTOM_CSS_STYLE_ID = "kiwi-custom-css";
 
+/**
+ * Fired on window whenever a palette or custom CSS is applied or removed.
+ * Those land in a <style> in <head>, which nothing observing <html> can see —
+ * sandboxed kiwi-apps listen for this to pick up the new tokens.
+ */
+export const THEME_CHANGE_EVENT = "kiwi:themechange";
+
+function announceThemeChange(): void {
+  window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+}
+
 const customCSSScriptTag = /<script\b[^>]*>[\s\S]*?<\/script>/gi;
 
 // When set, CSS custom-property overrides are scoped to this selector instead
@@ -180,10 +191,12 @@ export function applyKiwiTheme(overrides: KiwiThemeOverrides): void {
   style.id = STYLE_ID;
   style.textContent = css;
   document.head.appendChild(style);
+  announceThemeChange();
 }
 
 export function removeKiwiTheme(): void {
   document.getElementById(STYLE_ID)?.remove();
+  announceThemeChange();
 }
 
 /** Strip script tags from custom CSS (defense in depth; server also sanitizes). */
@@ -195,15 +208,18 @@ export function sanitizeCustomCSS(css: string): string {
 export function applyKiwiCustomCSS(css: string): void {
   const sanitized = sanitizeCustomCSS(css);
   document.getElementById(CUSTOM_CSS_STYLE_ID)?.remove();
-  if (!sanitized.trim()) return;
-  const style = document.createElement("style");
-  style.id = CUSTOM_CSS_STYLE_ID;
-  style.textContent = sanitized;
-  document.head.appendChild(style);
+  if (sanitized.trim()) {
+    const style = document.createElement("style");
+    style.id = CUSTOM_CSS_STYLE_ID;
+    style.textContent = sanitized;
+    document.head.appendChild(style);
+  }
+  announceThemeChange();
 }
 
 export function removeKiwiCustomCSS(): void {
   document.getElementById(CUSTOM_CSS_STYLE_ID)?.remove();
+  announceThemeChange();
 }
 
 export function applyKiwiThemeFromUrl(): boolean {
