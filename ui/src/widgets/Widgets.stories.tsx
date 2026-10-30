@@ -692,6 +692,7 @@ function Gallery() {
 const meta: Meta<typeof Gallery> = {
   title: "Widgets/Gallery",
   component: Gallery,
+  tags: ["autodocs"],
   parameters: { layout: "fullscreen" },
 };
 

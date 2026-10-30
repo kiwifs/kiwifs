@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: ${{ needs.changes.outputs.ui == 'true' || needs.changes.outputs.go == 'true' || needs.changes.outputs.infra == 'true' }}
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
@@ -123,6 +123,39 @@ jobs:
       - name: go build
         if: ${{ needs.changes.outputs.go == 'true' || needs.changes.outputs.infra == 'true' }}
         run: go build -o /tmp/kiwifs .
+
+
+  storybook:
+    name: storybook
+    needs: changes
+    if: ${{ needs.changes.outputs.ui == 'true' || needs.changes.outputs.infra == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: install frontend deps
+        run: npm ci
+        working-directory: ui
+
+      - name: install chromium for story tests
+        run: npx playwright install --with-deps chromium
+        working-directory: ui
+
+      # A story that fails to render or whose play function fails breaks the
+      # PR here, not the deploy to demo.kiwifs.com/storybook afterwards.
+      - name: run story tests
+        run: npm run test-storybook
+        working-directory: ui
+
+      - name: build storybook
+        run: npm run build-storybook
+        working-directory: ui
 
   docker:
     name: docker build

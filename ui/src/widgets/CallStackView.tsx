@@ -25,8 +25,11 @@ export interface CallStackViewProps {
   growth?: "top" | "bottom";
   /** Scroll past this height rather than growing the page. Default 320. */
   maxHeight?: number;
+  /** Caption above the stack. */
   title?: string;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
   /** Message shown when the stack is empty. */
   empty?: string;

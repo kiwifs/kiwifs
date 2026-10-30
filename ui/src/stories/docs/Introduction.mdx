@@ -1,0 +1,30 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta title="Introduction" />
+
+# KiwiFS UI
+
+KiwiFS turns a folder of markdown into pages. This Storybook shows what those pages look like: not only the parts, but whole pages rendered the way a reader sees them.
+
+## What a page can hold
+
+- **Markdown**: GFM, footnotes, math, wiki links, admonitions, and directives for tabs, columns, figures and claims.
+- **Typed fences**: pictures as data (`array`, `tree`, `graph`, `sequence`, `timeline`, …). Validated, steppable, deep-linkable, and readable as prose in a PDF. Reference: [docs/WIDGETS.md](https://github.com/kiwifs/kiwifs/blob/main/docs/WIDGETS.md).
+- **Blocks**: `kiwi-chart`, `kiwi-calc`, `kiwi-query`, `kiwi-kanban`, `kiwi-steps`, `mermaid`, `d2` and more.
+- **Apps**: `kiwi-app`, sandboxed HTML with a shared kit and the page's playback engine. Reference: [docs/APPS.md](https://github.com/kiwifs/kiwifs/blob/main/docs/APPS.md).
+- **Escape hatches**: `widget:live` (React) and `widget:code` (Python in the browser).
+- **Views**: saved queries rendered as tables, boards, cards and maps.
+
+## Finding your way
+
+| Section | What is there |
+|---|---|
+| **Authoring** | Every block type: the markdown on the left, the rendering on the right. |
+| **Showcase** | Whole pages (an architecture walkthrough, a lesson, a runbook, an ADR, a dashboard) rendered through the real page. |
+| **Fences** | Every typed fence from its documented example, playing on a loop. |
+| **Widgets** | The view components, static and playing. |
+| **Blocks** | `kiwi-*` blocks and `kiwi-app`, including the kit reference. |
+| **Tokens** | Every theme variable, in light, dark and each palette. |
+| Everything else | The app around the page: navigation, editor, bases, kanban, canvas, dialogs, and the `UI` primitives. |
+
+Use the toolbar to switch **Theme** (light, dark, or both side by side) and **Palette**. Every block has to look right in all of them, because it is embedded in someone else's page with nothing to fall back on.

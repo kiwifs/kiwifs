@@ -43,7 +43,9 @@ export interface InputField {
 }
 
 export interface InputPanelProps {
+  /** Controls to render, in order. */
   fields: InputField[];
+  /** Current value per field key. */
   values: Record<string, unknown>;
   /**
    * One field changed. When `persist` restores several saved fields at once
@@ -155,6 +157,7 @@ export function InputPanel({
 
               {field.type === "number" && (
                 <input
+                  aria-label={field.label}
                   type="number"
                   value={val as number}
                   min={field.min}
@@ -172,6 +175,7 @@ export function InputPanel({
               {field.type === "slider" && (
                 <>
                   <input
+                    aria-label={field.label}
                     type="range"
                     value={Number(val)}
                     min={field.min ?? 0}
@@ -240,6 +244,7 @@ export function InputPanel({
 
               {field.type === "text" && (
                 <input
+                  aria-label={field.label}
                   type="text"
                   value={val as string}
                   onChange={(e) => onChange(field.key, e.target.value)}
@@ -249,6 +254,7 @@ export function InputPanel({
 
               {field.type === "array" && (
                 <input
+                  aria-label={field.label}
                   type="text"
                   value={Array.isArray(val) ? (val as unknown[]).join(field.separator ?? ", ") : String(val)}
                   onChange={(e) =>

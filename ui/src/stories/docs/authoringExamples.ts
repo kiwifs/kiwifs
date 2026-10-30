@@ -1,0 +1,35 @@
+/**
+ * One example per block type, rendered by Authoring.mdx through the real
+ * pipeline. Kept as data so the MDX stays readable and each string is the
+ * exact markdown an author would type.
+ */
+
+export interface AuthoringExample {
+  title: string;
+  note: string;
+  md: string;
+}
+
+export const AUTHORING_EXAMPLES: AuthoringExample[] = [
+  { title: "Admonitions", note: "GitHub-style callouts. Add `-` or `+` after the tag to make one foldable.", md: "> [!NOTE]\n> Indexes are derivative. `kiwifs reindex` rebuilds them from the files.\n\n> [!WARNING]- Fold me\n> Collapsed until the reader opens it." },
+  { title: "Tabs", note: "`:::tabs` with one `::tab[Label]` per tab.", md: ":::tabs\n::tab[Happy path]\nThe worker finishes and acks the job.\n\n::tab[Crash]\nThe lease expires and another worker picks the job up.\n:::" },
+  { title: "Columns", note: "`:::columns` with a `:::col` per column; `{ratio=\"2:1\"}` or `{cols=\"3\"}` to size them.", md: ":::columns{ratio=\"1:1\"}\n:::col\n**Option A**: one queue, simple to run.\n\n:::col\n**Option B**: a queue per tenant, isolated but more to operate.\n:::" },
+  { title: "Figure", note: "`:::figure{width=wide caption=\"\u2026\"}`: the first child is the picture, the rest is the caption body.", md: ":::figure{width=wide caption=\"Throughput by worker count\"}\n| Workers | Jobs/s | p99 |\n|---|---|---|\n| 1 | 120 | 40 ms |\n| 4 | 450 | 55 ms |\n| 16 | 1,400 | 180 ms |\n:::" },
+  { title: "Claim", note: "Provenance on a statement: `:::claim{evidence confidence source}`, or inline `:claim[text]{\u2026}`.", md: ":::claim{evidence=measured confidence=0.8 source=benchmarks/queue.md}\nSixteen workers saturate the database before they saturate the queue.\n:::\n\nRetries double the load :claim[at worst]{evidence=derived confidence=0.6}." },
+  { title: "Quiz", note: "A callout tagged `[!quiz]`. One `[x]` is single choice, more is multiple choice.", md: "> [!quiz single ^lease-check] What stops a paused worker's late write?\n> - [ ] A longer lease\n>   It only makes the window rarer.\n> - [x] A fencing token checked by storage\n> - [ ] Retrying the write\n>\n> Storage rejects any token older than the newest it has seen." },
+  { title: "Mermaid with focus", note: "`focus=` and `dim=` on the opening line pick out nodes.", md: "```mermaid focus=\"Q,W\"\ngraph LR\n  C[Client] --> A[API]\n  A --> DB[(Postgres)]\n  A --> Q[[Queue]]\n  Q --> W[Worker]\n```" },
+  { title: "D2", note: "Rendered to SVG by the server; in Storybook there is no server, so this shows its fallback.", md: "```d2\nclient -> api -> db\napi -> queue -> worker\n```" },
+  { title: "kiwi-steps", note: "A diagram that builds up: render once, then focus and dim per step.", md: "```kiwi-steps\ndiagram: |\n  graph LR\n    C[Client] --> A[API]\n    A --> DB[(Postgres)]\n    A --> Q[[Queue]]\nsteps:\n  - focus: [C, A]\n    note: The write lands on the API.\n  - focus: [A, DB]\n    note: It commits synchronously.\n  - focus: [A, Q]\n    dim: [DB]\n    note: The slow work is queued.\n```" },
+  { title: "kiwi-calc", note: "Assumptions above `---`, derivations below; units are checked.", md: "```kiwi-calc\ndau:        10 million\nwrites:     100\nwrite_size: 1 KB\n---\nqps:     dau * writes / day\ndaily:   dau * writes * write_size\n```" },
+  { title: "kiwi-chart", note: "Bar, line, area, pie, radar or scatter from inline rows (or a query).", md: "```kiwi-chart\ntype: bar\ntitle: Jobs per second\nxKey: workers\nseries:\n  - key: jobs\n    name: Jobs/s\ndata:\n  - workers: \"1\"\n    jobs: 120\n  - workers: \"4\"\n    jobs: 450\n  - workers: \"16\"\n    jobs: 1400\n```" },
+  { title: "kiwi-progress", note: "Bars or gauges.", md: "```kiwi-progress\ntype: bar\ntitle: Migration\nshowPercent: true\nitems:\n  - label: Schemas\n    value: 100\n  - label: Backfill\n    value: 60\n  - label: Cut-over\n    value: 10\n```" },
+  { title: "kiwi-color", note: "A palette with optional contrast checks.", md: "```kiwi-color\npalette: Status\nshowContrast: true\ncolors:\n  - value: \"#16a34a\"\n    label: ok\n  - value: \"#b45309\"\n    label: warn\n  - value: \"#dc2626\"\n    label: bad\n```" },
+  { title: "kiwi-diff", note: "Before and after, separated by `===`, with an optional header above `---`.", md: "```kiwi-diff\ntitle: Raise the lease\nlanguage: yaml\n---\nlease_seconds: 10\nmax_retries: 3\n===\nlease_seconds: 30\nmax_retries: 5\n```" },
+  { title: "kiwi-data", note: "Queryable records on the page: `FROM RECORDS \"<kind>\"` finds them.", md: "```kiwi-data\nkind: dataset-schema\nrecords:\n  - name: job_id\n    dtype: string\n  - name: attempts\n    dtype: int\n```" },
+  { title: "kiwi-query", note: "An inline DQL table. In Storybook the rows come from the mock API.", md: "```kiwi-query\nTABLE title, status FROM \"guides/\" SORT title ASC\n```" },
+  { title: "kiwi-kanban", note: "An inline board.", md: "```kiwi-kanban\ntitle: Queue hardening\ncolumns:\n  - name: Now\n    cards:\n      - id: fence\n        title: Add fencing tokens\n        priority: high\n  - name: Next\n    cards:\n      - id: dlq\n        title: Dead-letter queue\n```" },
+  { title: "Typed fences", note: "Pictures as data. Every one steps, deep-links and shares clocks. Full reference: docs/WIDGETS.md and Fences/Gallery.", md: "```array id=search caption=\"Binary search for 23\"\nvalues: [2, 5, 8, 12, 16, 23, 38, 56]\nsteps:\n  - { activeIndices: [3], note: \"mid = 12, too small\" }\n  - { activeIndices: [5], note: \"mid = 23, found\" }\n```" },
+  { title: "widget:live", note: "The escape hatch: React with every view component in scope.", md: "```widget:live\nconst steps = [2, 5, 8, 12].map((_, i) => ({ i, label: \"visit \" + i }));\nfunction Walk() {\n  const pb = usePlayback(steps, { autoPlay: true, loop: true });\n  return (\n    <div>\n      <ArrayView values={[2, 5, 8, 12]} activeIndex={pb.current.i} />\n      <PlaybackControls pb={pb} />\n    </div>\n  );\n}\nrender(<Walk />);\n```" },
+  { title: "widget:code", note: "Python in the browser (Pyodide). Loads on first run.", md: "```widget:code lang=python\nbackoff = [min(2 ** n, 30) for n in range(8)]\nprint(backoff)\n```" },
+  { title: "kiwi-app", note: "Sandboxed HTML with the kit and the runtime. Full reference: docs/APPS.md and Blocks/KiwiApp.", md: "```kiwi-app id=retries controls=host caption=\"Exponential backoff, capped at 30s\"\n<div class=\"k-app\">\n  <div class=\"k-eyebrow\">Retry</div>\n  <div class=\"k-dots\" id=\"dots\"></div>\n  <p class=\"k-lede\" id=\"note\"></p>\n</div>\n<script>\n  var waits = [1, 2, 4, 8, 16, 30];\n  kiwi.steps({ count: waits.length, onStep: function (i) {\n    document.getElementById(\"dots\").innerHTML = waits.map(function (_, j) { return '<i class=\"' + (j <= i ? 'on' : '') + '\"></i>'; }).join(\"\");\n    document.getElementById(\"note\").textContent = \"Attempt \" + (i + 1) + \": wait \" + waits[i] + \"s\";\n  } });\n</script>\n```" },
+];

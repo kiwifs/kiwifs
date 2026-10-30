@@ -1,14 +1,23 @@
 import type { NodeShape } from "./graphGeometry";
 
 export interface ShapeOutlineProps {
+  /** Outline to draw. */
   shape: NodeShape;
+  /** Center x in px. */
   x: number;
+  /** Center y in px. */
   y: number;
+  /** Outer width in px. */
   w: number;
+  /** Outer height in px. */
   h: number;
+  /** Fill color. */
   fill: string;
+  /** Stroke color. */
   stroke: string;
+  /** Stroke width in px. */
   strokeWidth?: number;
+  /** SVG dash pattern, e.g. `"4 3"`. */
   strokeDasharray?: string;
 }
 

@@ -69,11 +69,17 @@ export interface MemoryViewProps {
   framesLabel?: string;
   /** Caption above the heap column. Default "Objects". */
   heapLabel?: string;
+  /** Reported when the reader selects a variable or heap object. */
   onSelect?: (ref: InspectRef) => void;
+  /** Heap id or variable → explanation, revealed on select. */
   why?: Record<string, string>;
+  /** Name for the inspect bus, so a `link:` can address this view. */
   widgetId?: string;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
+  /** Accessible name. Defaults to a summary of the frames and heap. */
   ariaLabel?: string;
 }
 

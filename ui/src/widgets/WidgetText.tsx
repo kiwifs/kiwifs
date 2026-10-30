@@ -5,6 +5,7 @@ import { alpha } from "./colors";
 import { hasMath, labelSegments, plainHeaderLength } from "./widgetLabel";
 
 export interface WidgetTextProps {
+  /** Label text; inline math is typeset. */
   text: string | number | null | undefined;
   /** Parse `**bold**`, `*italic*`, and `code` in the non-math parts. */
   markdown?: boolean;
@@ -93,19 +94,29 @@ function parseInlineMarkdown(text: string): (string | ReactNode)[] {
 }
 
 export interface SvgLabelProps {
+  /** Anchor x in SVG user units. */
   x: number;
+  /** Anchor y in SVG user units. */
   y: number;
+  /** Label text; `plain` limits math to explicit `$…$`. */
   text: string | number | null | undefined;
+  /** Text color. */
   fill?: string;
+  /** Font size in px. */
   fontSize?: number;
+  /** CSS font weight. */
   fontWeight?: number | string;
+  /** CSS font family. */
   fontFamily?: string;
+  /** Horizontal alignment relative to `x`, as SVG `text-anchor`. */
   anchor?: "start" | "middle" | "end";
+  /** Vertical alignment relative to `y`. */
   dominantBaseline?: "auto" | "central";
   /** Halo color so the label stays readable on a stroke or fill. */
   halo?: string;
   /** Prose caption: only typeset math written explicitly as `$…$`. */
   plain?: boolean;
+  /** Extra inline styles on the text element. */
   style?: CSSProperties;
 }
 

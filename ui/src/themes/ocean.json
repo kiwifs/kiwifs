@@ -15,7 +15,7 @@
     "secondary-foreground": "hsl(0 0% 9%)",
     "secondary-hover": "hsl(0 0% 91%)",
     "muted": "hsl(0 0% 96%)",
-    "muted-foreground": "hsl(0 0% 45%)",
+    "muted-foreground": "hsl(0 0% 40%)",
     "accent": "hsl(0 0% 96%)",
     "accent-foreground": "hsl(0 0% 9%)",
     "accent-hover": "hsl(0 0% 91%)",

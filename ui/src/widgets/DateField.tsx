@@ -20,6 +20,7 @@ export interface DateFieldProps {
   format?: (value: string) => string;
   /** Offer a "Clear" button inside the popover. Default false. */
   clearable?: boolean;
+  /** Render read-only. Default false. */
   disabled?: boolean;
   /** Which edge of the trigger the popover lines up with. Default `"start"`. */
   align?: "start" | "center" | "end";
@@ -101,7 +102,7 @@ export function DateField({
         <button
           type="button"
           disabled={disabled}
-          aria-label={ariaLabel}
+          aria-label={ariaLabel ? `${ariaLabel}: ${selected ? format(value) : placeholder}` : undefined}
           style={{
             display: "inline-flex",
             alignItems: "center",

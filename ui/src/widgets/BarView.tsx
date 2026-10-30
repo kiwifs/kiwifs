@@ -96,7 +96,9 @@ export interface BarViewProps {
   barWidth?: number;
   /** Gap between bars in px. Default 10. */
   gap?: number;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
   /** Default overlay color (water). */
   overlayColor?: string;

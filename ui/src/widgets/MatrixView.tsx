@@ -61,6 +61,7 @@ export interface MatrixViewProps {
   arrows?: MatrixArrow[];
   /** A traceback path through the table, drawn as a line over the cells. */
   path?: CellRef[];
+  /** Stroke color of `path`. */
   pathColor?: string;
   /** Row pointer labels (shown right of the row). */
   rowPointers?: { row: number; label: string; color?: string }[];
@@ -83,11 +84,15 @@ export interface MatrixViewProps {
   layers?: MatrixLayer[];
   /** Index of the slice to show. Readers can still click the tabs. */
   layer?: number;
+  /** Reported when the reader switches to another slice. */
   onLayerChange?: (layer: number) => void;
   /** Pulse cells whose value changed since the previous step. Default true. */
   flash?: boolean;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
+  /** Color of cells read by the active cell. Defaults to a tint of the active color. */
   readColor?: string;
   /** Cell size in px. Defaults to 44, shrinking for wide tables. */
   cellSize?: number;
@@ -330,6 +335,7 @@ export function MatrixView({
                   type="button"
                   role="tab"
                   aria-selected={on}
+                  aria-label={String(l.label)}
                   onClick={() => setLayer(i)}
                   style={{
                     fontSize: "0.68rem",

@@ -55,16 +55,21 @@ export interface HostTheme {
   dark: boolean;
 }
 
-export function readHostTheme(): HostTheme {
+/**
+ * The theme where `el` sits, not only on <html>: a nested `.dark` (Storybook's
+ * side-by-side mode, a host that scopes the theme) must reach its apps too.
+ */
+export function readHostTheme(el?: Element | null): HostTheme {
   const root = document.documentElement;
-  const computed = getComputedStyle(root);
+  const at = el && el.isConnected ? el : root;
+  const computed = getComputedStyle(at);
   const vars: Record<string, string> = {};
   for (const name of KIWI_APP_TOKENS) {
     // A value lands inside a <style> in the app's srcdoc; no markup may ride along.
     const value = computed.getPropertyValue(name).trim().replace(/[<>]/g, "");
     if (value) vars[name] = value;
   }
-  return { vars, dark: root.classList.contains("dark") };
+  return { vars, dark: at.closest(".dark") != null };
 }
 
 export function themeCss({ vars, dark }: HostTheme): string {

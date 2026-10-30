@@ -64,7 +64,9 @@ export interface NumberLinePointer {
 }
 
 export interface NumberLineViewProps {
+  /** Left end of the axis. */
   min?: number;
+  /** Right end of the axis. */
   max?: number;
   /** `[min, max]` or `[min, max, step]`, an alias for the three props. */
   xRange?: readonly number[];
@@ -76,24 +78,35 @@ export interface NumberLineViewProps {
   includeNumbers?: boolean;
   /** `"log"` needs a positive `min`. Default "linear". */
   scale?: "linear" | "log";
+  /** Dots on the axis: closed, open, or a cross. */
   points?: NumberLinePoint[];
+  /** Spans between two values, each end open or closed. */
   intervals?: NumberLineInterval[];
+  /** Half-lines running off one end of the axis. */
   rays?: NumberLineRay[];
+  /** Vertical ticks with a caption: query points, boundaries. */
   marks?: NumberLineMark[];
   /** Named pointers above the axis — `lo`, `hi`, `mid`. */
   pointers?: NumberLinePointer[];
   /** Position of a sweep cursor. */
   sweep?: number;
+  /** Caption beside the sweep cursor. */
   sweepLabel?: string;
   /** Shade the axis wherever this formula in `x` is true — `"x^2 < 9"`. */
   predicate?: string;
+  /** Caption on the shaded `predicate` region. */
   predicateLabel?: string;
+  /** Fill of the `predicate` region. Defaults to the highlight color. */
   predicateColor?: string;
+  /** Point or interval ids emphasised this step. */
   activeIds?: Many<string | number>;
+  /** Secondary-highlighted point or interval ids. */
   highlightIds?: Many<string | number>;
+  /** Dimmed point or interval ids. */
   dimIds?: Many<string | number>;
   /** Axis caption. */
   label?: string;
+  /** Canvas width in px. Default 560. */
   width?: number;
   /** Reported when the reader selects a point or an interval. */
   onSelect?: (ref: InspectRef) => void;
@@ -101,9 +114,13 @@ export interface NumberLineViewProps {
   why?: Record<string, string>;
   /** Controlled selection, as point or interval ids. */
   selected?: Many<string | number>;
+  /** Name for the inspect bus. Defaults to "numberline". */
   widgetId?: string;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
+  /** Accessible name. Defaults to a summary of the axis and its marks. */
   ariaLabel?: string;
 }
 

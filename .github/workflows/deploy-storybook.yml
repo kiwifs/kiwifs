@@ -27,12 +27,20 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
       - name: install deps
         run: npm ci
+        working-directory: ui
+
+      - name: install chromium for story tests
+        run: npx playwright install --with-deps chromium
+        working-directory: ui
+
+      - name: run story tests
+        run: npm run test-storybook
         working-directory: ui
 
       - name: build storybook

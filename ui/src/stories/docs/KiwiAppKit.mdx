@@ -1,0 +1,185 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { Example } from "./Example";
+
+<Meta title="Blocks/KiwiApp Kit" />
+
+{/* Same content as docs/APPS.md; edit both together. */}
+
+# kiwi-app — sandboxed apps in a page
+
+A `kiwi-app` fence is a small HTML page that runs inside the KiwiFS page, in a sandboxed iframe. It is for the explanation that no declarative fence can draw: a lease timeline that shows two workers holding the same lock, a retry policy you can tune, a request flowing through four services.
+
+Every app gets two things for free:
+
+- **The kit**: a stylesheet of `k-` classes (pills, segmented controls, step lists, lanes, time tracks…) that follow the page theme, light or dark, in every palette.
+- **The `kiwi` runtime**: auto-height, live theme tokens, and `kiwi.steps()`, which hands the app's stepping to the same playback engine every other widget uses. Arrow keys, the scrubber, shared clocks and `#?step.<id>=N` deep links all work without the app writing any of it.
+
+## Which block do I want?
+
+| You want… | Use |
+|---|---|
+| A picture of data: an array, a tree, a graph, a timeline, a sequence diagram | A typed fence (` ```array `, ` ```graph `, …). See [WIDGETS.md](WIDGETS.md). It is validated, indexed for search, and degrades to prose in a PDF. |
+| A diagram that builds up step by step | ` ```kiwi-steps ` over Mermaid. |
+| A React composition of the built-in views (`ArrayStack` + `CodeHighlight` + `AnnotationBar`) | ` ```widget:live `. |
+| Anything else: a custom simulation, a bespoke layout, a canvas, a form that recomputes | ` ```kiwi-app `. |
+
+Reach for a typed fence first. An app is opaque to search, lint and export; a fence is data.
+
+## A minimal app
+
+````markdown
+```kiwi-app id=lease caption="A paused worker outlives its lease."
+<div class="k-app">
+  <div class="k-eyebrow">Lease</div>
+  <p class="k-lede" id="note"></p>
+  <div class="k-ctl">
+    <button class="k-btn" onclick="kiwi.prev()">Back</button>
+    <button class="k-btn primary" onclick="kiwi.next()">Next</button>
+    <span class="k-pill" id="state"></span>
+  </div>
+</div>
+<script>
+  var notes = ["Worker A takes the lease.", "A pauses for GC.", "The lease expires; B takes it.", "A wakes and writes with a stale token."];
+  var tones = ["ok", "warn", "info", "bad"];
+  kiwi.steps({
+    count: notes.length,
+    onStep: function (i) {
+      document.getElementById("note").textContent = notes[i];
+      var pill = document.getElementById("state");
+      pill.className = "k-pill " + tones[i];
+      pill.textContent = "step " + (i + 1);
+    }
+  });
+</script>
+```
+````
+
+The body can be a fragment (as above) or a full `<!DOCTYPE html>` document. The runtime, the theme and the kit are injected ahead of your own `<head>`, so your styles and scripts always come last.
+
+## Meta options
+
+Written on the opening line, after `kiwi-app`. The first seven mean exactly what they mean on every typed fence.
+
+| Option | Meaning |
+|---|---|
+| `id=name` | Stable name: the anchor, the clock, the deep-link key (`#?step.name=3`). |
+| `clock=name` | Join a shared clock. Defaults to `id`. An app and an ` ```array clock=c ` fence on the same clock advance together. |
+| `title="…"` | Accessible name; shown in the bar with `chrome=full`. |
+| `caption="…"` | Caption under the figure. |
+| `width=inline\|wide\|full` | Figure width, as for every other figure. |
+| `autoplay` | Start playing once the app registers steps. |
+| `loop` | Wrap to the first step at the end. |
+| `height=N` | Fixed height in px. Without it the app sizes itself to its content. |
+| `chrome=minimal\|full\|none` | `minimal` (default): a framed app with a copy button on hover. `full`: a header bar with the title. `none`: no frame at all, so the app sits on the page. |
+| `kit=off` | Skip the kit stylesheet. The runtime is still injected. |
+| `controls=host` | Render the standard playback transport under the app once it calls `kiwi.steps`. Without it, transport is left to the app's own buttons; keys and deep links work either way. |
+| `src=path.html` | Load the HTML from a file, relative to the page's folder (a leading `/` means the workspace root). The fence body becomes optional; if present, it is shown while loading and if the file is missing. |
+
+The older nested form, `kiwi-app meta="height=300"`, still sets the height.
+
+## The kit
+
+All kit CSS lives in `@layer kiwi-kit`. Unlayered CSS always beats layered CSS, so your own rules win without `!important`, and apps written before the kit existed keep their look. Every class is prefixed `k-` so it cannot collide with yours.
+
+### Tokens
+
+Use these instead of colours. Each one reads the host theme and falls back to a sensible `light-dark()` value when the file is opened on its own.
+
+| Token | What |
+|---|---|
+| `--k-bg`, `--k-fg` | Page background and text. |
+| `--k-dim` | Secondary text. |
+| `--k-line` | Borders and rules. |
+| `--k-soft` | A 5% wash of the text colour, for fills. |
+| `--k-card` | Card surface. |
+| `--k-accent`, `--k-accent-fg` | The workspace primary and the text that sits on it. |
+| `--k-ok`, `--k-bad`, `--k-warn`, `--k-info`, `--k-violet` | Semantic tones, mapped onto the widget accents. |
+| `--k-radius`, `--k-mono`, `--k-sans`, `--k-ease` | Shape, fonts, easing. |
+
+Every host token is also there under its own name: `--background`, `--primary`, `--kw-widget-accent-red`, `--font-mono`, … and `<html>` carries a `dark` class in dark mode.
+
+### Components
+
+```html
+<div class="k-app">…</div>                  <!-- padded root; a container for @container queries -->
+<div class="k-eyebrow">Lease</div>          <!-- small mono uppercase label -->
+<h2 class="k-title">Title</h2><p class="k-lede">Muted intro line.</p>
+
+<div class="k-seg">                          <!-- segmented control -->
+  <button aria-pressed="true">Happy path</button><button aria-pressed="false">Crash</button>
+</div>
+
+<span class="k-pill ok">RUNNING</span>       <!-- tones: ok bad warn info violet muted -->
+
+<div class="k-ctl">                          <!-- button row -->
+  <button class="k-btn">Reset</button><button class="k-btn primary">Next</button>
+</div>
+
+<div class="k-out on good">Committed.</div>  <!-- outcome panel; fades in with .on; tones good / bad -->
+
+<ol class="k-steps">                         <!-- li.on = reached, li.now = current -->
+  <li class="on">Acquire</li><li class="now">Write</li><li>Release</li>
+</ol>
+
+<div class="k-lanes">                        <!-- card columns; one column under 600px -->
+  <div class="k-lane on">Worker A</div><div class="k-lane paused">Worker B</div><div class="k-lane dead">Worker C</div>
+</div>
+
+<dl class="k-kv"><dt>token</dt><dd>42</dd><dt>holder</dt><dd>A</dd></dl>
+
+<pre class="k-code">UPDATE jobs SET owner = <b>'B'</b> WHERE token = 42</pre>
+
+<div class="k-track">                        <!-- time track with spans and a "now" marker -->
+  <div class="k-bar" style="left:5%;width:40%"></div><div class="k-now" style="left:30%"></div>
+</div>
+
+<div class="k-dots"><i class="on"></i><i class="on"></i><i></i></div>
+
+<div class="k-grid">
+  <div class="k-card k-stat"><b>42 ms</b><span>p99</span></div>
+</div>
+
+<svg class="k-svg" viewBox="0 0 200 60">     <!-- .node .edge .label; state .on .dim .hot -->
+  <rect class="node on" x="10" y="10" width="60" height="40" rx="6"/>
+  <path class="edge dim" d="M70 30 H130"/>
+  <rect class="node hot" x="130" y="10" width="60" height="40" rx="6"/>
+</svg>
+```
+
+Transitions are on colour, opacity and transform only, and switch off under `prefers-reduced-motion`.
+
+## The `kiwi` runtime
+
+`window.kiwi` exists before your first line of script runs.
+
+| API | What it does |
+|---|---|
+| `kiwi.steps({ count, labels?, durations?, onStep })` | Register the app's steps. The host owns the clock and calls `onStep(i)` whenever the step changes, from your buttons, the keyboard, the transport, a deep link or a shared clock. Call it again with a new `count` to switch scenarios. |
+| `kiwi.next()`, `kiwi.prev()`, `kiwi.seek(i)`, `kiwi.reset()`, `kiwi.play()`, `kiwi.pause()` | Ask the host to move. The host decides, so a blocked step or a loop behaves as it does for every other widget. |
+| `kiwi.step` | The current step index. |
+| `kiwi.theme` | `{ vars, dark }`: the current host tokens. |
+| `kiwi.onTheme(fn)` | Called after every theme change, for canvas or SVG apps that need colours in JavaScript. Returns an unsubscribe function. CSS that uses the tokens needs nothing: they update in place. |
+| `kiwi.resize()` | Re-measure now. The runtime already watches the document with a `ResizeObserver`. |
+| `kiwi.ready()` | Optional. Hide the host's loading skeleton before `load` fires. |
+
+Opened on its own (no host), `kiwi.steps` still works: `next`/`prev`/`seek` move locally.
+
+Keys pressed inside an app never reach the page, so the runtime forwards ←, →, Space, Home and End to the host once steps are registered, unless an input, textarea, select or editable element has focus.
+
+A theme change does **not** reload the app. Toggling dark mode on step 7 leaves the reader on step 7.
+
+## Security model
+
+- The iframe has `sandbox="allow-scripts"` and nothing else. Without `allow-same-origin` it runs in an opaque origin: it cannot read the page, its cookies, local storage or the KiwiFS API, and cannot navigate the top window, open popups or submit forms.
+- The host accepts a message only when `event.source` is that app's own iframe window and the message carries the `{ source: "kiwi-app", v: 1 }` envelope. Everything else is ignored.
+- Theme values are copied in as text with `<` and `>` removed.
+- `src=` files are read through the ordinary file API as text and run inside the same sandbox. They are never served as live HTML on the KiwiFS origin.
+- `kiwi.query` / `kiwi.read` are reserved for a future read-only data bridge on this channel; the protocol version field exists so it can be added without breaking apps.
+
+## Exports
+
+PDF, HTML, slides and static-site exports replace each app with its title and caption and the line *Interactive app — open this page in KiwiFS to use it.*
+
+## Try it
+
+<Example md={"```kiwi-app id=kit-demo controls=host\n<div class=\"k-app\">\n  <div class=\"k-eyebrow\">Lease</div>\n  <ol class=\"k-steps\" id=\"list\"></ol>\n  <div class=\"k-ctl\"><button class=\"k-btn\" onclick=\"kiwi.prev()\">Back</button><button class=\"k-btn primary\" onclick=\"kiwi.next()\">Next</button></div>\n</div>\n<script>\n  var s = [\"Acquire\", \"Pause\", \"Expire\", \"Reject stale write\"];\n  kiwi.steps({ count: s.length, onStep: function (i) {\n    document.getElementById(\"list\").innerHTML = s.map(function (t, j) { return '<li class=\"' + (j < i ? 'on' : j === i ? 'now' : '') + '\">' + t + '</li>'; }).join(\"\");\n  } });\n</script>\n```"} />

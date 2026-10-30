@@ -37,8 +37,11 @@ export interface MapViewProps {
   entries?: MapEntry[] | Record<string, unknown>;
   /** Shows an `h(k)=i` badge beside the key. */
   hashOf?: Record<string, number>;
+  /** Secondary-highlighted slot indices. */
   highlightSlots?: Many<number>;
+  /** Slots being written or read this step. */
   activeSlots?: Many<number>;
+  /** Dimmed slot indices. */
   dimSlots?: Many<number>;
   /** The key being inserted or looked up this step. */
   activeKey?: string | number;
@@ -52,13 +55,19 @@ export interface MapViewProps {
   showIndices?: boolean;
   /** Widget id for the inspect bus. */
   widgetId?: string;
+  /** Reported when the reader selects a slot or entry. */
   onSelect?: (ref: InspectRef) => void;
+  /** Slot index (or key in `map` mode) → explanation, revealed on select. */
   why?: Record<string, string>;
   /** Controlled selection: slot indices, or keys in `map` mode. */
   selected?: Many<string | number>;
+  /** Width of one slot in px. Default 54. */
   slotWidth?: number;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
+  /** Accessible name. Defaults to a summary of the slots or entries. */
   ariaLabel?: string;
 }
 

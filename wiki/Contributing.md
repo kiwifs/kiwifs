@@ -81,6 +81,8 @@ kiwifs/
 - **Testing** — integration tests for MCP tools, NFS/S3/WebDAV protocols
 - **Documentation** — usage guides, examples, config reference
 - **Frontend** — UI polish, accessibility, Storybook stories
+
+Every new widget, fence or block needs a story. Fences are enforced by `ui/src/fences/storiesCoverage.test.ts`, which fails when a registered fence has no story. Run Storybook with `cd ui && npm run storybook`, and `npm run test-storybook` to render every story in headless Chromium.
 - **Search** — FTS5 ranking improvements, vector search UX
 - **Importers** — testing and improving import fidelity
 

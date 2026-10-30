@@ -17,13 +17,19 @@ export interface ActivityGridProps {
   color?: string;
   /** Explicit ramp of 5 colors, index 0 = empty day. Overrides `color`. */
   colors?: string[];
+  /** Side of one day cell in px. Default 12. */
   cellSize?: number;
+  /** Gap between day cells in px. Default 3. */
   cellGap?: number;
+  /** Label the weekday rows. Default true. */
   showWeekdayLabels?: boolean;
+  /** Label the month columns. Default true. */
   showMonthLabels?: boolean;
+  /** Show the intensity legend. Default true. */
   showLegend?: boolean;
   /** Builds the hover text for a day. Default: `"<value> on <date>"`. */
   tooltip?: (date: string, value: number) => string;
+  /** Reported when the reader clicks a day, with its ISO date and value. */
   onDayClick?: (date: string, value: number) => void;
   /** ISO date drawn with a selection ring. */
   selectedDate?: string;
@@ -236,7 +242,7 @@ export function ActivityGrid({
                         key={row}
                         title={label}
                         aria-label={label}
-                        role={onDayClick ? "button" : undefined}
+                        role={onDayClick ? "button" : "img"}
                         tabIndex={onDayClick ? 0 : undefined}
                         onClick={onDayClick ? () => onDayClick(day.date, day.value) : undefined}
                         onKeyDown={

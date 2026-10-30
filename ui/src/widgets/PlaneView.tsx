@@ -100,12 +100,17 @@ export interface PlaneRegion {
 }
 
 export interface PlaneViewProps {
+  /** Left edge of the visible x range. */
   xMin?: number;
+  /** Right edge of the visible x range. */
   xMax?: number;
+  /** Bottom edge of the visible y range. */
   yMin?: number;
+  /** Top edge of the visible y range. */
   yMax?: number;
   /** `[min, max]`, an alias for the pair above. */
   xRange?: readonly [number, number];
+  /** `[min, max]`, an alias for `yMin` and `yMax`. */
   yRange?: readonly [number, number];
   /** Draw the unit grid. Default true. */
   grid?: boolean;
@@ -113,20 +118,35 @@ export interface PlaneViewProps {
   axes?: boolean;
   /** `"equal"` (default) keeps circles round; `"auto"` fills the box. */
   aspect?: "equal" | "auto";
+  /** Named points, which segments and polygons can refer to. */
   points?: PlanePoint[];
+  /** Line segments between two points. */
   segments?: PlaneSegment[];
+  /** Closed shapes through a list of points. */
   polygons?: PlanePolygon[];
+  /** Circles by center and radius. */
   circles?: PlaneCircle[];
+  /** Arrows from a tail to a head. */
   vectors?: PlaneVector[];
+  /** Free-standing captions at a coordinate. */
   labels?: PlaneLabel[];
+  /** Areas shaded where a formula in `x` and `y` holds. */
   regions?: PlaneRegion[];
+  /** A sweep cursor: a vertical or horizontal line, or a ray turning about `origin`. */
   sweep?: PlaneSweep;
+  /** Shape ids emphasised this step. */
   activeIds?: Many<string | number>;
+  /** Secondary-highlighted shape ids. */
   highlightIds?: Many<string | number>;
+  /** Dimmed shape ids. */
   dimIds?: Many<string | number>;
+  /** Caption on the x axis. */
   xLabel?: string;
+  /** Caption on the y axis. */
   yLabel?: string;
+  /** Canvas width in px. Default 440. */
   width?: number;
+  /** Canvas height in px. Default 340. */
   height?: number;
   /** Reported when the reader selects a point. */
   onSelect?: (ref: InspectRef) => void;
@@ -134,9 +154,13 @@ export interface PlaneViewProps {
   why?: Record<string, string>;
   /** Controlled selection, as point ids. */
   selected?: Many<string | number>;
+  /** Name for the inspect bus. Defaults to "plane". */
   widgetId?: string;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
+  /** Accessible name. Defaults to a summary of the shapes. */
   ariaLabel?: string;
 }
 

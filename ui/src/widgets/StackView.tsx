@@ -16,7 +16,9 @@ export interface StackViewProps {
   values: (string | number)[];
   /** Index of the active item. Defaults to the top of the stack. */
   activeIndex?: number;
+  /** Secondary-highlighted items. */
   highlightIndices?: Many<number>;
+  /** Dimmed items, e.g. ones about to be popped. */
   dimIndices?: Many<number>;
   /** Named markers beside individual items. */
   pointers?: StackPointer[];
@@ -28,11 +30,17 @@ export interface StackViewProps {
   showIndices?: boolean;
   /** Scroll past this height rather than growing the page. Default 300. */
   maxHeight?: number;
+  /** Width of one item in px. Default 72. */
   itemWidth?: number;
+  /** Height of one item in px. Default 30. */
   itemHeight?: number;
+  /** Caption above the stack. */
   title?: string;
+  /** Text shown when the stack is empty. Default "(empty)". */
   empty?: string;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
   /** Accessible name. Defaults to a summary of the items, bottom to top. */
   ariaLabel?: string;

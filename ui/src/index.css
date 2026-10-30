@@ -397,7 +397,7 @@
   @apply font-medium text-foreground/80;
 }
 .kiwi-code-lang {
-  @apply text-muted-foreground/70 font-mono;
+  @apply text-muted-foreground font-mono;
 }
 
 /* ─── Shiki code blocks ─── */

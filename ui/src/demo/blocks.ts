@@ -92,7 +92,7 @@ export function tabs(items: { label: string; body: string }[]): string {
 }
 
 export function columns(ratio: string | null, cols: string[]): string {
-  const directive = ratio ? `:::columns ratio="${ratio}"` : cols.length > 1 ? `:::columns cols="${cols.length}"` : ":::columns";
+  const directive = ratio ? `:::columns{ratio="${ratio}"}` : cols.length > 1 ? `:::columns{cols="${cols.length}"}` : ":::columns";
   const body = cols.map((c) => `:::col\n${c.trim()}`).join("\n\n");
   return `${directive}\n${body}\n:::`;
 }

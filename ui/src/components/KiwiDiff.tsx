@@ -56,7 +56,7 @@ interface DiffConfig {
 
 // ── Parser ───────────────────────────────────────────────────────────────────
 
-function parseDiffSource(source: string, meta?: string): {
+export function parseDiffSource(source: string, meta?: string): {
   config: DiffConfig;
   oldValue: string;
   newValue: string;
@@ -73,9 +73,14 @@ function parseDiffSource(source: string, meta?: string): {
   // Check for === separator (simple two-block format)
   const eqSplit = source.split(/\n===\n/);
   if (eqSplit.length === 2) {
+    // A `title:` header may sit above the before block. Only lines naming a
+    // known option count, so a before block that itself holds `---` survives.
+    const head = eqSplit[0].split(/\n---\n/);
+    const hasHeader =
+      head.length >= 2 && head[0].split("\n").every((l) => !l.trim() || /^(title|language|splitView):/.test(l.trim()));
     return {
-      config: { splitView: true, ...metaConfig },
-      oldValue: eqSplit[0].trim(),
+      config: { splitView: true, ...(hasHeader ? parseYamlHeader(head[0]) : {}), ...metaConfig },
+      oldValue: (hasHeader ? head.slice(1).join("\n---\n") : eqSplit[0]).trim(),
       newValue: eqSplit[1].trim(),
     };
   }

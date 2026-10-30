@@ -47,7 +47,9 @@ export interface SequenceFrame {
 }
 
 export interface SequenceViewProps {
+  /** Lifelines, left to right. */
   participants: SequenceParticipant[];
+  /** Messages, notes and dividers, top to bottom. */
   items: SequenceItem[];
   /**
    * Items revealed so far. Item `step - 1` is the active one; later items are
@@ -56,12 +58,15 @@ export interface SequenceViewProps {
   step?: number;
   /** How to draw items after the active one. Default "ghost". */
   future?: "ghost" | "hide";
+  /** Labelled boxes around a run of items: `alt`, `loop`, `opt`. */
   frames?: SequenceFrame[];
   /** Prefix each message with its number. */
   numbered?: boolean;
   /** Move a dot along the active message. Default true. */
   packet?: boolean;
+  /** Wrap in a zoom / pan viewport for long diagrams. */
   zoomable?: boolean;
+  /** Color of the active message. */
   activeColor?: string;
   /** Maximum display width; the diagram scales down to fit. */
   width?: number;

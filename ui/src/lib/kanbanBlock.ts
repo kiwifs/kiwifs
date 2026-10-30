@@ -129,7 +129,7 @@ export function parseKanbanBlockConfig(source: string): KanbanBlockConfig {
       currentColumn.color = stripYamlQuotes(l.slice(6).trim());
     } else if ((section === "column" || section === "cards") && l === "cards:") {
       section = "cards";
-    } else if (section === "cards" && l.startsWith("- id:")) {
+    } else if ((section === "cards" || section === "card") && l.startsWith("- id:")) {
       if (currentCard.id) {
         currentColumn.cards.push(finalizeKanbanBlockCard(currentCard));
       }

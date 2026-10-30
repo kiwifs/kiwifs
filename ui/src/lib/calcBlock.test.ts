@@ -54,6 +54,13 @@ describe("formatQuantity", () => {
     expect(formatQuantity(11574)).toMatch(/11[.,]57 k|11.6 k/);
     expect(formatQuantity(1024)).toBe("1 KiB");
   });
+
+  it("keeps round decimal counts decimal", () => {
+    expect(formatQuantity(10_000_000)).toBe("10 M");
+    expect(formatQuantity(12_000_000)).toBe("12 M");
+    expect(formatQuantity(1024 ** 3)).toBe("1 GiB");
+    expect(formatQuantity(1024 * 1024 * 10)).toBe("10 MiB");
+  });
 });
 
 describe("the expression engine behind kiwi-calc", () => {

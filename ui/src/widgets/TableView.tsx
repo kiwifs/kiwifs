@@ -49,6 +49,7 @@ export interface TableViewProps {
    * rows came from a dataset rather than from an author.
    */
   columns?: (TableColumn | string)[];
+  /** Records, one per row, keyed by column. */
   rows?: Record<string, CellValue>[];
   /** Column whose value identifies a row. Defaults to the `pk` column, else the index. */
   rowKey?: string;
@@ -58,9 +59,13 @@ export interface TableViewProps {
   highlightCells?: Many<TableCellRef>;
   /** Dimmed cells. */
   dimCells?: Many<TableCellRef>;
+  /** Row keys being written this step. */
   activeRows?: Many<string | number>;
+  /** Secondary-highlighted row keys. */
   highlightRows?: Many<string | number>;
+  /** Dimmed row keys. */
   dimRows?: Many<string | number>;
+  /** Column keys to highlight top to bottom. */
   highlightCols?: Many<string>;
   /** Rows added this step — green, with a `+` gutter. */
   insertedRows?: Many<string | number>;
@@ -70,6 +75,7 @@ export interface TableViewProps {
   arrows?: TableArrow[];
   /** Sort indicator only; the rows are rendered in the order given. */
   sort?: { key: string; dir?: "asc" | "desc" } | string;
+  /** Caption above the table. */
   caption?: string;
   /** Render at most this many rows, then a "…n more" line. */
   maxRows?: number;
@@ -88,8 +94,11 @@ export interface TableViewProps {
   why?: Record<string, string>;
   /** Controlled selection, as cell refs. */
   selected?: Many<TableCellRef | number>;
+  /** Primary highlight color. */
   activeColor?: string;
+  /** Secondary highlight color. */
   highlightColor?: string;
+  /** Accessible name. Defaults to a summary of the rows and columns. */
   ariaLabel?: string;
 }
 
