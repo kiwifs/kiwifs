@@ -63,10 +63,14 @@ export function readHostTheme(el?: Element | null): HostTheme {
   const root = document.documentElement;
   const at = el && el.isConnected ? el : root;
   const computed = getComputedStyle(at);
+  // Engines that don't inherit custom properties into computed styles still
+  // see the page-wide value.
+  const rootComputed = at === root ? computed : getComputedStyle(root);
   const vars: Record<string, string> = {};
   for (const name of KIWI_APP_TOKENS) {
+    const raw = computed.getPropertyValue(name).trim() || rootComputed.getPropertyValue(name).trim();
     // A value lands inside a <style> in the app's srcdoc; no markup may ride along.
-    const value = computed.getPropertyValue(name).trim().replace(/[<>]/g, "");
+    const value = raw.replace(/[<>]/g, "");
     if (value) vars[name] = value;
   }
   return { vars, dark: at.closest(".dark") != null };
