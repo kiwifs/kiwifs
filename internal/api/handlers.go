@@ -138,23 +138,52 @@ func detectContentType(path string, content []byte) string {
 	if ct == "" {
 		return "application/octet-stream"
 	}
-	if isActiveMarkup(ct) {
+	return ct
+}
+
+func mediaType(ct string) string {
+	base, _, _ := strings.Cut(ct, ";")
+	return strings.TrimSpace(strings.ToLower(base))
+}
+
+// isActiveMarkup reports types a browser would render and run script in.
+// Workspace files (a kiwi-app's src= HTML among them) are written by anyone
+// with write access, so they never execute on the KiwiFS origin; kiwi-app
+// runs them inside its sandboxed iframe instead.
+func isActiveMarkup(ct string) bool {
+	switch base := mediaType(ct); base {
+	case "text/html", "text/xml", "application/xml", "text/xsl":
+		return true
+	default:
+		return strings.HasSuffix(base, "+xml")
+	}
+}
+
+// servedContentType is the type a stored file of type ct is served as.
+func servedContentType(ct string) string {
+	// SVG keeps its type so <img src> still renders it; the sandbox CSP that
+	// serveWorkspaceBlob sends is what stops its script when opened directly.
+	if isActiveMarkup(ct) && mediaType(ct) != "image/svg+xml" {
 		return "text/plain; charset=utf-8"
 	}
 	return ct
 }
 
-// isActiveMarkup reports types a browser would render and run script in.
-// Workspace files (a kiwi-app's src= HTML among them) are written by anyone
-// with write access, so they are served as text and never execute on the
-// KiwiFS origin; kiwi-app runs them inside its sandboxed iframe instead.
-func isActiveMarkup(ct string) bool {
-	base, _, _ := strings.Cut(ct, ";")
-	switch strings.TrimSpace(strings.ToLower(base)) {
-	case "text/html", "application/xhtml+xml", "text/xml", "application/xml":
-		return true
+// workspaceBlobCSP applies when a browser opens a stored file as a document;
+// <img>, <video> and fetch ignore it. PDFs go without: Chrome's viewer will
+// not render a sandboxed document, and the UI embeds PDFs in an iframe.
+const workspaceBlobCSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'"
+
+// serveWorkspaceBlob writes a stored file's bytes. Every route that serves
+// workspace files goes through it.
+func serveWorkspaceBlob(c echo.Context, path string, content []byte) error {
+	ct := servedContentType(detectContentType(path, content))
+	hdr := c.Response().Header()
+	hdr.Set("X-Content-Type-Options", "nosniff")
+	if mediaType(ct) != "application/pdf" {
+		hdr.Set("Content-Security-Policy", workspaceBlobCSP)
 	}
-	return false
+	return c.Blob(http.StatusOK, ct, content)
 }
 
 func parseIntParam(c echo.Context, name string, fallback int) int {

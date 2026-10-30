@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -443,7 +444,7 @@ func scanFenceSpans(lines []string) []fenceSpan {
 		}
 		marker := extractFenceMarker(trimmed)
 		span := fenceSpan{start: i, end: -1, indent: leadingWhitespace(lines[i])}
-		span.lang, span.meta = splitFenceInfo(trimmed)
+		span.lang, span.meta = SplitFenceInfo(trimmed)
 		for j := i + 1; j < len(lines); j++ {
 			if isClosingFence(strings.TrimSpace(lines[j]), marker) {
 				span.end = j
@@ -460,7 +461,9 @@ func scanFenceSpans(lines []string) []fenceSpan {
 	return out
 }
 
-func splitFenceInfo(trimmed string) (lang, meta string) {
+// SplitFenceInfo splits an opening fence line (indentation already trimmed)
+// into its language and meta. meta is a substring of trimmed.
+func SplitFenceInfo(trimmed string) (lang, meta string) {
 	info := strings.TrimLeft(trimmed, "`~")
 	info = strings.TrimSpace(info)
 	if idx := strings.IndexFunc(info, unicode.IsSpace); idx >= 0 {
@@ -496,11 +499,98 @@ func parseFenceMeta(meta string) map[string]string {
 		out[m[1]] = m[2] + m[3]
 		return " "
 	})
-	for _, token := range strings.Fields(rest) {
-		if key, value, ok := strings.Cut(token, "="); ok {
+	for _, token := range metaTokens(rest) {
+		if key, value, ok := strings.Cut(token.text, "="); ok {
 			out[key] = value
 		}
 	}
+	return out
+}
+
+// MetaValue is one key's value in a fence meta string. Start and End bound
+// it as written, quotes included; Quote is its quote byte, or 0 when bare.
+type MetaValue struct {
+	Value      string
+	Start, End int
+	Quote      byte
+}
+
+// FenceMetaValue finds the value parseFenceMeta gives key, and where it is
+// written in meta. ok is false when key is absent, or when the winning value
+// is a bare token with stray quotes, which cannot be spliced in place.
+func FenceMetaValue(meta, key string) (MetaValue, bool) {
+	var found MetaValue
+	ok := false
+	rest := []byte(meta)
+	for _, m := range quotedMetaRe.FindAllStringSubmatchIndex(meta, -1) {
+		for i := m[0]; i < m[1]; i++ {
+			rest[i] = ' '
+		}
+		if meta[m[2]:m[3]] != key {
+			continue
+		}
+		lo, hi := m[4], m[5]
+		if lo < 0 {
+			lo, hi = m[6], m[7]
+		}
+		found, ok = MetaValue{Value: meta[lo:hi], Start: lo - 1, End: hi + 1, Quote: meta[lo-1]}, true
+	}
+	for _, token := range metaTokens(string(rest)) {
+		k, v, isPair := strings.Cut(token.text, "=")
+		if !isPair || k != key {
+			continue
+		}
+		if token.quoted {
+			found, ok = MetaValue{}, false
+			continue
+		}
+		start := token.start + len(k) + 1
+		found, ok = MetaValue{Value: v, Start: start, End: start + len(v)}, true
+	}
+	return found, ok
+}
+
+type metaToken struct {
+	text   string
+	start  int  // byte offset of the token's first character
+	quoted bool // text had quotes stripped, so it is not a slice of the input
+}
+
+// metaTokens splits on whitespace, keeping quoted runs together and dropping
+// the quotes, like the UI's tokenizeMeta.
+func metaTokens(s string) []metaToken {
+	var out []metaToken
+	var buf strings.Builder
+	var quote rune
+	tok := metaToken{start: -1}
+	flush := func() {
+		if buf.Len() > 0 {
+			tok.text = buf.String()
+			out = append(out, tok)
+		}
+		buf.Reset()
+		tok = metaToken{start: -1}
+	}
+	for i, r := range s {
+		if tok.start < 0 && !unicode.IsSpace(r) {
+			tok.start = i
+		}
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			} else {
+				buf.WriteRune(r)
+			}
+		case r == '"' || r == '\'':
+			quote, tok.quoted = r, true
+		case unicode.IsSpace(r):
+			flush()
+		default:
+			buf.WriteRune(r)
+		}
+	}
+	flush()
 	return out
 }
 
@@ -1248,6 +1338,25 @@ func AppSources(content string) []string {
 		}
 	}
 	return out
+}
+
+// ResolveAppSrc resolves a kiwi-app src= the way the UI does: relative to
+// the page's folder, or to the workspace root with a leading slash. ok is
+// false when the path climbs above the root, which the UI refuses to load;
+// target is "" when it names the root itself.
+func ResolveAppSrc(pagePath, src string) (target string, ok bool) {
+	rel := strings.TrimLeft(src, "/")
+	if !strings.HasPrefix(src, "/") {
+		rel = path.Join(path.Dir(pagePath), src)
+	}
+	clean := path.Clean(rel)
+	switch {
+	case clean == ".." || strings.HasPrefix(clean, "../"):
+		return "", false
+	case clean == ".":
+		return "", true
+	}
+	return clean, true
 }
 
 // replaceFenceSpans swaps each closed fence for replace's output, re-indented

@@ -152,7 +152,7 @@ func (h *Handlers) PublishedPage(c echo.Context) error {
 		if !h.hasPublicSibling(ctx, cleaned) {
 			return echo.NewHTTPError(http.StatusNotFound, "not found")
 		}
-		return c.Blob(http.StatusOK, detectContentType(cleaned, content), content)
+		return serveWorkspaceBlob(c, cleaned, content)
 	}
 
 	if rbac.PageVisibility(content) != rbac.VisibilityPublic && !rbac.PagePublished(content) {

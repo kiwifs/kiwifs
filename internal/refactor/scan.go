@@ -5,6 +5,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
+
+	"github.com/kiwifs/kiwifs/internal/markdown"
 )
 
 // linkKind says which syntax a reference was written in. The kind decides
@@ -14,6 +17,7 @@ type linkKind int
 const (
 	kindWiki     linkKind = iota // [[target|label]], ![[embed]]
 	kindMarkdown                 // [label](target.md), ![alt](image.png)
+	kindAppSrc                   // ```kiwi-app src=apps/a.html: a literal path, never percent-encoded
 )
 
 // linkRef is one reference found in a page. Start and End bound only the
@@ -23,8 +27,12 @@ type linkRef struct {
 	Kind  linkKind
 	Start int
 	End   int
-	Path  string // the raw path bytes, content[Start:End]
-	Line  int    // 1-based, for reports
+	// Path is the raw path bytes, content[Start:End], except for kindAppSrc,
+	// whose Start and End also take in the quotes (see Quote) so a rewrite
+	// can add or change them.
+	Path  string
+	Quote byte
+	Line  int // 1-based, for reports
 	// Frag is the #fragment after the path (without "#"), and FragEnd the
 	// offset just past it; FragEnd == End when there is none.
 	Frag    string
@@ -54,39 +62,54 @@ func maskCode(content []byte) []byte {
 		}
 	}
 
-	pos := 0
 	if fmEnd := frontmatterEnd(content); fmEnd > 0 {
 		blank(0, fmEnd)
-		pos = fmEnd
 	}
+	walkLines(content, func(start, end int, role lineRole) {
+		if role == lineText {
+			maskInlineCode(out[start:end])
+		} else {
+			blank(start, end)
+		}
+	})
+	return out
+}
 
+type lineRole int
+
+const (
+	lineText      lineRole = iota
+	lineFenceOpen          // the opening line of a fence
+	lineFenced             // inside a fence, its closing line included
+)
+
+// walkLines visits every line after the frontmatter with its bounds and
+// where it sits relative to fences.
+func walkLines(content []byte, visit func(start, end int, role lineRole)) {
 	var fenceChar byte
 	fenceLen := 0
 	inFence := false
-	for pos < len(content) {
+	for pos := frontmatterEnd(content); pos < len(content); {
 		end := pos
 		for end < len(content) && content[end] != '\n' {
 			end++
 		}
-		line := string(content[pos:end])
-		trimmed := strings.TrimLeft(line, " \t")
-		if inFence {
-			blank(pos, end)
-			if run := fenceRun(trimmed); run > 0 && trimmed[0] == fenceChar && run >= fenceLen &&
-				strings.TrimSpace(trimmed[run:]) == "" {
+		trimmed := strings.TrimLeft(string(content[pos:end]), " \t")
+		run := fenceRun(trimmed)
+		switch {
+		case inFence:
+			visit(pos, end, lineFenced)
+			if run > 0 && trimmed[0] == fenceChar && run >= fenceLen && strings.TrimSpace(trimmed[run:]) == "" {
 				inFence = false
 			}
-		} else if run := fenceRun(trimmed); run > 0 && !(trimmed[0] == '`' && strings.ContainsRune(trimmed[run:], '`')) {
-			inFence = true
-			fenceChar = trimmed[0]
-			fenceLen = run
-			blank(pos, end)
-		} else {
-			maskInlineCode(out[pos:end])
+		case run > 0 && !(trimmed[0] == '`' && strings.ContainsRune(trimmed[run:], '`')):
+			inFence, fenceChar, fenceLen = true, trimmed[0], run
+			visit(pos, end, lineFenceOpen)
+		default:
+			visit(pos, end, lineText)
 		}
 		pos = end + 1
 	}
-	return out
 }
 
 // frontmatterEnd returns the offset just past a leading --- ... --- block,
@@ -262,54 +285,45 @@ func scanLinks(content []byte) []linkRef {
 	return refs
 }
 
-var appSrcRe = regexp.MustCompile(`(?:^|\s)src=(?:"([^"\n]+)"|'([^'\n]+)'|([^\s"']+))`)
-
-// scanAppSrc finds the `src=` file on each ```kiwi-app opening line. It is
-// written relative to the page, like a markdown link, so it moves the same
-// way; maskCode blanks the fence line, so the original content is scanned.
+// scanAppSrc finds the src= file on each ```kiwi-app opening line, reading
+// the meta the way the UI does. maskCode blanks fence lines, so it scans the
+// original content.
 func scanAppSrc(content []byte) []linkRef {
 	var refs []linkRef
-	var fenceChar byte
-	fenceLen := 0
-	inFence := false
-	pos := frontmatterEnd(content)
-	for pos < len(content) {
-		end := pos
-		for end < len(content) && content[end] != '\n' {
-			end++
+	walkLines(content, func(start, end int, role lineRole) {
+		if role != lineFenceOpen {
+			return
 		}
-		line := string(content[pos:end])
-		trimmed := strings.TrimLeft(line, " \t")
-		run := fenceRun(trimmed)
-		switch {
-		case inFence:
-			if run > 0 && trimmed[0] == fenceChar && run >= fenceLen && strings.TrimSpace(trimmed[run:]) == "" {
-				inFence = false
-			}
-		case run > 0 && !(trimmed[0] == '`' && strings.ContainsRune(trimmed[run:], '`')):
-			inFence, fenceChar, fenceLen = true, trimmed[0], run
-			info := trimmed[run:]
-			if lang, meta, _ := strings.Cut(strings.TrimLeft(info, " \t"), " "); lang == "kiwi-app" {
-				metaAt := pos + len(line) - len(meta)
-				if m := appSrcRe.FindStringSubmatchIndex(meta); m != nil {
-					for g := 2; g <= 6; g += 2 {
-						if m[g] < 0 {
-							continue
-						}
-						path := meta[m[g]:m[g+1]]
-						if path == "" || path[0] == '#' || schemeRe.MatchString(path) || strings.HasPrefix(path, "//") {
-							break
-						}
-						start := metaAt + m[g]
-						refs = append(refs, linkRef{Kind: kindMarkdown, Start: start, End: start + len(path), FragEnd: start + len(path), Path: path})
-						break
-					}
-				}
-			}
+		line := strings.TrimRightFunc(string(content[start:end]), unicode.IsSpace)
+		lang, meta := markdown.SplitFenceInfo(strings.TrimLeft(line, " \t"))
+		if lang != "kiwi-app" {
+			return
 		}
-		pos = end + 1
-	}
+		v, ok := markdown.FenceMetaValue(meta, "src")
+		if !ok || v.Value == "" || v.Value[0] == '#' || schemeRe.MatchString(v.Value) || strings.HasPrefix(v.Value, "//") {
+			return
+		}
+		at := start + len(line) - len(meta)
+		refs = append(refs, linkRef{Kind: kindAppSrc, Start: at + v.Start, End: at + v.End, FragEnd: at + v.End, Path: v.Value, Quote: v.Quote})
+	})
 	return refs
+}
+
+// quoteAppSrc spells a src= value: in its original quote while that still
+// fits, bare when nothing in it needs quoting, else in a quote it lacks.
+func quoteAppSrc(p string, quote byte) (string, bool) {
+	if quote != 0 && strings.IndexByte(p, quote) < 0 {
+		return string(quote) + p + string(quote), true
+	}
+	if quote == 0 && !strings.ContainsAny(p, `"'`) && strings.IndexFunc(p, unicode.IsSpace) < 0 {
+		return p, true
+	}
+	for _, q := range []string{`"`, `'`} {
+		if !strings.Contains(p, q) {
+			return q + p + q, true
+		}
+	}
+	return p, false
 }
 
 func sortRefs(refs []linkRef) {

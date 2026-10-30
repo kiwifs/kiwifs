@@ -172,7 +172,7 @@ func (h *Handlers) PublicPage(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.Blob(http.StatusOK, detectContentType(link.Path, content), content)
+	return serveWorkspaceBlob(c, link.Path, content)
 }
 
 // PublicFile godoc
@@ -222,7 +222,7 @@ func (h *Handlers) PublicFile(c echo.Context) error {
 		}
 	}
 
-	return c.Blob(http.StatusOK, detectContentType(cleaned, content), content)
+	return serveWorkspaceBlob(c, cleaned, content)
 }
 
 // hasPublicSibling walks the directory hierarchy from the asset's parent dir

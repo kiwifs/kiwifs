@@ -679,3 +679,99 @@ func TestKiwiAppSrcFollowsMoves(t *testing.T) {
 		t.Fatalf("src= not rewritten after the app file moved:\n%s", got)
 	}
 }
+
+func TestKiwiAppSrcSpellsPathsLiterally(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"guides/queue.md":          "```kiwi-app src=\"my apps/a b.html\" chrome=full\n```\n",
+		"guides/my apps/a b.html":  "<div></div>\n",
+		"guides/plain.md":          "```kiwi-app src=apps/lease.html\n```\n",
+		"guides/apps/lease.html":   "<div></div>\n",
+		"guides/single.md":         "```kiwi-app src='apps/x.html'\n```\n",
+		"guides/apps/x.html":       "<div></div>\n",
+		"guides/my apps/other.txt": "x\n",
+	})
+
+	p := plan(t, dir, "moves:\n  - from: guides/queue.md\n    to: archive/queue.md\n")
+	requireNoErrors(t, p)
+	if got := written(t, p, "archive/queue.md"); got != "```kiwi-app src=\"../guides/my apps/a b.html\" chrome=full\n```\n" {
+		t.Fatalf("quoted path with spaces: %q", got)
+	}
+
+	p = plan(t, dir, "moves:\n  - from: guides/apps/lease.html\n    to: guides/my apps/lease one.html\n")
+	requireNoErrors(t, p)
+	if got := written(t, p, "guides/plain.md"); got != "```kiwi-app src=\"my apps/lease one.html\"\n```\n" {
+		t.Fatalf("bare path gaining a space should be quoted, not percent-encoded: %q", got)
+	}
+
+	p = plan(t, dir, "moves:\n  - from: guides/apps/x.html\n    to: guides/apps/y z.html\n")
+	requireNoErrors(t, p)
+	if got := written(t, p, "guides/single.md"); got != "```kiwi-app src='apps/y z.html'\n```\n" {
+		t.Fatalf("single quotes should be kept: %q", got)
+	}
+
+	p = plan(t, dir, "moves:\n  - from: guides/apps/x.html\n    to: \"guides/apps/it's.html\"\n")
+	requireNoErrors(t, p)
+	if got := written(t, p, "guides/single.md"); got != "```kiwi-app src=\"apps/it's.html\"\n```\n" {
+		t.Fatalf("a quote in the path should switch the quote style: %q", got)
+	}
+}
+
+func TestKiwiAppSrcOnlyRewritesTheSrcKey(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"guides/queue.md": "```kiwi-app title=\"see src=apps/lease.html\" src=apps/lease.html\n```\n\n" +
+			"```kiwi-app title=\"src=apps/lease.html\"\nbody\n```\n\n" +
+			"```kiwi-app\tid=a\tsrc=apps/lease.html\n```\n",
+		"guides/apps/lease.html": "<div></div>\n",
+	})
+
+	p := plan(t, dir, "moves:\n  - from: guides/queue.md\n    to: archive/queue.md\n")
+	requireNoErrors(t, p)
+	want := "```kiwi-app title=\"see src=apps/lease.html\" src=../guides/apps/lease.html\n```\n\n" +
+		"```kiwi-app title=\"src=apps/lease.html\"\nbody\n```\n\n" +
+		"```kiwi-app\tid=a\tsrc=../guides/apps/lease.html\n```\n"
+	if got := written(t, p, "archive/queue.md"); got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestKiwiAppSrcFollowsFolderMoves(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"guides/queue.md":        "```kiwi-app src=apps/lease.html\n```\n\n```kiwi-app src=/guides/apps/lease.html\n```\n",
+		"guides/apps/lease.html": "<div></div>\n",
+		"guides/apps/demo.md":    "```kiwi-app src=./lease.html\n```\n\n```kiwi-app src=../../shared/retry.html\n```\n",
+		"shared/retry.html":      "<div></div>\n",
+	})
+
+	p := plan(t, dir, "moves:\n  - from: guides/apps\n    to: lib/apps\n")
+	requireNoErrors(t, p)
+	if got := written(t, p, "guides/queue.md"); got != "```kiwi-app src=../lib/apps/lease.html\n```\n\n```kiwi-app src=/lib/apps/lease.html\n```\n" {
+		t.Fatalf("queue.md after moving apps/: %q", got)
+	}
+	if got := written(t, p, "lib/apps/demo.md"); got != "```kiwi-app src=./lease.html\n```\n\n```kiwi-app src=../../shared/retry.html\n```\n" {
+		t.Fatalf("demo.md moving with its app: %q", got)
+	}
+
+	p = plan(t, dir, "moves:\n  - from: guides/apps/demo.md\n    to: archive/2026/demo.md\n")
+	requireNoErrors(t, p)
+	if got := written(t, p, "archive/2026/demo.md"); got != "```kiwi-app src=../../guides/apps/lease.html\n```\n\n```kiwi-app src=../../shared/retry.html\n```\n" {
+		t.Fatalf("demo.md moved deeper: %q", got)
+	}
+
+	p = plan(t, dir, "moves:\n  - from: shared/retry.html\n    to: retry.html\n")
+	requireNoErrors(t, p)
+	if got := written(t, p, "guides/apps/demo.md"); got != "```kiwi-app src=./lease.html\n```\n\n```kiwi-app src=../../retry.html\n```\n" {
+		t.Fatalf("demo.md after its .. target moved: %q", got)
+	}
+}
+
+func TestKiwiAppSrcAboveTheRootIsLeftAlone(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"q.md":       "```kiwi-app src=../outside.html\n```\n\n```kiwi-app src=/../outside.html\n```\n",
+		"other.html": "<div></div>\n",
+	})
+	p := plan(t, dir, "moves:\n  - from: q.md\n    to: deep/q.md\n")
+	requireNoErrors(t, p)
+	if got := written(t, p, "deep/q.md"); got != "```kiwi-app src=../outside.html\n```\n\n```kiwi-app src=/../outside.html\n```\n" {
+		t.Fatalf("a src= above the root resolves to nothing and must not be rewritten: %q", got)
+	}
+}

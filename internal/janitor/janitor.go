@@ -3,7 +3,6 @@ package janitor
 import (
 	"context"
 	"fmt"
-	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -18,17 +17,17 @@ import (
 const DefaultStaleDays = 90
 
 const (
-	IssueStale         = "stale"
-	IssueOrphan        = "orphan"
-	IssueDuplicate     = "duplicate"
-	IssueContradiction = "contradiction"
-	IssueMissingOwner  = "missing-owner"
-	IssueMissingStatus = "missing-status"
-	IssueEmptyPage     = "empty-page"
-	IssueBrokenLink    = "broken-link"
-	IssueBrokenAppSrc  = "broken-app-src"
-	IssueNoReviewDate  = "no-review-date"
-	IssueDecisionFound = "decision-found"
+	IssueStale          = "stale"
+	IssueOrphan         = "orphan"
+	IssueDuplicate      = "duplicate"
+	IssueContradiction  = "contradiction"
+	IssueMissingOwner   = "missing-owner"
+	IssueMissingStatus  = "missing-status"
+	IssueEmptyPage      = "empty-page"
+	IssueBrokenLink     = "broken-link"
+	IssueBrokenAppSrc   = "broken-app-src"
+	IssueNoReviewDate   = "no-review-date"
+	IssueDecisionFound  = "decision-found"
 	IssueExpiredMemory  = "expired-memory"
 	IssueExecutionStale = "execution-stale"
 )
@@ -328,18 +327,9 @@ func (s *Scanner) checkPage(ctx context.Context, p pageInfo, existing map[string
 		}
 	}
 
-	// A kiwi-app whose src= file is gone renders an error card instead.
 	for _, src := range markdown.AppSources(string(p.content)) {
-		target := resolveAppSrc(p.path, src)
-		if target == "" || !s.store.Exists(ctx, target) {
-			issues = append(issues, Issue{
-				Kind:       IssueBrokenAppSrc,
-				Path:       p.path,
-				Message:    fmt.Sprintf("kiwi-app src=%s doesn't resolve to any file", src),
-				Related:    []string{target},
-				Severity:   "error",
-				Suggestion: "fix the path (it is relative to the page's folder) or restore the file",
-			})
+		if issue, broken := s.checkAppSrc(ctx, p.path, src); broken {
+			issues = append(issues, issue)
 		}
 	}
 
@@ -726,18 +716,25 @@ func fmDateField(fm map[string]any, key string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// resolveAppSrc mirrors the UI: relative to the page's folder, or to the
-// workspace root with a leading slash. "" when the path climbs out of it.
-func resolveAppSrc(pagePath, src string) string {
-	var joined string
-	if strings.HasPrefix(src, "/") {
-		joined = src
-	} else {
-		joined = path.Join(path.Dir(pagePath), src)
+func (s *Scanner) checkAppSrc(ctx context.Context, pagePath, src string) (Issue, bool) {
+	issue := Issue{
+		Kind:       IssueBrokenAppSrc,
+		Path:       pagePath,
+		Severity:   "error",
+		Suggestion: "fix the path (it is relative to the page's folder) or restore the file",
 	}
-	clean := strings.TrimPrefix(path.Clean("/"+joined), "/")
-	if clean == "" || strings.HasPrefix(path.Clean(joined), "..") {
-		return ""
+	target, ok := markdown.ResolveAppSrc(pagePath, src)
+	switch {
+	case !ok:
+		issue.Message = fmt.Sprintf("kiwi-app src=%s climbs above the workspace root", src)
+		issue.Suggestion = "point it at a file inside the workspace; a leading / starts at the root"
+	case target == "":
+		issue.Message = fmt.Sprintf("kiwi-app src=%s names the workspace root, not a file", src)
+	case !s.store.Exists(ctx, target):
+		issue.Message = fmt.Sprintf("kiwi-app src=%s doesn't resolve to any file", src)
+		issue.Related = []string{target}
+	default:
+		return Issue{}, false
 	}
-	return clean
+	return issue, true
 }
