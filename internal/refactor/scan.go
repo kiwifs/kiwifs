@@ -252,10 +252,62 @@ func scanLinks(content []byte) []linkRef {
 		refs = append(refs, ref)
 	}
 
+	refs = append(refs, scanAppSrc(content)...)
+
 	sortRefs(refs)
 	lineAt := newLineIndex(content)
 	for i := range refs {
 		refs[i].Line = lineAt(refs[i].Start)
+	}
+	return refs
+}
+
+var appSrcRe = regexp.MustCompile(`(?:^|\s)src=(?:"([^"\n]+)"|'([^'\n]+)'|([^\s"']+))`)
+
+// scanAppSrc finds the `src=` file on each ```kiwi-app opening line. It is
+// written relative to the page, like a markdown link, so it moves the same
+// way; maskCode blanks the fence line, so the original content is scanned.
+func scanAppSrc(content []byte) []linkRef {
+	var refs []linkRef
+	var fenceChar byte
+	fenceLen := 0
+	inFence := false
+	pos := frontmatterEnd(content)
+	for pos < len(content) {
+		end := pos
+		for end < len(content) && content[end] != '\n' {
+			end++
+		}
+		line := string(content[pos:end])
+		trimmed := strings.TrimLeft(line, " \t")
+		run := fenceRun(trimmed)
+		switch {
+		case inFence:
+			if run > 0 && trimmed[0] == fenceChar && run >= fenceLen && strings.TrimSpace(trimmed[run:]) == "" {
+				inFence = false
+			}
+		case run > 0 && !(trimmed[0] == '`' && strings.ContainsRune(trimmed[run:], '`')):
+			inFence, fenceChar, fenceLen = true, trimmed[0], run
+			info := trimmed[run:]
+			if lang, meta, _ := strings.Cut(strings.TrimLeft(info, " \t"), " "); lang == "kiwi-app" {
+				metaAt := pos + len(line) - len(meta)
+				if m := appSrcRe.FindStringSubmatchIndex(meta); m != nil {
+					for g := 2; g <= 6; g += 2 {
+						if m[g] < 0 {
+							continue
+						}
+						path := meta[m[g]:m[g+1]]
+						if path == "" || path[0] == '#' || schemeRe.MatchString(path) || strings.HasPrefix(path, "//") {
+							break
+						}
+						start := metaAt + m[g]
+						refs = append(refs, linkRef{Kind: kindMarkdown, Start: start, End: start + len(path), FragEnd: start + len(path), Path: path})
+						break
+					}
+				}
+			}
+		}
+		pos = end + 1
 	}
 	return refs
 }

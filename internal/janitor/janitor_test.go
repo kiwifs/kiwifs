@@ -618,3 +618,36 @@ next-review: 2040-01-01
 		t.Fatalf("expected execution-stale with default date_field, got %+v", res.Issues)
 	}
 }
+
+func TestScan_FlagsBrokenKiwiAppSrc(t *testing.T) {
+	store, root := buildStore(t, map[string]string{
+		"guides/queue.md": "# Queue\n\n" +
+			"```kiwi-app src=apps/lease.html\n```\n\n" +
+			"```kiwi-app src=\"apps/gone.html\"\nfallback\n```\n\n" +
+			"```kiwi-app src=/shared/retry.html\n```\n",
+		"guides/apps/lease.html": "<div></div>\n",
+		"shared/retry.html":      "<div></div>\n",
+	})
+
+	res, err := New(root, store, nil, 90).Scan(context.Background())
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	broken := issuesByKind(res.Issues)[IssueBrokenAppSrc]
+	if len(broken) != 1 || broken[0].Path != "guides/queue.md" || broken[0].Related[0] != "guides/apps/gone.html" {
+		t.Fatalf("expected only guides/apps/gone.html flagged, got %+v", broken)
+	}
+}
+
+func TestResolveAppSrc(t *testing.T) {
+	for _, c := range []struct{ page, src, want string }{
+		{"guides/q.md", "apps/a.html", "guides/apps/a.html"},
+		{"guides/q.md", "../shared/a.html", "shared/a.html"},
+		{"guides/q.md", "/apps/a.html", "apps/a.html"},
+		{"q.md", "../../escape.html", ""},
+	} {
+		if got := resolveAppSrc(c.page, c.src); got != c.want {
+			t.Errorf("resolveAppSrc(%q, %q) = %q, want %q", c.page, c.src, got, c.want)
+		}
+	}
+}

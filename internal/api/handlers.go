@@ -131,13 +131,30 @@ func detectContentType(path string, content []byte) string {
 	if ext == ".md" || ext == ".markdown" {
 		return "text/markdown; charset=utf-8"
 	}
-	if ct := mime.TypeByExtension(ext); ct != "" {
-		return ct
+	ct := mime.TypeByExtension(ext)
+	if ct == "" {
+		ct = http.DetectContentType(content)
 	}
-	if ct := http.DetectContentType(content); ct != "" {
-		return ct
+	if ct == "" {
+		return "application/octet-stream"
 	}
-	return "application/octet-stream"
+	if isActiveMarkup(ct) {
+		return "text/plain; charset=utf-8"
+	}
+	return ct
+}
+
+// isActiveMarkup reports types a browser would render and run script in.
+// Workspace files (a kiwi-app's src= HTML among them) are written by anyone
+// with write access, so they are served as text and never execute on the
+// KiwiFS origin; kiwi-app runs them inside its sandboxed iframe instead.
+func isActiveMarkup(ct string) bool {
+	base, _, _ := strings.Cut(ct, ";")
+	switch strings.TrimSpace(strings.ToLower(base)) {
+	case "text/html", "application/xhtml+xml", "text/xml", "application/xml":
+		return true
+	}
+	return false
 }
 
 func parseIntParam(c echo.Context, name string, fallback int) int {

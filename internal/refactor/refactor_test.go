@@ -649,3 +649,33 @@ func TestSplitPageByHeadings(t *testing.T) {
 		t.Fatalf("confirmed split = %+v", confirmed.PlanOnly)
 	}
 }
+
+func TestKiwiAppSrcFollowsMoves(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"guides/queue.md": "# Queue\n\n" +
+			"```kiwi-app id=lease src=apps/lease.html\nLoading…\n```\n\n" +
+			"```kiwi-app src=\"apps/lease.html\" chrome=full\n```\n\n" +
+			"````markdown\n```kiwi-app src=apps/lease.html\n```\n````\n",
+		"guides/apps/lease.html": "<div class=\"k-app\"></div>\n",
+	})
+
+	p := plan(t, dir, "moves:\n  - from: guides/queue.md\n    to: archive/queue.md\n")
+	requireNoErrors(t, p)
+	got := written(t, p, "archive/queue.md")
+	for _, want := range []string{
+		"```kiwi-app id=lease src=../guides/apps/lease.html\n",
+		"```kiwi-app src=\"../guides/apps/lease.html\" chrome=full\n",
+		// An example inside another fence is text, not an app.
+		"````markdown\n```kiwi-app src=apps/lease.html\n```\n````\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+
+	p = plan(t, dir, "moves:\n  - from: guides/apps/lease.html\n    to: guides/apps/leases.html\n")
+	requireNoErrors(t, p)
+	if got := written(t, p, "guides/queue.md"); !strings.Contains(got, "src=apps/leases.html") {
+		t.Fatalf("src= not rewritten after the app file moved:\n%s", got)
+	}
+}

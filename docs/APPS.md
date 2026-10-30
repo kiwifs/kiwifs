@@ -66,7 +66,7 @@ Written on the opening line, after `kiwi-app`. The first seven mean exactly what
 | `chrome=minimal\|full\|none` | `minimal` (default): a framed app with a copy button on hover. `full`: a header bar with the title. `none`: no frame at all, so the app sits on the page. |
 | `kit=off` | Skip the kit stylesheet. The runtime is still injected. |
 | `controls=host` | Render the standard playback transport under the app once it calls `kiwi.steps`. Without it, transport is left to the app's own buttons; keys and deep links work either way. |
-| `src=path.html` | Load the HTML from a file, relative to the page's folder (a leading `/` means the workspace root); a path that climbs above the root shows an error instead of loading. The fence body becomes optional; if present, it is shown while loading and if the file is missing. |
+| `src=path.html` | Load the HTML from a file, relative to the page's folder (a leading `/` means the workspace root); a path that climbs above the root shows an error instead of loading. The fence body becomes optional; if present, it is shown while loading and if the file is missing. Moving the page or the file with `kiwifs refactor` rewrites the path, and the janitor reports a `src=` that points nowhere (`broken-app-src`). |
 
 The older nested form, `kiwi-app meta="height=300"`, still sets the height.
 

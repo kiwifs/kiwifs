@@ -183,6 +183,7 @@ func (h *Handlers) ReadFile(c echo.Context) error {
 		tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindLinkResolve, Path: path, Detail: "wiki-links resolved"})
 	}
 
+	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
 	return c.Blob(http.StatusOK, detectContentType(path, content), content)
 }
 

@@ -3,6 +3,7 @@ package janitor
 import (
 	"context"
 	"fmt"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -25,6 +26,7 @@ const (
 	IssueMissingStatus = "missing-status"
 	IssueEmptyPage     = "empty-page"
 	IssueBrokenLink    = "broken-link"
+	IssueBrokenAppSrc  = "broken-app-src"
 	IssueNoReviewDate  = "no-review-date"
 	IssueDecisionFound = "decision-found"
 	IssueExpiredMemory  = "expired-memory"
@@ -322,6 +324,21 @@ func (s *Scanner) checkPage(ctx context.Context, p pageInfo, existing map[string
 				Message:  fmt.Sprintf("[[%s]] doesn't resolve to any file", target),
 				Related:  []string{target},
 				Severity: "error",
+			})
+		}
+	}
+
+	// A kiwi-app whose src= file is gone renders an error card instead.
+	for _, src := range markdown.AppSources(string(p.content)) {
+		target := resolveAppSrc(p.path, src)
+		if target == "" || !s.store.Exists(ctx, target) {
+			issues = append(issues, Issue{
+				Kind:       IssueBrokenAppSrc,
+				Path:       p.path,
+				Message:    fmt.Sprintf("kiwi-app src=%s doesn't resolve to any file", src),
+				Related:    []string{target},
+				Severity:   "error",
+				Suggestion: "fix the path (it is relative to the page's folder) or restore the file",
 			})
 		}
 	}
@@ -707,4 +724,20 @@ func fmDateField(fm map[string]any, key string) (time.Time, bool) {
 		return v, true
 	}
 	return time.Time{}, false
+}
+
+// resolveAppSrc mirrors the UI: relative to the page's folder, or to the
+// workspace root with a leading slash. "" when the path climbs out of it.
+func resolveAppSrc(pagePath, src string) string {
+	var joined string
+	if strings.HasPrefix(src, "/") {
+		joined = src
+	} else {
+		joined = path.Join(path.Dir(pagePath), src)
+	}
+	clean := strings.TrimPrefix(path.Clean("/"+joined), "/")
+	if clean == "" || strings.HasPrefix(path.Clean(joined), "..") {
+		return ""
+	}
+	return clean
 }

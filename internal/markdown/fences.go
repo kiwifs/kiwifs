@@ -1236,6 +1236,20 @@ func StripAppFences(content string, render func(AppFenceBlock) string) string {
 	})
 }
 
+// AppSources returns the `src=` file of every ```kiwi-app fence, as written.
+func AppSources(content string) []string {
+	var out []string
+	for _, span := range scanFenceSpans(strings.Split(content, "\n")) {
+		if span.lang != "kiwi-app" {
+			continue
+		}
+		if src := parseFenceMeta(span.meta)["src"]; src != "" {
+			out = append(out, src)
+		}
+	}
+	return out
+}
+
 // replaceFenceSpans swaps each closed fence for replace's output, re-indented
 // to the fence's own margin. An empty replacement leaves the fence alone.
 func replaceFenceSpans(content string, replace func(fenceSpan) string) string {
