@@ -10,6 +10,7 @@ import incidentRunbook from "./showcase/incident-runbook.md?raw";
 import adr from "./showcase/adr.md?raw";
 import teamDashboard from "./showcase/team-dashboard.md?raw";
 import { SHOWCASE_QUERY_ROWS } from "./showcase/queryRows";
+import { BROKEN, PENDING } from "./showcase/checks";
 
 /**
  * Whole pages written the way a team would write them, rendered through the
@@ -19,7 +20,7 @@ import { SHOWCASE_QUERY_ROWS } from "./showcase/queryRows";
 const meta: Meta<typeof KiwiPage> = {
   title: "Showcase",
   component: KiwiPage,
-  parameters: { layout: "fullscreen" },
+  parameters: { layout: "fullscreen", a11y: { test: "error" } },
 };
 
 export default meta;
@@ -79,17 +80,6 @@ function page(name: Fixture, overrides: MockOverrides = {}): Story {
   };
 }
 
-const PENDING = ".my-4.h-24.animate-pulse, .kiwi-query-loading, .kiwi-chart-loading, .kiwi-kanban-loading";
-const BROKEN = [
-  ".kiwi-calc-error",
-  ".kiwi-chart-error",
-  ".kiwi-progress-error",
-  ".kiwi-kanban-error",
-  ".kiwi-data-error",
-  ".kiwi-query-error",
-  ".kiwi-quiz-error",
-].join(", ");
-
 /** Wait for every deferred block, then fail on any block that rendered as an error. */
 async function renderedCleanly(
   canvasElement: HTMLElement,
@@ -137,7 +127,7 @@ export const ArchitectureWalkthrough: Story = {
       ".kiwi-widget": 2,
       ".kiwi-tabs [role='tab']": 3,
       ".kiwi-calc": 1,
-      ".kiwi-figure-wide table": 1,
+      ".kiwi-figure-media table": 1,
     }, 2);
     const app = await waitFor(
       () => {

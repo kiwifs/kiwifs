@@ -86,15 +86,15 @@ ${colors}
 
 export function tabs(items: { label: string; body: string }[]): string {
   const body = items
-    .map((t) => `::tab[${t.label}]\n${t.body.trim()}`)
+    .map((t) => `:::tab{label="${t.label}"}\n${t.body.trim()}\n:::`)
     .join("\n\n");
-  return `:::tabs\n${body}\n:::`;
+  return `::::tabs\n${body}\n::::`;
 }
 
 export function columns(ratio: string | null, cols: string[]): string {
-  const directive = ratio ? `:::columns{ratio="${ratio}"}` : cols.length > 1 ? `:::columns{cols="${cols.length}"}` : ":::columns";
-  const body = cols.map((c) => `:::col\n${c.trim()}`).join("\n\n");
-  return `${directive}\n${body}\n:::`;
+  const directive = ratio ? `::::columns{ratio="${ratio}"}` : cols.length > 1 ? `::::columns{cols="${cols.length}"}` : "::::columns";
+  const body = cols.map((c) => `:::col\n${c.trim()}\n:::`).join("\n\n");
+  return `${directive}\n${body}\n::::`;
 }
 
 export function queryTable(dql: string): string {

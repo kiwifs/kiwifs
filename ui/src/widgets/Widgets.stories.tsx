@@ -689,13 +689,38 @@ function Gallery() {
   );
 }
 
-const meta: Meta<typeof Gallery> = {
+const meta: Meta<typeof ArrayView> = {
   title: "Widgets/Gallery",
-  component: Gallery,
+  component: ArrayView,
+  subcomponents: {
+    ActivityGrid,
+    AnnotationBar,
+    ArrayStack,
+    BarView,
+    BitsView,
+    CallStackView,
+    CodeHighlight,
+    DateField,
+    GraphView,
+    InputPanel,
+    LinkedListView,
+    MatrixView,
+    PlaybackControls,
+    PlotView,
+    PropertyBar,
+    SequenceView,
+    StackView,
+    StateInspector,
+    TimelineView,
+    TreeView,
+    WidgetLayout,
+    WidgetPanel,
+  },
   tags: ["autodocs"],
-  parameters: { layout: "fullscreen" },
+  parameters: { layout: "fullscreen", a11y: { test: "error" } },
+  render: () => <Gallery />,
 };
 
 export default meta;
 
-export const AllWidgets: StoryObj<typeof Gallery> = {};
+export const AllWidgets: StoryObj<typeof ArrayView> = {};

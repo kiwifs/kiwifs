@@ -14,7 +14,7 @@ const meta: Meta<typeof KiwiApp> = {
   title: "Blocks/KiwiApp",
   component: KiwiApp,
   tags: ["autodocs"],
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", a11y: { test: "error" } },
   decorators: [
     (Story) => (
       <div className="max-w-3xl p-4 bg-background text-foreground">

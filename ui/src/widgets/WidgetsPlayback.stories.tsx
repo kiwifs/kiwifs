@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, type ComponentProps, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within, waitFor } from "storybook/test";
 
@@ -1039,9 +1039,31 @@ interface StoryArgs {
   autoPlay: boolean;
 }
 
-const meta: Meta<StoryArgs> = {
+const meta: Meta<StoryArgs & ComponentProps<typeof PlaybackControls>> = {
   title: "Widgets/Playback",
+  component: PlaybackControls,
+  subcomponents: {
+    AnnotationBar,
+    ArrayStack,
+    ArrayView,
+    BarView,
+    BitsView,
+    CallStackView,
+    CodeHighlight,
+    GraphView,
+    LinkedListView,
+    MapView,
+    MatrixView,
+    MemoryView,
+    PlotView,
+    QueueView,
+    SequenceView,
+    StackView,
+    TimelineView,
+    TreeView,
+  },
   tags: ["autodocs"],
+  parameters: { a11y: { test: "error" } },
   args: { autoPlay: true },
 };
 

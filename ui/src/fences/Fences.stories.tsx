@@ -95,15 +95,13 @@ function Gallery({ only }: { only?: string }) {
 const meta: Meta<typeof Gallery> = {
   title: "Fences/Gallery",
   component: Gallery,
-  parameters: { layout: "fullscreen" },
+  parameters: { layout: "fullscreen", a11y: { test: "error" } },
 };
 
 export default meta;
-
-export const AllFences: StoryObj<typeof Gallery> = {};
-
-
 type Story = StoryObj<typeof Gallery>;
+
+export const AllFences: Story = {};
 
 export const Array_: Story = { args: { only: "array" } };
 export const Matrix: Story = { args: { only: "matrix" } };

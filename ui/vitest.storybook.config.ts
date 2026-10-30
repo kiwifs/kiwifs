@@ -29,6 +29,9 @@ export default mergeConfig(
         instances: [{ browser: "chromium" }],
       },
       setupFiles: [".storybook/vitest.setup.ts"],
+      // Showcase play functions wait up to 20s for deferred blocks; the 15s
+      // default cuts them off under a full parallel run.
+      testTimeout: 30_000,
     },
   }),
 );

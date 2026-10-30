@@ -10,6 +10,11 @@ type ThemeMode = "light" | "dark" | "both";
 
 const BACKGROUND = { light: "hsl(0 0% 100%)", dark: "hsl(0 0% 5%)" };
 
+const PALETTE_ORDER = ["kiwi", "forest", "ocean", "sunset", "neutral"];
+const palettes = [...presets].sort(
+  (a, b) => PALETTE_ORDER.indexOf(a.name.toLowerCase()) - PALETTE_ORDER.indexOf(b.name.toLowerCase()),
+);
+
 let appliedPalette = "kiwi";
 function applyPalette(name: string) {
   if (name === appliedPalette) return;
@@ -47,7 +52,8 @@ const withTheme: Decorator = (Story, context) => {
   if (mode !== "both") return <Story />;
   // Dark tokens are scoped to `.dark`, so a nested `.dark` themes its subtree
   // without touching <html>. Portals (tooltips, popovers) attach to <body>
-  // and still show the light theme in this mode.
+  // and still show the light theme in this mode. The story mounts twice, so
+  // both copies share element ids and playback clocks.
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: "100vh" }}>
       <div style={{ background: BACKGROUND.light, minWidth: 0 }}>
@@ -80,7 +86,7 @@ const preview: Preview = {
       toolbar: {
         title: "Palette",
         icon: "paintbrush",
-        items: presets.map((p) => ({ value: p.name.toLowerCase(), title: p.name, right: p.description })),
+        items: palettes.map((p) => ({ value: p.name.toLowerCase(), title: p.name, right: p.description })),
         dynamicTitle: true,
       },
     },

@@ -166,6 +166,36 @@ export function rehypeCodeMeta() {
   };
 }
 
+// ── Task-list checkbox labels ───────────────────────────────────────────────
+// GFM renders `- [ ] text` as a bare `<input type=checkbox>` beside the text,
+// which screen readers announce as an unlabelled checkbox. Label each box
+// with the text that follows it in its own item (nested lists excluded).
+
+export function rehypeTaskListLabels() {
+  return (tree: HastRoot) => {
+    visit(tree, "element", (node: any) => {
+      if (node.tagName !== "li" && node.tagName !== "p") return;
+      const kids: any[] = node.children ?? [];
+      const box = kids.find(
+        (k) => k.type === "element" && k.tagName === "input" && k.properties?.type === "checkbox",
+      );
+      if (!box || box.properties.ariaLabel) return;
+      const label = kids
+        .filter((k) => k !== box)
+        .map(hastText)
+        .join("")
+        .trim();
+      if (label) box.properties.ariaLabel = label;
+    });
+  };
+}
+
+function hastText(node: any): string {
+  if (node.type === "text") return node.value;
+  if (node.type !== "element" || node.tagName === "ul" || node.tagName === "ol") return "";
+  return (node.children ?? []).map(hastText).join("");
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function escapeHtml(s: string): string {

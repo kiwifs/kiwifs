@@ -80,7 +80,7 @@ export function KiwiTabs({ children }: KiwiTabsProps) {
             aria-controls={`kiwi-tabpanel-${index}`}
             className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
               ${index === activeIndex
-                ? "border-primary text-primary bg-background"
+                ? "border-primary text-foreground bg-background"
                 : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
               }`}
             onClick={() => handleTabClick(index)}

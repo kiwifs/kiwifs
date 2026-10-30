@@ -10,7 +10,7 @@ export function themeTokensForExport(theme: MermaidThemeKey = mermaidThemeKey())
     "--foreground": ["hsl(0 0% 95%)", "hsl(0 0% 9%)"],
     "--background": ["hsl(0 0% 10%)", "hsl(0 0% 100%)"],
     "--card": ["hsl(0 0% 10%)", "hsl(0 0% 100%)"],
-    "--muted-foreground": ["hsl(0 0% 70%)", "hsl(0 0% 45%)"],
+    "--muted-foreground": ["hsl(0 0% 70%)", "hsl(0 0% 40%)"],
     "--border": ["hsl(0 0% 22%)", "hsl(0 0% 90%)"],
     "--primary": ["hsl(65 80% 55%)", "hsl(65 80% 55%)"],
     "--font-sans": ["ui-sans-serif, system-ui, sans-serif", "ui-sans-serif, system-ui, sans-serif"],
@@ -108,7 +108,7 @@ export function mermaidThemeVariables(theme: MermaidThemeKey = mermaidThemeKey()
   const foreground = cssVar("--foreground", theme === "dark" ? "hsl(0 0% 95%)" : "hsl(0 0% 9%)");
   const background = cssVar("--card", theme === "dark" ? "hsl(0 0% 10%)" : "hsl(0 0% 100%)");
   const muted = cssVar("--muted", theme === "dark" ? "hsl(0 0% 16%)" : "hsl(0 0% 96%)");
-  const mutedFg = cssVar("--muted-foreground", theme === "dark" ? "hsl(0 0% 70%)" : "hsl(0 0% 45%)");
+  const mutedFg = cssVar("--muted-foreground", theme === "dark" ? "hsl(0 0% 70%)" : "hsl(0 0% 40%)");
   const border = cssVar("--border", theme === "dark" ? "hsl(0 0% 22%)" : "hsl(0 0% 90%)");
   const primary = cssVar("--primary", "hsl(65 80% 55%)");
   const font = cssVar("--font-sans", "ui-sans-serif, system-ui, sans-serif");
@@ -187,6 +187,17 @@ export function mermaidShadowStyles(): string {
     }
     .kiwi-dim {
       opacity: 0.28;
+    }
+    /* Faded labels are still read: muted text keeps AA contrast where 0.28 opacity cannot. */
+    .edgeLabel.kiwi-dim,
+    .messageText.kiwi-dim {
+      opacity: 1;
+    }
+    .edgeLabel.kiwi-dim * {
+      color: var(--muted-foreground) !important;
+    }
+    .messageText.kiwi-dim {
+      fill: var(--muted-foreground) !important;
     }
     .kiwi-focus > rect,
     .kiwi-focus > polygon,

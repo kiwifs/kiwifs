@@ -9,7 +9,9 @@ type Props = {
 };
 
 export function KiwiFigure({ width = "inline", pin = false, caption, children }: Props) {
-  const kids = Array.isArray(children) ? children : [children];
+  const kids = (Array.isArray(children) ? children : [children]).filter(
+    (kid) => !(typeof kid === "string" && kid.trim() === ""),
+  );
   const media = kids[0];
   const rest = kids.slice(1);
 

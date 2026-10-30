@@ -31,6 +31,8 @@ const config: StorybookConfig = {
           "@": path.resolve(here, "../src"),
         },
       },
+      // KiwiAppKit.mdx renders docs/APPS.md, which sits outside ui/.
+      server: { fs: { allow: [path.resolve(here, "../..")] } },
     });
   },
 };

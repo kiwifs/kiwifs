@@ -21,8 +21,8 @@ const VARIANT_STYLES = {
     bg: "var(--kw-widget-highlight, #22c55e)",
   },
   warning: {
-    border: "var(--kw-widget-warning, #f59e0b)",
-    bg: "var(--kw-widget-warning, #f59e0b)",
+    border: "var(--kw-widget-accent-amber, #b45309)",
+    bg: "var(--kw-widget-accent-amber, #b45309)",
   },
 };
 

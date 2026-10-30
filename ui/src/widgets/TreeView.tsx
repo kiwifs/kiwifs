@@ -339,7 +339,7 @@ export function TreeView({
   );
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
+    <div tabIndex={0} style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
       <svg
         width={width}
         height={height}

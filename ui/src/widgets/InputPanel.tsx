@@ -275,9 +275,9 @@ export function InputPanel({
                   style={{
                     padding: "2px 8px",
                     borderRadius: 4,
-                    border: `1px solid ${DEFAULTS.border}`,
+                    border: `1px solid ${val ? "var(--kw-widget-highlight, #22c55e)" : DEFAULTS.border}`,
                     background: val ? alpha("var(--kw-widget-highlight, #22c55e)", 18) : "transparent",
-                    color: val ? "var(--kw-widget-highlight, #22c55e)" : DEFAULTS.dimColor,
+                    color: val ? DEFAULTS.text : DEFAULTS.dimColor,
                     fontSize: "0.75rem",
                     fontWeight: 600,
                     cursor: "pointer",

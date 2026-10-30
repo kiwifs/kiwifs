@@ -65,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/kiwifs/kiwifs/main/install.sh | sh
 go install github.com/kiwifs/kiwifs@latest
 ```
 
-Or build from source (requires Go 1.25+ and Node.js 20+):
+Or build from source (requires Go 1.25+ and Node.js 22+):
 
 ```bash
 git clone https://github.com/kiwifs/kiwifs.git && cd kiwifs
