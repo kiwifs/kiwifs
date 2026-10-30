@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { action } from "@storybook/addon-actions";
-import { userEvent, within } from "@storybook/test";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { action } from "storybook/actions";
+import { userEvent, within } from "storybook/test";
 import { KiwiGraph } from "./KiwiGraph";
 import { MockApiProvider, type MockOverrides } from "./__mocks__/apiMock";
 import {
@@ -74,7 +74,8 @@ export const LoadError: Story = {
   render: () => renderGraph(graphLoadError),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await canvas.findByText("Failed to load graph data");
+    // The message arrives wrapped in the HTTP status line.
+    await canvas.findByText(/Failed to load graph data/);
   },
 };
 

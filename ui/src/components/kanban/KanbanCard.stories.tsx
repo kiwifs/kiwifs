@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { action } from "@storybook/addon-actions";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { action } from "storybook/actions";
 import { KanbanCard } from "./KanbanCard";
 import { KanbanDragProvider } from "./KanbanDragProvider";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";

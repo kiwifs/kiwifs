@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
-import type { Meta, StoryObj } from "@storybook/react";
-import { action } from "@storybook/addon-actions";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { action } from "storybook/actions";
 import { KanbanToolbar } from "./KanbanToolbar";
 import { KanbanStoreProvider, useKanbanStore } from "./kanbanStore";
 import { MockApiProvider } from "@kw/components/__mocks__/apiMock";

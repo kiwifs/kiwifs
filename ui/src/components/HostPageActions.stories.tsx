@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { Meta, StoryObj } from "@storybook/react";
+import type { Meta, StoryObj } from "@storybook/react-vite";
 import { HostPageActions } from "./HostPageActions";
 import { KIWI_PAGE_ACTION_STATE_EVENT, type KiwiHostConfig } from "../lib/hostConfig";
 

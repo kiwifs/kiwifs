@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react";
+import type { Meta, StoryObj } from "@storybook/react-vite";
 import { KiwiKanbanBlock } from "./KiwiKanbanBlock";
 import { MockApiProvider } from "./__mocks__/apiMock";
 

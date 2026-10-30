@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react";
+import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ExcalidrawMarkdownPreview } from "./ExcalidrawMarkdownPreview";
 import { mockMarkdownExcalidraw } from "./__mocks__/data";
 

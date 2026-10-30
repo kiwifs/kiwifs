@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react";
+import type { Meta, StoryObj } from "@storybook/react-vite";
 import { KiwiQuiz, KiwiQuizProvider, KiwiQuizScore } from "./KiwiQuiz";
 import { MockApiProvider, type MockOverrides } from "./__mocks__/apiMock";
 import { parseQuizCallout } from "@kw/lib/quizBlock";

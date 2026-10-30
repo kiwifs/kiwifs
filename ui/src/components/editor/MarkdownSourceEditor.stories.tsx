@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { expect, userEvent, within } from "@storybook/test";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, userEvent, within } from "storybook/test";
 import { useState } from "react";
 import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
 import { markdownSamples } from "./markdownSamples";
@@ -144,7 +144,9 @@ export const SaveShortcutHarness: Story = {
       throw new Error("CodeMirror content element not found — editor may not have mounted yet");
     }
     await userEvent.click(editor);
-    await userEvent.keyboard("{Control>}s{/Control}");
+    // CodeMirror's Mod- is Cmd on macOS and Ctrl elsewhere.
+    const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? "Meta" : "Control";
+    await userEvent.keyboard(`{${mod}>}s{/${mod}}`);
     await expect(canvas.getByTestId("save-count")).toHaveTextContent("Saves: 1");
   },
 };

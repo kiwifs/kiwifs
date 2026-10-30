@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { action } from "@storybook/addon-actions";
-import { expect, userEvent, within } from "@storybook/test";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { action } from "storybook/actions";
+import { expect, userEvent, within } from "storybook/test";
 import { KiwiKanban } from "./KiwiKanban";
 import { MockApiProvider, type MockOverrides } from "./__mocks__/apiMock";
 import { KanbanDragProvider } from "./kanban/KanbanDragProvider";
