@@ -1,20 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeSlug from "rehype-slug";
-import rehypeRaw from "rehype-raw";
-import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
-import rehypeKatex from "rehype-katex";
-import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import matter from "gray-matter";
-import Zoom from "react-medium-image-zoom";
-import "react-medium-image-zoom/dist/styles.css";
-import { AlertTriangle, BookOpen, Bug, Calendar, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Crosshair, Edit, Eye, File, FileAxis3D, FileQuestion, Flame, Folder, HelpCircle, History as HistoryIcon, Info, Lightbulb, Link2, List, ListChecks, MessageSquareQuote, NotebookPen, Pin, Plus, Quote, ScrollText, ShieldAlert, Star, Tag, TriangleAlert, Type, User, XCircle, Zap } from "lucide-react";
+import { AlertTriangle, BookOpen, Calendar, CheckSquare, ChevronDown, ChevronRight, Crosshair, Edit, Eye, File, FileAxis3D, FileQuestion, Folder, History as HistoryIcon, Link2, List, MessageSquareQuote, NotebookPen, Pin, Plus, Star, Tag, Type, User } from "lucide-react";
 import { api, type TreeEntry } from "@kw/lib/api";
-import { decodeHref, dirOf, isCanvasFile, isExcalidrawFile, normalizePath, titleize } from "@kw/lib/paths";
+import { dirOf, titleize } from "@kw/lib/paths";
 import { readingTime } from "@kw/lib/readingTime";
-import { useRawUrl } from "@kw/lib/rawUrl";
 import { HostPageActions } from "./HostPageActions";
 import { KiwiBreadcrumb } from "./KiwiBreadcrumb";
 import { KiwiToC } from "./KiwiToC";
@@ -22,15 +12,8 @@ import { KiwiBacklinks } from "./KiwiBacklinks";
 import { KiwiComments } from "./KiwiComments";
 import { PageActions } from "./PageActions";
 import { PublishButton } from "./PublishButton";
-import { FenceBlock } from "./FenceBlock";
-import { KiwiFigure } from "./KiwiFigure";
-import { KiwiEmbed } from "./KiwiEmbed";
 import { KiwiPageNav } from "./KiwiPageNav";
-import { KiwiTabs } from "./KiwiTabs";
-import { KiwiColumns } from "./KiwiColumns";
-import { KiwiClaim } from "./KiwiClaim";
-import { KiwiQuiz, KiwiQuizProvider, KiwiQuizScore } from "./KiwiQuiz";
-import { WikiLinkPreview } from "./WikiLinkPreview";
+import { KiwiQuizProvider, KiwiQuizScore } from "./KiwiQuiz";
 import { invalidatePagePreview } from "@kw/lib/pagePreview";
 import { ExcalidrawMarkdownPreview, isExcalidrawMarkdown } from "./ExcalidrawMarkdownPreview";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -43,11 +26,7 @@ import { trackRecent } from "./KiwiFavorites";
 import { Badge } from "@kw/components/ui/badge";
 import { Button } from "@kw/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@kw/components/ui/tooltip";
-import remarkEmoji from "remark-emoji";
-import remarkSupersub from "remark-supersub";
-import remarkDefinitionList from "remark-definition-list";
-import { buildResolver, remarkWikiLinks } from "@kw/lib/wikiLinks";
-import { KiwiControl } from "./KiwiControl";
+import { buildResolver } from "@kw/lib/wikiLinks";
 import {
   applyPageMeta,
   applyTitles,
@@ -58,15 +37,15 @@ import {
   type BookNav,
   type BookOrder,
 } from "@kw/lib/bookOrder";
-import type { FigureWidth } from "@kw/lib/figureLayout";
-import { remarkMark, stripObsidianComments, remarkInlineTags, remarkPageControls, rehypeCodeMeta } from "@kw/lib/remarkPlugins";
-import remarkDirective from "remark-directive";
-import { CLAIM_DATA_ATTRIBUTES, remarkKiwiDirectives } from "@kw/lib/remarkDirectives";
-import { remarkKiwiQuiz } from "@kw/lib/remarkQuiz";
-import { withDataAttributeAliasesForSchema, withUnrestrictedClassName } from "@kw/lib/sanitizeAttributes";
+import { stripObsidianComments } from "@kw/lib/remarkPlugins";
 import { resetClocks } from "@kw/widgets/playbackClock";
+import { kiwiRehypePlugins, kiwiRemarkPlugins, useKiwiMarkdownComponents } from "@kw/lib/markdownPipeline";
 import { resetPageVars } from "@kw/lib/pageVars";
 import { resetPageData } from "@kw/lib/pageData";
+
+const pageRehypePlugins = kiwiRehypePlugins();
+const notesRehypePlugins = kiwiRehypePlugins({ autolinkHeadings: false });
+
 type Props = {
   /** Page path in the KiwiFS tree. Used for API fetching in connected mode. */
   path?: string;
@@ -103,108 +82,10 @@ type Props = {
   className?: string;
 };
 
-function ScrollableTable({ children, node: _node, ...rest }: any) {
-  return (
-    <div className="kiwi-table-wrapper">
-      <table {...rest}>{children}</table>
-    </div>
-  );
-}
-
 type FrontmatterProperty = {
   key: string;
   value: unknown;
   kind: "text" | "list" | "date" | "boolean" | "object";
-};
-
-const sanitizeSchema = {
-  ...defaultSchema,
-  tagNames: [
-    ...(defaultSchema.tagNames || []),
-    "details", "summary", "kbd", "mark", "span", "div", "figure", "figcaption",
-    "video", "audio", "source", "iframe", "section", "sup", "sub", "dl", "dt", "dd", "abbr",
-    // SVG elements
-    "svg", "path", "circle", "rect", "ellipse", "line", "polyline", "polygon",
-    "g", "defs", "use", "text", "tspan", "clipPath", "mask", "pattern",
-    "linearGradient", "radialGradient", "stop", "filter",
-    "animate", "animateTransform", "animateMotion", "set",
-    "foreignObject", "marker", "symbol", "title", "desc", "metadata",
-    "feGaussianBlur", "feOffset", "feMerge", "feMergeNode", "feBlend",
-    "feColorMatrix", "feComposite", "feFlood", "feMorphology",
-    // Style element (for scoped @keyframes in SVG)
-    "style",
-  ],
-  protocols: {
-    ...defaultSchema.protocols,
-    href: ["http", "https", "irc", "ircs", "mailto", "xmpp", "kiwi", "kiwi-missing"],
-  },
-  attributes: withDataAttributeAliasesForSchema({
-    ...defaultSchema.attributes,
-    "*": [...(defaultSchema.attributes?.["*"] || []), "className", "style", "role", "id",
-      "data-footnotes", "data-footnote-ref", "data-footnote-backref",
-      "data-tag", "metastring",
-      "data-kiwi-directive", "data-quiz", "data-label", "data-ratio", "data-cols",
-      "data-control", "data-control-attrs", "data-var",
-      "data-width", "data-pin", "data-caption",
-      "data-kiwi-embed", "data-kiwi-target", "data-kiwi-width", "data-kiwi-pin",
-      // This schema is a copy of kiwiSanitizeSchema in lib/kiwiMarkdown.ts.
-      // The claim attributes come from a shared constant so that half of the
-      // duplication cannot drift — an omitted attribute here is not a render
-      // bug, it is silently stripped metadata.
-      ...CLAIM_DATA_ATTRIBUTES,
-      "aria-describedby", "aria-label"],
-    a: [...withUnrestrictedClassName(defaultSchema.attributes?.a || []), "data-kiwi-target", "data-kiwi-missing"],
-    iframe: ["src", "title", "className", "style"],
-    video: ["controls", "preload", "className"],
-    audio: ["controls", "preload", "className"],
-    source: ["src", "type"],
-    img: [...(defaultSchema.attributes?.img || []), "width", "height",
-      "data-kiwi-embed", "data-kiwi-target", "data-kiwi-width", "data-kiwi-pin"],
-    abbr: ["title"],
-    // SVG attributes
-    svg: ["viewBox", "xmlns", "xmlnsXlink", "width", "height", "fill", "stroke",
-      "className", "preserveAspectRatio", "overflow"],
-    path: ["d", "fill", "stroke", "strokeWidth", "strokeLinecap", "strokeLinejoin",
-      "opacity", "transform", "fillRule", "clipRule", "strokeDasharray", "strokeDashoffset"],
-    circle: ["cx", "cy", "r", "fill", "stroke", "strokeWidth", "opacity", "transform"],
-    rect: ["x", "y", "width", "height", "rx", "ry", "fill", "stroke", "strokeWidth", "opacity", "transform"],
-    ellipse: ["cx", "cy", "rx", "ry", "fill", "stroke", "strokeWidth", "opacity", "transform"],
-    line: ["x1", "y1", "x2", "y2", "stroke", "strokeWidth", "strokeLinecap", "opacity", "transform"],
-    polyline: ["points", "fill", "stroke", "strokeWidth", "strokeLinecap", "strokeLinejoin", "opacity", "transform"],
-    polygon: ["points", "fill", "stroke", "strokeWidth", "opacity", "transform"],
-    g: ["fill", "stroke", "strokeWidth", "opacity", "transform", "clipPath", "mask", "filter"],
-    defs: [],
-    use: ["href", "xlinkHref", "x", "y", "width", "height", "transform"],
-    text: ["x", "y", "dx", "dy", "textAnchor", "dominantBaseline", "fontSize",
-      "fontFamily", "fontWeight", "fill", "opacity", "transform"],
-    tspan: ["x", "y", "dx", "dy", "textAnchor", "dominantBaseline", "fontSize",
-      "fontFamily", "fontWeight", "fill"],
-    clipPath: ["id"],
-    mask: ["id", "x", "y", "width", "height", "maskUnits"],
-    pattern: ["id", "x", "y", "width", "height", "patternUnits", "patternTransform"],
-    linearGradient: ["id", "x1", "y1", "x2", "y2", "gradientUnits", "gradientTransform"],
-    radialGradient: ["id", "cx", "cy", "r", "fx", "fy", "gradientUnits", "gradientTransform"],
-    stop: ["offset", "stopColor", "stopOpacity"],
-    filter: ["id", "x", "y", "width", "height", "filterUnits"],
-    animate: ["attributeName", "from", "to", "values", "dur", "repeatCount",
-      "begin", "end", "fill", "keyTimes", "keySplines", "calcMode"],
-    animateTransform: ["attributeName", "type", "from", "to", "values", "dur",
-      "repeatCount", "begin", "end", "fill", "additive", "accumulate"],
-    animateMotion: ["path", "dur", "repeatCount", "begin", "end", "fill", "rotate", "keyPoints", "keyTimes"],
-    set: ["attributeName", "to", "begin", "dur", "end", "fill"],
-    foreignObject: ["x", "y", "width", "height"],
-    marker: ["id", "markerWidth", "markerHeight", "refX", "refY", "orient", "markerUnits"],
-    symbol: ["id", "viewBox", "preserveAspectRatio"],
-    feGaussianBlur: ["in", "stdDeviation", "result"],
-    feOffset: ["in", "dx", "dy", "result"],
-    feMerge: [],
-    feMergeNode: ["in"],
-    feBlend: ["in", "in2", "mode", "result"],
-    feColorMatrix: ["in", "type", "values", "result"],
-    feComposite: ["in", "in2", "operator", "k1", "k2", "k3", "k4", "result"],
-    feFlood: ["floodColor", "floodOpacity", "result"],
-    feMorphology: ["in", "operator", "radius", "result"],
-  }),
 };
 
 async function decorateBookTitles(order: BookOrder): Promise<BookOrder> {
@@ -235,100 +116,6 @@ function findEntry(node: TreeEntry | null | undefined, target: string): TreeEntr
   }
   return null;
 }
-
-const CALLOUT_PREFIXES: Array<{ emoji: string; cls: string }> = [
-  { emoji: "ℹ️", cls: "kiwi-callout-info" },
-  { emoji: "⚠️", cls: "kiwi-callout-warn" },
-  { emoji: "🛑", cls: "kiwi-callout-error" },
-];
-
-function splitCallout(text: string): { emoji: string; cls: string; rest: string } | null {
-  const trimmed = text.trimStart();
-  for (const p of CALLOUT_PREFIXES) {
-    if (trimmed.startsWith(p.emoji)) {
-      return { emoji: p.emoji, cls: p.cls, rest: trimmed.slice(p.emoji.length).trimStart() };
-    }
-  }
-  return null;
-}
-
-function flattenBlockquoteText(children: React.ReactNode): string {
-  if (typeof children === "string") return children;
-  if (!children) return "";
-  if (Array.isArray(children)) return children.map(flattenBlockquoteText).join("");
-  if (typeof children === "object" && "props" in (children as any)) {
-    return flattenBlockquoteText((children as any).props?.children);
-  }
-  return String(children);
-}
-
-function stripAdmonitionTag(children: React.ReactNode): React.ReactNode {
-  if (!Array.isArray(children)) return children;
-  let stripped = false;
-  return children.map((child) => {
-    if (stripped) return child;
-    // Skip whitespace-only text nodes that react-markdown inserts between elements
-    if (typeof child === "string" && !child.trim()) return child;
-    if (!child || typeof child !== "object" || !("props" in child)) return child;
-    const inner = (child as any).props?.children;
-    if (!inner) return child;
-    const arr = Array.isArray(inner) ? inner : [inner];
-    const first = arr[0];
-    if (typeof first !== "string") return child;
-    // Strip the [!TYPE] tag (+ optional fold marker + optional custom title) from the first line
-    const tagMatch = first.match(ADMONITION_TAG_RE);
-    if (!tagMatch) return child;
-    stripped = true;
-    // Remove everything up to and including the tag on the first line
-    const afterTag = first.slice(tagMatch[0].length);
-    // Also strip optional fold marker and custom title on the same line
-    const cleaned = afterTag.replace(/^[+-]?[^\S\n]*[^\n]*/, "");
-    // Remove leading newline left after stripping the first line
-    const trimmed = cleaned.replace(/^\n/, "");
-    const newChildren = trimmed ? [trimmed, ...arr.slice(1)] : arr.slice(1);
-    return { ...(child as any), props: { ...(child as any).props, children: newChildren } };
-  });
-}
-
-const ADMONITION_TYPES: Record<string, { icon: typeof Info; cls: string; label: string }> = {
-  // Blue family
-  NOTE:      { icon: Info,          cls: "kiwi-admonition-note",      label: "Note" },
-  INFO:      { icon: Info,          cls: "kiwi-admonition-note",      label: "Info" },
-  TODO:      { icon: ClipboardList, cls: "kiwi-admonition-note",      label: "Todo" },
-  // Green family
-  TIP:       { icon: Lightbulb,     cls: "kiwi-admonition-tip",       label: "Tip" },
-  HINT:      { icon: Lightbulb,     cls: "kiwi-admonition-tip",       label: "Hint" },
-  SUCCESS:   { icon: CheckCircle2,  cls: "kiwi-admonition-tip",       label: "Success" },
-  CHECK:     { icon: CheckCircle2,  cls: "kiwi-admonition-tip",       label: "Check" },
-  DONE:      { icon: ListChecks,    cls: "kiwi-admonition-tip",       label: "Done" },
-  // Purple family
-  IMPORTANT: { icon: CircleAlert,   cls: "kiwi-admonition-important", label: "Important" },
-  ABSTRACT:  { icon: ScrollText,    cls: "kiwi-admonition-important", label: "Abstract" },
-  SUMMARY:   { icon: ScrollText,    cls: "kiwi-admonition-important", label: "Summary" },
-  TLDR:      { icon: ScrollText,    cls: "kiwi-admonition-important", label: "TL;DR" },
-  EXAMPLE:   { icon: Zap,           cls: "kiwi-admonition-important", label: "Example" },
-  // Yellow family
-  WARNING:   { icon: TriangleAlert, cls: "kiwi-admonition-warning",   label: "Warning" },
-  CAUTION:   { icon: Flame,         cls: "kiwi-admonition-caution",   label: "Caution" },
-  ATTENTION: { icon: TriangleAlert, cls: "kiwi-admonition-warning",   label: "Attention" },
-  QUESTION:  { icon: HelpCircle,    cls: "kiwi-admonition-warning",   label: "Question" },
-  HELP:      { icon: HelpCircle,    cls: "kiwi-admonition-warning",   label: "Help" },
-  FAQ:       { icon: HelpCircle,    cls: "kiwi-admonition-warning",   label: "FAQ" },
-  // Red family
-  DANGER:    { icon: ShieldAlert,   cls: "kiwi-admonition-caution",   label: "Danger" },
-  FAILURE:   { icon: XCircle,       cls: "kiwi-admonition-caution",   label: "Failure" },
-  FAIL:      { icon: XCircle,       cls: "kiwi-admonition-caution",   label: "Fail" },
-  ERROR:     { icon: XCircle,       cls: "kiwi-admonition-caution",   label: "Error" },
-  BUG:       { icon: Bug,           cls: "kiwi-admonition-caution",   label: "Bug" },
-  MISSING:   { icon: FileQuestion,  cls: "kiwi-admonition-caution",   label: "Missing" },
-  // Gray family
-  QUOTE:     { icon: Quote,         cls: "kiwi-admonition-quote",     label: "Quote" },
-  CITE:      { icon: Quote,         cls: "kiwi-admonition-quote",     label: "Cite" },
-};
-
-// Build the admonition type regex dynamically from ADMONITION_TYPES keys
-const ADMONITION_TYPE_KEYS = Object.keys(ADMONITION_TYPES).join("|");
-const ADMONITION_TAG_RE = new RegExp(`^\\[!(${ADMONITION_TYPE_KEYS})\\]`);
 
 function parseMarkdownPage(content: string): { body: string; meta: Record<string, unknown> } {
   const fallback = splitFrontmatterBlock(content);
@@ -416,88 +203,6 @@ function stripDuplicateTitle(body: string, meta: Record<string, unknown>): strin
     return body.replace(/^\s*#\s+.+\n?/, "");
   }
   return body;
-}
-
-const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif", ".bmp", ".heic", ".heif", ".ico"]);
-const VIDEO_EXTS = new Set([".mp4", ".webm", ".ogv", ".mov"]);
-const AUDIO_EXTS = new Set([".mp3", ".ogg", ".wav", ".flac", ".m4a", ".opus", ".aac", ".weba"]);
-
-function classifyMedia(src: string): "image" | "video" | "audio" | "pdf" | "unknown" {
-  if (!src) return "unknown";
-  const url = src.split("?")[0].split("#")[0];
-  const dot = url.lastIndexOf(".");
-  if (dot === -1) return "unknown";
-  const ext = url.substring(dot).toLowerCase();
-  if (IMAGE_EXTS.has(ext)) return "image";
-  if (VIDEO_EXTS.has(ext)) return "video";
-  if (AUDIO_EXTS.has(ext)) return "audio";
-  if (ext === ".pdf") return "pdf";
-  return "unknown";
-}
-
-function KiwiMedia({ src, alt, width, height, rest }: {
-  src: string;
-  alt?: string;
-  width?: string | number;
-  height?: string | number;
-  rest: Record<string, unknown>;
-}) {
-  const url = useRawUrl(src);
-  switch (classifyMedia(src)) {
-    case "video":
-      return (
-        <figure className="kiwi-media">
-          <video key={url} controls preload="metadata" className="max-w-full rounded-md">
-            {url && <source src={url} />}
-          </video>
-          {alt && <figcaption className="text-sm text-muted-foreground mt-1">{alt}</figcaption>}
-        </figure>
-      );
-    case "audio":
-      return (
-        <figure className="kiwi-media">
-          <audio key={url} controls preload="metadata" className="w-full">
-            {url && <source src={url} />}
-          </audio>
-          {alt && <figcaption className="text-sm text-muted-foreground mt-1">{alt}</figcaption>}
-        </figure>
-      );
-    case "pdf":
-      return (
-        <figure className="kiwi-media">
-          <iframe
-            src={url}
-            title={alt || "PDF"}
-            className="w-full rounded-md border border-border"
-            style={{ height: "600px" }}
-          />
-          {alt && <figcaption className="text-sm text-muted-foreground mt-1">{alt}</figcaption>}
-        </figure>
-      );
-    default: {
-      const imgEl = (
-        <Zoom wrapElement="span" classDialog="kiwi-zoom-dialog" zoomMargin={32}>
-          <img
-            src={url}
-            alt={alt}
-            {...(width ? { width: Number(width) } : {})}
-            {...(height ? { height: Number(height) } : {})}
-            {...(rest as any)}
-          />
-        </Zoom>
-      );
-      // Show caption from alt text for standalone images
-      if (alt?.trim()) {
-        return (
-          <figure className="kiwi-figure">
-            {imgEl}
-            <figcaption className="kiwi-figcaption">{alt}</figcaption>
-          </figure>
-        );
-      }
-      return imgEl;
-    }
-  }
 }
 
 /**
@@ -693,6 +398,16 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
     if (!frontmatterTitle || !path) return bookOrder;
     return applyTitles(bookOrder, { [path]: frontmatterTitle });
   }, [bookOrder, frontmatterTitle, path]);
+
+  const remarkPlugins = useMemo(() => kiwiRemarkPlugins({ resolver, fromPath: path }), [resolver, path]);
+  const markdownComponents = useKiwiMarkdownComponents({
+    path,
+    navigate: nav,
+    onWikiLinkClick,
+    isComputedView: parsed.meta?.["kiwi-view"] === true,
+    typedFences,
+    typedFenceTags,
+  });
   const readingNav: BookNav | null = titledBook && path ? navForPath(titledBook, path) : null;
   const statusBadge = badges.find((b) => b.key === "status");
 
@@ -950,345 +665,9 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
               >
                 <ErrorBoundary>
                 <ReactMarkdown
-                  remarkPlugins={[
-                    remarkKiwiQuiz,
-                    remarkGfm,
-                    remarkMath,
-                    remarkMark,
-                    remarkInlineTags,
-                    remarkPageControls,
-                    remarkEmoji,
-                    remarkSupersub,
-                    remarkDefinitionList,
-                    remarkDirective,
-                    remarkKiwiDirectives,
-                    [remarkWikiLinks, { resolver, fromPath: path }],
-                  ]}
-                  rehypePlugins={[
-                    rehypeCodeMeta,
-                    rehypeRaw,
-                    [rehypeSanitize, sanitizeSchema],
-                    rehypeKatex,
-                    rehypeSlug,
-                    [rehypeAutolinkHeadings, { behavior: "wrap" }],
-                  ]}
-                  components={{
-                    a: ({ href, children, node: _node, ...rest }) => {
-                      const h = href ?? "";
-                      if (h.startsWith("#kiwi:")) {
-                        const raw = decodeHref(h.slice("#kiwi:".length));
-                        const hashIdx = raw.indexOf("#");
-                        const pagePath = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
-                        const anchor = hashIdx >= 0 ? raw.slice(hashIdx) : "";
-                        return (
-                          <WikiLinkPreview path={pagePath}>
-                            <a
-                              href={`/page/${pagePath}${anchor}`}
-                              onClick={(e) => {
-                                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                                e.preventDefault();
-                                if (onWikiLinkClick) onWikiLinkClick(pagePath);
-                                else nav(pagePath);
-                                if (anchor) {
-                                  requestAnimationFrame(() => {
-                                    setTimeout(() => {
-                                      const el = document.getElementById(anchor.slice(1));
-                                      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                                    }, 100);
-                                  });
-                                }
-                              }}
-                              {...(rest as any)}
-                              // The hover card stands in for the native title tooltip.
-                              title={undefined}
-                              className="wiki-link"
-                            >
-                              {children}
-                            </a>
-                          </WikiLinkPreview>
-                        );
-                      }
-                      if (h.startsWith("#kiwi-missing:")) {
-                        const target = decodeHref(h.slice("#kiwi-missing:".length));
-                        return (
-                          <WikiLinkPreview path={`${target}.md`} missing>
-                            <a
-                              href={`/page/${target}.md`}
-                              onClick={(e) => {
-                                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                                e.preventDefault();
-                                if (onWikiLinkClick) onWikiLinkClick(target);
-                                else nav(`${target}.md`);
-                              }}
-                              {...(rest as any)}
-                              title={undefined}
-                              className="wiki-link-missing"
-                            >
-                              {children}
-                              <span className="sr-only"> (missing page, click to create)</span>
-                            </a>
-                          </WikiLinkPreview>
-                        );
-                      }
-                      if (h.startsWith("#")) {
-                        return (
-                          <a
-                            href={h}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              const el = document.getElementById(h.slice(1));
-                              if (el) {
-                                el.scrollIntoView({ behavior: "smooth", block: "start" });
-                                history.replaceState(null, "", h);
-                              }
-                            }}
-                            {...(rest as any)}
-                          >
-                            {children}
-                          </a>
-                        );
-                      }
-
-                      const mdMatch = /^([^#]*\.md)(?:#(.+))?$/.exec(h);
-                      if (mdMatch && !h.startsWith("http")) {
-                        const relPage = decodeHref(mdMatch[1]);
-                        const anchor = mdMatch[2] ?? "";
-                        const dir = dirOf(path);
-                        const joined = dir ? `${dir}/${relPage}` : relPage;
-                        const resolved = normalizePath(joined);
-                        return (
-                          <a
-                            href={`/page/${resolved}${anchor ? `#${anchor}` : ""}`}
-                            onClick={(e) => {
-                              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                              e.preventDefault();
-                              nav(resolved);
-                              if (anchor) {
-                                requestAnimationFrame(() => {
-                                  setTimeout(() => {
-                                    const el = document.getElementById(anchor);
-                                    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                                  }, 150);
-                                });
-                              }
-                            }}
-                            {...(rest as any)}
-                          >
-                            {children}
-                          </a>
-                        );
-                      }
-
-                      return (
-                        <a
-                          href={h}
-                          target={h.startsWith("http") ? "_blank" : undefined}
-                          rel={h.startsWith("http") ? "noreferrer" : undefined}
-                          {...(rest as any)}
-                        >
-                          {children}
-                        </a>
-                      );
-                    },
-                    code: (props: any) => (
-                      <FenceBlock
-                        {...props}
-                        onNavigate={nav}
-                        pagePath={path}
-                        isComputedView={parsed.meta?.["kiwi-view"] === true}
-                        typedFences={typedFences}
-                        typedFenceTags={typedFenceTags}
-                      />
-                    ),
-                    pre: ({ children }) => <>{children}</>,
-                    span: ({ children, node: _node, ...rest }: any) => {
-                      const props = rest as Record<string, unknown>;
-                      if (props["data-kiwi-directive"] === "claim") {
-                        return (
-                          <KiwiClaim
-                            inline
-                            evidence={props["data-evidence"] as string | undefined}
-                            confidence={props["data-confidence"] as string | undefined}
-                            source={props["data-source"] as string | undefined}
-                          >
-                            {children}
-                          </KiwiClaim>
-                        );
-                      }
-                      if (props["data-kiwi-directive"] === "control") {
-                        return (
-                          <KiwiControl
-                            kind={String(props["data-control"] ?? "value")}
-                            attrs={parseControlAttrs(props["data-control-attrs"])}
-                          />
-                        );
-                      }
-                      return <span {...(rest as any)}>{children}</span>;
-                    },
-                    div: ({ children, node: _node, ...rest }: any) => {
-                      const props = rest as Record<string, unknown>;
-                      const directive = props["data-kiwi-directive"];
-                      if (directive === "quiz") {
-                        return (
-                          <ErrorBoundary>
-                            <KiwiQuiz specAttr={String(props["data-quiz"] ?? props["dataQuiz"] ?? "")} />
-                          </ErrorBoundary>
-                        );
-                      }
-                      if (directive === "tabs") {
-                        return <KiwiTabs>{children}</KiwiTabs>;
-                      }
-                      if (directive === "claim") {
-                        return (
-                          <KiwiClaim
-                            evidence={props["data-evidence"] as string | undefined}
-                            confidence={props["data-confidence"] as string | undefined}
-                            source={props["data-source"] as string | undefined}
-                          >
-                            {children}
-                          </KiwiClaim>
-                        );
-                      }
-                      if (directive === "columns") {
-                        return (
-                          <KiwiColumns
-                            ratio={props["data-ratio"] as string | undefined}
-                            cols={props["data-cols"] as string | undefined}
-                          >
-                            {children}
-                          </KiwiColumns>
-                        );
-                      }
-                      if (directive === "figure") {
-                        return (
-                          <KiwiFigure
-                            width={(props["data-width"] as FigureWidth | undefined) || "inline"}
-                            pin={props["data-pin"] === "true"}
-                            caption={props["data-caption"] as string | undefined}
-                          >
-                            {children}
-                          </KiwiFigure>
-                        );
-                      }
-                      return <div {...(rest as any)}>{children}</div>;
-                    },
-                    img: ({ src, alt, node: _node, width, height, ...rest }) => {
-                      let resolvedSrc = src as string;
-                      if (resolvedSrc && !resolvedSrc.startsWith("http") && !resolvedSrc.startsWith("/raw/") && !resolvedSrc.startsWith("/api/")) {
-                        if (resolvedSrc.startsWith("./") || (!resolvedSrc.startsWith("/") && !resolvedSrc.startsWith("data:"))) {
-                          const pageDir = dirOf(path);
-                          const rel = resolvedSrc.startsWith("./") ? resolvedSrc.slice(2) : resolvedSrc;
-                          resolvedSrc = pageDir ? `/raw/${pageDir}/${rel}` : `/raw/${rel}`;
-                        } else {
-                          resolvedSrc = resolvedSrc.startsWith("/") ? `/raw${resolvedSrc}` : `/raw/${resolvedSrc}`;
-                        }
-                      }
-                      const embedKind = ((rest as any)["data-kiwi-embed"] || (rest as any)["dataKiwiEmbed"]) as string | undefined;
-                      const embedTarget = ((rest as any)["data-kiwi-target"] || (rest as any)["dataKiwiTarget"]) as string | undefined;
-                      const rawPath = (resolvedSrc || "").replace(/^\/raw\//, "");
-                      const drawingPath = embedTarget
-                        || ((isExcalidrawFile(rawPath) || isCanvasFile(rawPath)) ? rawPath : "");
-                      if (embedKind || (drawingPath && (isExcalidrawFile(drawingPath) || isCanvasFile(drawingPath)))) {
-                        return (
-                          <KiwiEmbed
-                            path={drawingPath}
-                            display={{
-                              width: (((rest as any)["data-kiwi-width"] || (rest as any)["dataKiwiWidth"]) as FigureWidth | undefined) || "inline",
-                              pin: ((rest as any)["data-kiwi-pin"] || (rest as any)["dataKiwiPin"]) === "true",
-                              pixelWidth: width ? Number(width) : undefined,
-                              pixelHeight: height ? Number(height) : undefined,
-                              caption: typeof alt === "string" ? alt : undefined,
-                            }}
-                            onNavigate={nav}
-                          />
-                        );
-                      }
-                      return <KiwiMedia src={resolvedSrc} alt={typeof alt === "string" ? alt : undefined} width={width} height={height} rest={rest as Record<string, unknown>} />;
-                    },
-                    table: ScrollableTable,
-                    p: ({ children, node: _node, ...rest }) => {
-                      const arr = Array.isArray(children) ? children : [children];
-                      const first = arr[0];
-                      if (typeof first === "string") {
-                        const hit = splitCallout(first);
-                        if (hit) {
-                          const rest2 = [hit.rest, ...arr.slice(1)];
-                          return (
-                            <div className={`kiwi-callout ${hit.cls}`} role="note">
-                              <span className="mr-1.5">{hit.emoji}</span>
-                              {rest2}
-                            </div>
-                          );
-                        }
-                      }
-                      return <p {...(rest as any)}>{children}</p>;
-                    },
-                    blockquote: ({ children, node: _node, ...rest }: any) => {
-                      const flat = flattenBlockquoteText(children);
-                      // Match admonition tag on its own (first line only).
-                      // [^\S\n]* = horizontal whitespace only (no newline consumption).
-                      const admonitionRe = new RegExp(
-                        `^\\[!(${ADMONITION_TYPE_KEYS})\\]([+-])?[^\\S\\n]*(.*?)$`,
-                        "m"
-                      );
-                      const match = flat.match(admonitionRe);
-                      if (match) {
-                        const kind = match[1].toUpperCase() as keyof typeof ADMONITION_TYPES;
-                        const foldMarker = match[2] as "+" | "-" | undefined;
-                        const customTitle = match[3]?.trim() || "";
-                        const cfg = ADMONITION_TYPES[kind];
-                        if (cfg) {
-                          const Icon = cfg.icon;
-                          const displayTitle = customTitle || cfg.label;
-                          const stripped = stripAdmonitionTag(children);
-
-                          // Foldable callout: `-` means collapsed, `+` means expanded
-                          if (foldMarker) {
-                            return (
-                              <details
-                                className={`kiwi-admonition kiwi-admonition-foldable ${cfg.cls}`}
-                                open={foldMarker === "+"}
-                              >
-                                <summary className="kiwi-admonition-title">
-                                  <Icon className="h-4 w-4" />
-                                  <span>{displayTitle}</span>
-                                </summary>
-                                <div className="kiwi-admonition-body">
-                                  {stripped}
-                                </div>
-                              </details>
-                            );
-                          }
-
-                          return (
-                            <aside className={`kiwi-admonition ${cfg.cls}`} role="note">
-                              <div className="kiwi-admonition-title">
-                                <Icon className="h-4 w-4" />
-                                <span>{displayTitle}</span>
-                              </div>
-                              <div className="kiwi-admonition-body">
-                                {stripped}
-                              </div>
-                            </aside>
-                          );
-                        }
-                      }
-                      return <blockquote {...(rest as any)}>{children}</blockquote>;
-                    },
-                    section: ({ children, node: _node, ...rest }: any) => {
-                      const props = rest as Record<string, unknown>;
-                      if (props["data-footnotes"] !== undefined || props.className === "footnotes") {
-                        return (
-                          <section className="kiwi-footnotes" role="doc-endnotes" {...(rest as any)}>
-                            <hr className="my-6" />
-                            <h2 className="text-sm font-semibold text-muted-foreground mb-2">Footnotes</h2>
-                            {children}
-                          </section>
-                        );
-                      }
-                      return <section {...(rest as any)}>{children}</section>;
-                    },
-                  }}
+                  remarkPlugins={remarkPlugins}
+                  rehypePlugins={pageRehypePlugins}
+                  components={markdownComponents}
                 >
                   {stripObsidianComments(parsed.body)}
                 </ReactMarkdown>
@@ -1314,59 +693,9 @@ export function KiwiPage({ path = "", content: contentProp, tree, onNavigate, on
                     <div className="kiwi-prose kiwi-local-notes">
                       <ErrorBoundary>
                         <ReactMarkdown
-                          remarkPlugins={[
-                            remarkKiwiQuiz,
-                            remarkGfm,
-                            remarkMath,
-                            remarkMark,
-                            remarkInlineTags,
-                            remarkPageControls,
-                            remarkEmoji,
-                            remarkSupersub,
-                            remarkDefinitionList,
-                            remarkDirective,
-                            remarkKiwiDirectives,
-                            [remarkWikiLinks, { resolver, fromPath: path }],
-                          ]}
-                          rehypePlugins={[
-                            rehypeCodeMeta,
-                            rehypeRaw,
-                            [rehypeSanitize, sanitizeSchema],
-                            rehypeKatex,
-                            rehypeSlug,
-                          ]}
-                          components={{
-                            code: (props: any) => (
-                              <FenceBlock
-                                {...props}
-                                onNavigate={nav}
-                                pagePath={path}
-                                typedFences={typedFences}
-                                typedFenceTags={typedFenceTags}
-                              />
-                            ),
-                            pre: ({ children }) => <>{children}</>,
-                            table: ScrollableTable,
-                            span: ({ children, node: _node, ...rest }: any) => {
-                              const props = rest as Record<string, unknown>;
-                              if (props["data-kiwi-directive"] === "control") {
-                                return (
-                                  <KiwiControl
-                                    kind={String(props["data-control"] ?? "value")}
-                                    attrs={parseControlAttrs(props["data-control-attrs"])}
-                                  />
-                                );
-                              }
-                              return <span {...(rest as any)}>{children}</span>;
-                            },
-                            div: ({ children, node: _node, ...rest }: any) => {
-                              const props = rest as Record<string, unknown>;
-                              if (props["data-kiwi-directive"] === "quiz") {
-                                return <KiwiQuiz specAttr={String(props["data-quiz"] ?? props["dataQuiz"] ?? "")} />;
-                              }
-                              return <div {...(rest as any)}>{children}</div>;
-                            },
-                          }}
+                          remarkPlugins={remarkPlugins}
+                          rehypePlugins={notesRehypePlugins}
+                          components={markdownComponents}
                         >
                           {stripObsidianComments(localNote.replace(/^---[\s\S]*?---\n*/, ""))}
                         </ReactMarkdown>
@@ -1753,17 +1082,6 @@ function formatFrontmatterValue(value: unknown): string {
   if (Array.isArray(value)) return value.map(formatFrontmatterValue).join(", ");
   if (typeof value === "object") return JSON.stringify(value, null, 2);
   return String(value);
-}
-
-/** The attrs a `{% … /%}` tag carried, round-tripped through its data attribute. */
-function parseControlAttrs(raw: unknown): Record<string, string | number | boolean> {
-  if (typeof raw !== "string") return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 function frontmatterBadges(
