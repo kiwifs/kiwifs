@@ -1,4 +1,4 @@
-import { useState, createElement, type ReactNode } from "react";
+import { createContext, useContext, useState, createElement, type ReactNode } from "react";
 import {
   mockTree,
   mockMarkdownRich,
@@ -100,6 +100,20 @@ function resolveFileContent(
   return { content: overrides.fileContent ?? mockMarkdownRich, status: 200 };
 }
 
+function treeHasFile(entry: typeof mockTree, path: string): boolean {
+  if (!entry.isDir) return entry.path === path;
+  return (entry.children ?? []).some((child) => treeHasFile(child, path));
+}
+
+function peekSnippet(content: string): string {
+  const body = content.replace(/^---\n[\s\S]*?\n---\n/, "");
+  const para = body.split(/\n\s*\n/).find((block) => {
+    const t = block.trim();
+    return t && !t.startsWith("#") && !t.startsWith("```") && !t.startsWith(">");
+  });
+  return para?.trim() ?? "";
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -176,6 +190,24 @@ function createMockFetch(overrides: MockOverrides = {}) {
         return jsonResponse({
           path,
           comments: overrides.comments ?? mockComments,
+        });
+      }
+
+      if (url.includes("/peek") && method === "GET") {
+        const path = new URL(url, window.location.origin).searchParams.get("path") ?? "";
+        if (!treeHasFile(overrides.tree ?? mockTree, path)) {
+          return jsonResponse({ error: "not found" }, 404);
+        }
+        const { content } = resolveFileContent(url, overrides);
+        return jsonResponse({
+          path,
+          title: path.split("/").pop() ?? path,
+          frontmatter: null,
+          snippet: peekSnippet(content),
+          links_out: [],
+          links_in: [],
+          word_count: content.split(/\s+/).filter(Boolean).length,
+          headings: [],
         });
       }
 
@@ -651,8 +683,12 @@ function createMockFetch(overrides: MockOverrides = {}) {
   return { mockFetch, originalFetch };
 }
 
+const MockApiInstalled = createContext(false);
+
 /**
  * Wrapper component that installs mock fetch synchronously before children render.
+ * Nested inside another provider it does nothing, so the outer story's
+ * overrides stay in force.
  */
 export function MockApiProvider({
   children,
@@ -661,17 +697,19 @@ export function MockApiProvider({
   children: ReactNode;
   overrides?: MockOverrides;
 }) {
+  const nested = useContext(MockApiInstalled);
   // Install mock synchronously on first render via useState initializer.
   // No cleanup — the mock stays for the lifetime of the page, which avoids
   // StrictMode double-effect ordering issues (child effects run before
   // parent effects, so App's fetches would hit the real server if cleanup
   // temporarily restored window.fetch).
   useState(() => {
+    if (nested) return;
     const { mockFetch } = createMockFetch(overrides);
     window.fetch = mockFetch as typeof window.fetch;
   });
 
-  return createElement("div", null, children);
+  return createElement(MockApiInstalled.Provider, { value: true }, createElement("div", null, children));
 }
 
 export function installMockFetch(overrides: MockOverrides = {}): () => void {

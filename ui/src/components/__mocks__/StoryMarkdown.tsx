@@ -3,10 +3,10 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import { buildResolver } from "@kw/lib/wikiLinks";
 import { kiwiRehypePlugins, kiwiRemarkPlugins, useKiwiMarkdownComponents } from "@kw/lib/markdownPipeline";
 import { stripObsidianComments } from "@kw/lib/remarkPlugins";
+import { MockApiProvider } from "./apiMock";
 import { mockTree } from "./data";
 
 const resolver = buildResolver(mockTree);
-const remarkPlugins = kiwiRemarkPlugins({ resolver });
 const rehypePlugins = kiwiRehypePlugins();
 const noop = () => {};
 
@@ -29,7 +29,8 @@ const storyImg: Components["img"] = ({ src, alt, node: _node, ...rest }) => (
 /**
  * Markdown in stories, through the same pipeline as KiwiPage: fences,
  * directives, admonitions, quizzes, sanitizing and code meta all run.
- * Pass body-only markdown (frontmatter already stripped).
+ * Pass body-only markdown (frontmatter already stripped). Wiki-link hover
+ * previews read the mock API, installed here unless the story already has one.
  */
 export function StoryMarkdown({
   children,
@@ -45,13 +46,16 @@ export function StoryMarkdown({
   path?: string;
   onNavigate?: (path: string) => void;
 }) {
+  const remarkPlugins = useMemo(() => kiwiRemarkPlugins({ resolver, fromPath: path }), [path]);
   const base = useKiwiMarkdownComponents({ path, navigate: onNavigate });
   const components = useMemo(() => ({ ...base, img: storyImg }), [base]);
   return (
-    <div ref={innerRef as React.Ref<HTMLDivElement>} className={className}>
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
-        {stripObsidianComments(children)}
-      </ReactMarkdown>
-    </div>
+    <MockApiProvider>
+      <div ref={innerRef as React.Ref<HTMLDivElement>} className={className}>
+        <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components}>
+          {stripObsidianComments(children)}
+        </ReactMarkdown>
+      </div>
+    </MockApiProvider>
   );
 }

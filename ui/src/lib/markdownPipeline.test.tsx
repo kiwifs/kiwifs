@@ -3,9 +3,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { kiwiRehypePlugins, kiwiRemarkPlugins, useKiwiMarkdownComponents } from "./markdownPipeline";
+import * as kiwiMarkdown from "./kiwiMarkdown";
 import { kiwiSanitizeSchema } from "./kiwiMarkdown";
+import { buildResolver } from "./wikiLinks";
+import type { TreeEntry } from "./api";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -35,10 +38,17 @@ function Page({ md, onNavigate }: { md: string; onNavigate: (p: string) => void 
   );
 }
 
-async function settle() {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, 50));
-  });
+// Lazily loaded blocks (kiwi-app, tabs content) resolve on their own schedule.
+async function waitForElement(selector: string): Promise<Element> {
+  return vi.waitFor(
+    async () => {
+      await act(async () => {});
+      const el = container.querySelector(selector);
+      if (!el) throw new Error(`${selector} did not render`);
+      return el;
+    },
+    { timeout: 5000, interval: 20 },
+  );
 }
 
 describe("useKiwiMarkdownComponents", () => {
@@ -57,13 +67,10 @@ describe("useKiwiMarkdownComponents", () => {
   it("does not remount a kiwi-app when the page re-renders", async () => {
     const md = "```kiwi-app id=x\n<p>a</p>\n<p>b</p>\n```\n";
     await act(async () => root.render(<Page md={md} onNavigate={() => {}} />));
-    await settle();
-    const before = container.querySelector("iframe");
-    expect(before).not.toBeNull();
+    const before = await waitForElement("iframe");
 
     await act(async () => root.render(<Page md={md} onNavigate={() => {}} />));
-    await settle();
-    expect(container.querySelector("iframe")).toBe(before);
+    expect(await waitForElement("iframe")).toBe(before);
   });
 
   it("renders fences, directives and admonitions", async () => {
@@ -83,9 +90,45 @@ describe("useKiwiMarkdownComponents", () => {
       "```",
     ].join("\n");
     await act(async () => root.render(<Page md={md} onNavigate={() => {}} />));
-    await settle();
+    const tabs = await waitForElement(".kiwi-tabs");
+    expect(tabs.querySelector('[role="tab"]')?.textContent).toBe("One");
+    expect(tabs.textContent).toContain("first");
     expect(container.querySelector(".kiwi-admonition-note")).not.toBeNull();
     expect(container.innerHTML).not.toContain("language-mermaid");
+  });
+});
+
+describe("kiwiRemarkPlugins + kiwiRehypePlugins", () => {
+  it("keeps wiki-link hrefs and directive markers through sanitize", async () => {
+    const tree: TreeEntry = {
+      path: "",
+      name: "",
+      isDir: true,
+      children: [{ path: "guides/target.md", name: "target.md", isDir: false }],
+    };
+    const md = ["See [[target]].", "", ":::columns", "left", ":::"].join("\n");
+    await act(async () =>
+      root.render(
+        <ReactMarkdown
+          remarkPlugins={kiwiRemarkPlugins({ resolver: buildResolver(tree), fromPath: "guides/a.md" })}
+          rehypePlugins={rehype}
+        >
+          {md}
+        </ReactMarkdown>,
+      ),
+    );
+    expect(container.querySelector("a")?.getAttribute("href")).toBe("#kiwi:guides/target.md");
+    expect(container.querySelector("div")?.getAttribute("data-kiwi-directive")).toBe("columns");
+  });
+});
+
+describe("@kiwifs/ui plugin exports", () => {
+  it("are the pipeline's chains behind the positional signatures", () => {
+    const resolver = buildResolver(null);
+    expect(kiwiMarkdown.kiwiRemarkPlugins(resolver, "a.md")).toEqual(kiwiRemarkPlugins({ resolver, fromPath: "a.md" }));
+    expect(kiwiMarkdown.kiwiRemarkPlugins()).toEqual(kiwiRemarkPlugins());
+    expect(kiwiMarkdown.kiwiRehypePlugins()).toEqual(kiwiRehypePlugins());
+    expect(kiwiMarkdown.kiwiRehypePlugins(false)).toEqual(kiwiRehypePlugins({ autolinkHeadings: false }));
   });
 });
 

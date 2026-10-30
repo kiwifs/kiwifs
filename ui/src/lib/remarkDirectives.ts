@@ -19,7 +19,7 @@ import { parseFigureAttrs } from "./figureLayout";
  * rehype-sanitize strips anything not allow-listed, so an attribute missing
  * from a schema does not fail loudly — the claim renders as an unmarked div
  * with none of the metadata that makes it a claim. `kiwiSanitizeSchema` in
- * `lib/kiwiMarkdown.ts` splices this in; it is the only schema.
+ * `lib/kiwiSanitizeSchema.ts` splices this in; it is the only schema.
  */
 export const CLAIM_DATA_ATTRIBUTES: string[] = [
   "data-evidence",
