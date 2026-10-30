@@ -63,7 +63,7 @@ ${blk.progress({
   ],
 })}
 
-${blk.counterApp}
+${blk.pipelineApp}
 
 ## Snippets the user approved
 
@@ -460,7 +460,7 @@ append_only: true
 
 Automated and manual promotions from episodic → semantic memory.
 
-${blk.eventCounterApp}
+${blk.eventStatApp}
 
 ## Recent consolidations
 

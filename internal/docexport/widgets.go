@@ -16,7 +16,23 @@ import (
 // `activeIndices`. Rendering a real picture needs a headless pass; this is the
 // honest text version until then.
 func RewriteWidgetFences(content []byte) []byte {
-	return []byte(markdown.StripWidgetFences(string(content), renderStaticFence))
+	out := markdown.StripWidgetFences(string(content), renderStaticFence)
+	return []byte(markdown.StripAppFences(out, renderStaticApp))
+}
+
+// renderStaticApp stands in for a kiwi-app. Its body is minified HTML and
+// script, which in a PDF is pages of noise; the title and caption are what a
+// reader can use.
+func renderStaticApp(block markdown.AppFenceBlock) string {
+	var buf strings.Builder
+	if block.Title != "" {
+		buf.WriteString("> **" + block.Title + "**\n>\n")
+	}
+	if block.Caption != "" {
+		buf.WriteString("> " + block.Caption + "\n>\n")
+	}
+	buf.WriteString("> *Interactive app — open this page in KiwiFS to use it.*\n")
+	return buf.String()
 }
 
 func renderStaticFence(block markdown.WidgetFenceBlock) string {

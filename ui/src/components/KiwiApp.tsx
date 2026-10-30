@@ -1,227 +1,329 @@
 /**
- * KiwiApp — Sandboxed JavaScript execution in markdown.
+ * KiwiApp — sandboxed HTML/CSS/JS from ```kiwi-app fences.
  *
- * Renders HTML+CSS+JS from ```kiwi-app code blocks inside a sandboxed iframe.
- * The iframe uses `srcdoc` with `sandbox="allow-scripts"` which enables JS
- * but blocks access to the parent DOM, cookies, navigation, forms, and popups.
+ * The iframe runs with `sandbox="allow-scripts"` only: no same-origin, so the
+ * app cannot reach the page, its cookies or the API. Everything it gets from
+ * the host arrives as a message, and every message it sends is checked against
+ * the iframe's own window.
  *
- * Features:
- * - Auto-height via ResizeObserver + postMessage
- * - Dark mode forwarding via CSS custom properties
- * - Configurable height via code fence meta: ```kiwi-app height=400
- * - Copy source button
- * - Error boundary integration
+ * Into every app goes the `kiwi` runtime (resize, theme, steps, key
+ * forwarding) and, unless `kit=off`, the kit stylesheet. The srcdoc is built
+ * once per source: a theme change is posted to the running app, never baked
+ * into a new srcdoc, so a reader on step 7 stays on step 7.
  *
- * Markdown syntax:
  * ````markdown
- * ```kiwi-app height=500
- * <!DOCTYPE html>
- * <html>
- * <body>
- *   <h1>Hello from sandbox!</h1>
- *   <script>
- *     document.querySelector('h1').addEventListener('click', () => {
- *       alert('Clicked!');
- *     });
- *   </script>
- * </body>
- * </html>
+ * ```kiwi-app id=lease width=wide caption="A lease outliving its holder"
+ * <div class="k-app">…</div>
+ * <script>kiwi.steps({ count: 5, onStep: render })</script>
  * ```
  * ````
+ *
+ * See docs/APPS.md for the meta options, the kit classes and the runtime API.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { api } from "@kw/lib/api";
+import { figureClassName } from "@kw/lib/figureLayout";
+import { usePlayback, type Step } from "@kw/widgets/usePlayback";
+import { PlaybackControls } from "@kw/widgets/PlaybackControls";
+import { setClockPlaying, playClock, clockSnapshot } from "@kw/widgets/playbackClock";
+import { currentHostTheme, subscribeHostTheme, type HostTheme } from "./kiwiApp/hostTheme";
+import { buildSrcDoc } from "./kiwiApp/srcdoc";
+import { parseAppMeta, resolveAppSrc } from "./kiwiApp/meta";
 
 interface KiwiAppProps {
   source: string;
   meta?: string;
+  /** The page this fence sits on; `src=` resolves against its folder. */
+  pagePath?: string;
+  onNavigate?: (path: string) => void;
 }
 
-/**
- * Parse optional height from code fence meta string.
- * e.g. "height=400" → 400
- */
-function parseMetaHeight(meta?: string): number | null {
-  if (!meta) return null;
-  const match = meta.match(/height=(\d+)/);
-  return match ? parseInt(match[1], 10) : null;
+const PROTOCOL = 1;
+const STATIC_STEPS: Step<number>[] = [{ state: 0, label: "" }];
+const MIN_HEIGHT = 40;
+const MAX_HEIGHT = 6000;
+
+interface StepsRegistration {
+  count: number;
+  labels: string[] | null;
+  durations: (number | null)[] | null;
 }
 
-/**
- * Read CSS custom properties from the host document for dark mode forwarding.
- */
-function getThemeVars(): string {
-  const root = document.documentElement;
-  const computed = getComputedStyle(root);
-  const isDark = root.classList.contains("dark");
+type RemoteFile =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ok"; content: string }
+  | { status: "error"; message: string };
 
-  // Extract common theme variables used by kiwifs
-  const vars = [
-    "--background",
-    "--foreground",
-    "--muted",
-    "--muted-foreground",
-    "--border",
-    "--primary",
-    "--primary-foreground",
-    "--card",
-    "--card-foreground",
-    "--accent",
-    "--accent-foreground",
-  ];
-
-  const cssLines: string[] = [];
-  for (const v of vars) {
-    const val = computed.getPropertyValue(v).trim();
-    if (val) cssLines.push(`  ${v}: ${val};`);
-  }
-
-  return `
-:root {
-${cssLines.join("\n")}
-  color-scheme: ${isDark ? "dark" : "light"};
-}
-body {
-  background: ${isDark ? "#1a1a2e" : "#ffffff"};
-  color: ${isDark ? "#e5e5e5" : "#1a1a1a"};
-}
-`;
-}
-
-/**
- * Build the complete srcdoc with auto-resize script and theme injection.
- */
-function buildSrcDoc(source: string): string {
-  const themeCSS = getThemeVars();
-
-  // Auto-resize script: observes body size and posts height to parent
-  const resizeScript = `
-<script>
-(function() {
-  var _kiwi_ro;
-  function postHeight() {
-    var h = Math.max(
-      document.body.scrollHeight,
-      document.body.offsetHeight,
-      document.documentElement.scrollHeight
-    );
-    window.parent.postMessage({ type: "kiwi-app-resize", height: h }, "*");
-  }
-  if (typeof ResizeObserver !== "undefined") {
-    _kiwi_ro = new ResizeObserver(postHeight);
-    _kiwi_ro.observe(document.body);
-  }
-  window.addEventListener("load", postHeight);
-  // Also fire after a short delay for dynamic content
-  setTimeout(postHeight, 100);
-  setTimeout(postHeight, 500);
-})();
-</script>`;
-
-  const themeStyle = `<style data-kiwi-theme>${themeCSS}</style>`;
-
-  // If source already has a <head>, inject theme into it.
-  // Otherwise prepend theme + resize script.
-  if (/<head[\s>]/i.test(source)) {
-    // Inject after <head>
-    const injected = source.replace(
-      /(<head[^>]*>)/i,
-      `$1\n${themeStyle}`
-    );
-    // Append resize script before </body> or at end
-    if (/<\/body>/i.test(injected)) {
-      return injected.replace(/<\/body>/i, `${resizeScript}\n</body>`);
-    }
-    return injected + resizeScript;
-  }
-
-  // No <head> tag — wrap everything
-  return `<!DOCTYPE html>
-<html>
-<head>${themeStyle}</head>
-<body>
-${source}
-${resizeScript}
-</body>
-</html>`;
-}
-
-export function KiwiApp({ source, meta }: KiwiAppProps) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState<number>(parseMetaHeight(meta) || 300);
-  const [copied, setCopied] = useState(false);
-  const fixedHeight = parseMetaHeight(meta);
-
-  // Listen for resize messages from the iframe
+function useAppFile(path: string | null): RemoteFile {
+  const [state, setState] = useState<RemoteFile & { path?: string | null }>({ status: "idle" });
   useEffect(() => {
-    if (fixedHeight) return; // Don't auto-resize if height is explicitly set
+    if (!path) return;
+    let live = true;
+    setState({ status: "loading", path });
+    api.readFile(path).then(
+      ({ content }) => live && setState({ status: "ok", content, path }),
+      (err: unknown) =>
+        live && setState({ status: "error", message: err instanceof Error ? err.message : String(err), path }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [path]);
+  if (!path) return { status: "idle" };
+  return state.path === path ? state : { status: "loading" };
+}
 
-    function handleMessage(event: MessageEvent) {
-      if (
-        event.data &&
-        event.data.type === "kiwi-app-resize" &&
-        typeof event.data.height === "number"
-      ) {
-        // Only accept messages from our iframe
-        if (iframeRef.current && event.source === iframeRef.current.contentWindow) {
-          const newHeight = Math.max(50, Math.min(event.data.height + 16, 2000));
-          setHeight(newHeight);
+function readRegistration(d: Record<string, unknown>): StepsRegistration | null {
+  const count = Math.floor(Number(d.count));
+  if (!Number.isFinite(count) || count < 1) return null;
+  const capped = Math.min(count, 10_000);
+  return {
+    count: capped,
+    labels: Array.isArray(d.labels) ? d.labels.slice(0, capped).map((l) => String(l ?? "")) : null,
+    durations: Array.isArray(d.durations)
+      ? d.durations.slice(0, capped).map((n) => (typeof n === "number" && n > 0 ? n : null))
+      : null,
+  };
+}
+
+export function KiwiApp({ source, meta, pagePath }: KiwiAppProps) {
+  const opts = useMemo(() => parseAppMeta(meta), [meta]);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const figureRef = useRef<HTMLElement>(null);
+  const [measured, setMeasured] = useState<number | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [registration, setRegistration] = useState<StepsRegistration | null>(null);
+
+  const srcPath = opts.src ? resolveAppSrc(pagePath, opts.src) : null;
+  const remote = useAppFile(srcPath);
+  const html = srcPath ? (remote.status === "ok" ? remote.content : null) : source;
+
+  // Deliberately keyed on the HTML and the kit flag alone. The theme is read
+  // for first paint and then travels by message.
+  const srcDoc = useMemo(
+    () => (html == null ? null : buildSrcDoc(html, { kit: opts.kit, theme: currentHostTheme() })),
+    [html, opts.kit],
+  );
+
+  useEffect(() => {
+    setLoaded(false);
+    setRegistration(null);
+  }, [srcDoc]);
+
+  const steps = useMemo<Step<number>[]>(() => {
+    if (!registration) return STATIC_STEPS;
+    return Array.from({ length: registration.count }, (_, i) => ({
+      state: i,
+      label: registration.labels?.[i] || `Step ${i + 1}`,
+      duration: registration.durations?.[i] ?? undefined,
+    }));
+  }, [registration]);
+
+  const pb = usePlayback(steps, {
+    containerRef: figureRef,
+    // Until the app registers steps there is nothing to own a `#?step=` key.
+    clock: registration ? opts.clock : null,
+    autoPlay: opts.autoplay && registration != null,
+    loop: opts.loop,
+  });
+  const pbRef = useRef(pb);
+  pbRef.current = pb;
+
+  const post = useCallback((type: string, data: Record<string, unknown> = {}) => {
+    iframeRef.current?.contentWindow?.postMessage({ source: "kiwi-app", v: PROTOCOL, type, ...data }, "*");
+  }, []);
+
+  const postTheme = useCallback((theme: HostTheme) => post("theme", { vars: theme.vars, dark: theme.dark }), [post]);
+
+  useEffect(() => subscribeHostTheme(postTheme), [postTheme]);
+
+  useEffect(() => {
+    if (registration) post("steps:set", { index: pb.currentStep });
+  }, [registration, pb.currentStep, post]);
+
+  const fixedHeight = opts.height;
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      const frame = iframeRef.current;
+      if (!frame || event.source !== frame.contentWindow) return;
+      const d = event.data as Record<string, unknown> | null;
+      if (!d || typeof d !== "object" || d.source !== "kiwi-app" || d.v !== PROTOCOL) return;
+      const p = pbRef.current;
+      switch (d.type) {
+        case "resize":
+          if (!fixedHeight && typeof d.height === "number" && Number.isFinite(d.height)) {
+            setMeasured(Math.max(MIN_HEIGHT, Math.min(Math.ceil(d.height), MAX_HEIGHT)));
+          }
+          break;
+        case "ready":
+          setLoaded(true);
+          break;
+        case "steps:register": {
+          const reg = readRegistration(d);
+          if (reg) setRegistration(reg);
+          break;
         }
+        case "steps:next":
+          p.stepForward();
+          break;
+        case "steps:prev":
+          p.stepBack();
+          break;
+        case "steps:seek":
+          if (typeof d.index === "number") p.setCurrentStep(d.index);
+          break;
+        case "steps:reset":
+          p.reset();
+          break;
+        case "steps:play":
+          p.play();
+          break;
+        case "steps:pause":
+          p.stop();
+          break;
+        case "key":
+          forwardKey(String(d.key), p.clockId, p);
+          break;
       }
     }
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
   }, [fixedHeight]);
 
-  const srcDoc = buildSrcDoc(source);
+  const onLoad = useCallback(() => {
+    setLoaded(true);
+    // The theme may have changed between building the srcdoc and the load.
+    postTheme(currentHostTheme());
+  }, [postTheme]);
 
-  const handleCopySource = useCallback(async () => {
+  const copySource = useCallback(async () => {
+    const text = html ?? source;
     try {
-      await navigator.clipboard.writeText(source);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(text);
     } catch {
       const textarea = document.createElement("textarea");
-      textarea.value = source;
+      textarea.value = text;
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand("copy");
       document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
     }
-  }, [source]);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [html, source]);
 
-  return (
-    <figure className="kiwi-app not-prose my-4 relative group">
-      <div className="rounded-md border border-border overflow-hidden bg-background">
-        {/* Toolbar */}
-        <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Interactive App</span>
-          <button
-            onClick={handleCopySource}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded hover:bg-muted"
-            title="Copy source HTML"
-          >
-            {copied ? "Copied!" : "Copy HTML"}
-          </button>
+  const label = opts.title || "Interactive app";
+  const framed = opts.chrome !== "none";
+  const height = fixedHeight ?? measured ?? 160;
+  const fallbackText = source.trim();
+
+  let body: ReactNode;
+  if (srcPath && remote.status === "error") {
+    body = (
+      <div className="kiwi-app-error px-4 py-3 text-sm" role="alert">
+        <div className="font-medium text-destructive">Could not load app</div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          <code className="font-mono">{srcPath}</code> — {remote.message}
         </div>
-
-        {/* Sandboxed iframe */}
+        {fallbackText && <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">{fallbackText}</p>}
+      </div>
+    );
+  } else if (srcDoc == null) {
+    body = (
+      <div className="px-4 py-3 text-sm text-muted-foreground" aria-busy="true">
+        {fallbackText || <div className="h-24 animate-pulse rounded bg-muted" />}
+      </div>
+    );
+  } else {
+    body = (
+      <div className="relative">
         <iframe
           ref={iframeRef}
           srcDoc={srcDoc}
           sandbox="allow-scripts"
-          style={{
-            width: "100%",
-            height: fixedHeight || height,
-            border: "none",
-            display: "block",
-          }}
-          title="Embedded kiwi-app"
+          onLoad={onLoad}
+          style={{ width: "100%", height, border: "none", display: "block" }}
+          title={label}
         />
+        {!loaded && <div className="absolute inset-0 animate-pulse bg-muted/60" aria-hidden />}
       </div>
+    );
+  }
+
+  const copyButton = (
+    <button
+      type="button"
+      onClick={copySource}
+      className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded hover:bg-muted"
+      title="Copy source HTML"
+    >
+      {copied ? "Copied!" : "Copy HTML"}
+    </button>
+  );
+
+  return (
+    <figure
+      ref={figureRef}
+      className={`kiwi-app not-prose group relative ${figureClassName({ width: opts.width, pin: false })}`}
+      id={opts.id}
+      data-chrome={opts.chrome}
+      data-width={opts.width}
+      aria-label={opts.title || undefined}
+      tabIndex={-1}
+    >
+      <div className={framed ? "rounded-md border border-border overflow-hidden bg-background" : undefined}>
+        {opts.chrome === "full" && (
+          <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-1.5">
+            <span className="text-xs font-medium text-muted-foreground">{label}</span>
+            {copyButton}
+          </div>
+        )}
+        {body}
+        {opts.chrome === "minimal" && (
+          <div className="absolute right-1.5 top-1.5 rounded bg-background/80 opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            {copyButton}
+          </div>
+        )}
+        {opts.hostControls && registration && (
+          <div className={framed ? "border-t border-border px-3 py-2" : "mt-2"}>
+            <PlaybackControls pb={pb} />
+          </div>
+        )}
+      </div>
+      {opts.caption && <figcaption className="kiwi-figcaption">{opts.caption}</figcaption>}
     </figure>
   );
+}
+
+/** The same keys, with the same meaning, as usePlayback's own handler. */
+function forwardKey(
+  key: string,
+  clockId: string,
+  p: Pick<ReturnType<typeof usePlayback>, "stepForward" | "stepBack" | "setCurrentStep" | "totalSteps">,
+) {
+  if (!clockId) return;
+  switch (key) {
+    case "ArrowRight":
+      setClockPlaying(clockId, false);
+      p.stepForward();
+      break;
+    case "ArrowLeft":
+      setClockPlaying(clockId, false);
+      p.stepBack();
+      break;
+    case " ":
+      if (clockSnapshot(clockId).playing) setClockPlaying(clockId, false);
+      else playClock(clockId);
+      break;
+    case "Home":
+      p.setCurrentStep(0);
+      break;
+    case "End":
+      p.setCurrentStep(p.totalSteps - 1);
+      break;
+  }
 }

@@ -122,3 +122,27 @@ func TestRewriteWidgetFencesUsesTheOpeningLineCaption(t *testing.T) {
 		t.Errorf("expected the opening-line caption first:\n%s", got)
 	}
 }
+
+func TestRewriteWidgetFencesReplacesKiwiApps(t *testing.T) {
+	page := "# Leases\n\n" +
+		"```kiwi-app id=lease title=\"Lease timeline\" caption=\"A paused worker outlives its lease\"\n" +
+		"<div class=\"k-app\"><script>kiwi.steps({count: 4})</script></div>\n" +
+		"```\n\n" +
+		"```array\nvalues: [1, 2]\n```\n\n" +
+		"After.\n"
+	got := string(RewriteWidgetFences([]byte(page)))
+	for _, want := range []string{
+		"> **Lease timeline**",
+		"> A paused worker outlives its lease",
+		"Interactive app — open this page in KiwiFS to use it.",
+		"Interactive array widget",
+		"After.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "kiwi.steps") || strings.Contains(got, "```kiwi-app") {
+		t.Errorf("the app's HTML should not reach the export:\n%s", got)
+	}
+}

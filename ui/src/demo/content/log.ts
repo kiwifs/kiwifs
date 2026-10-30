@@ -76,7 +76,7 @@ ${blk.progress({
 - **Correlation:** change:CHG-2026-0612
 - **Details:** Increased \`proxy_read_timeout\` 60s → 120s for long-lived SSE connections. Peer review approved by sam@corp.example.
 
-${blk.eventCounterApp}
+${blk.eventStatApp}
 
 ## 2026-06-20T15:22:41Z | agent.search.query.v1
 
