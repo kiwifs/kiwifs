@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setBaseOverride, setCurrentSpace, setPrimarySpace } from "./api";
-import { clearRawUrlCache, peekRawUrl, rawPathOf, resolveRawUrl } from "./rawUrl";
+import { clearRawUrlCache, pageAssetUrl, peekRawUrl, rawPathOf, resolveRawUrl } from "./rawUrl";
 
 function signResponse(path: string, expiresInMs = 45 * 60 * 1000) {
   return new Response(
@@ -72,5 +72,23 @@ describe("rawUrl", () => {
   it("falls back to the unsigned URL when signing fails", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("unauthorized", { status: 401 })));
     await expect(resolveRawUrl("/raw/blog/cover.png")).resolves.toBe("/raw/blog/cover.png");
+  });
+});
+
+describe("pageAssetUrl", () => {
+  it("resolves relative sources against the page's folder", () => {
+    expect(pageAssetUrl("img.png", "notes/a.md")).toBe("/raw/notes/img.png");
+    expect(pageAssetUrl("./img.png", "notes/a.md")).toBe("/raw/notes/img.png");
+    expect(pageAssetUrl("img.png", "a.md")).toBe("/raw/img.png");
+  });
+
+  it("resolves root-relative sources against the workspace", () => {
+    expect(pageAssetUrl("/assets/x.png", "notes/a.md")).toBe("/raw/assets/x.png");
+  });
+
+  it("passes through URLs that already load", () => {
+    for (const src of ["https://x/y.png", "data:image/png;base64,AA", "/raw/a.png", "/api/kiwi/x"]) {
+      expect(pageAssetUrl(src, "notes/a.md")).toBe(src);
+    }
   });
 });

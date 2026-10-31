@@ -150,3 +150,51 @@ export const SaveShortcutHarness: Story = {
     await expect(canvas.getByTestId("save-count")).toHaveTextContent("Saves: 1");
   },
 };
+
+/**
+ * Obsidian-style live preview: syntax hides and widgets render in place;
+ * click into anything to see its markdown. Saving writes exactly this text.
+ */
+export const LivePreview: Story = {
+  args: {
+    value: markdownSamples.livePreview,
+    onChange: () => undefined,
+    livePreview: true,
+    minHeight: "70vh",
+  },
+  render: (args) => {
+    const [value, setValue] = useState<string>(args.value);
+    return <MarkdownSourceEditor {...args} value={value} onChange={setValue} />;
+  },
+  play: async ({ canvasElement }) => {
+    await new Promise((r) => setTimeout(r, 500));
+    // The page text is untouched: syntax is hidden by decorations only.
+    await expect(canvasElement.querySelector(".cm-lp-properties")).not.toBeNull();
+    await expect(canvasElement.querySelector(".cm-lp-task input")).not.toBeNull();
+    await expect(canvasElement.querySelector(".cm-lp-wikilink")).toHaveTextContent("Getting Started");
+  },
+};
+
+export const LivePreviewDark: Story = {
+  args: { ...LivePreview.args, dark: true },
+  render: LivePreview.render,
+  decorators: [
+    (Story) => (
+      <div className="dark min-h-screen bg-background p-6 text-foreground">
+        <div className="mx-auto max-w-4xl">
+          <Story />
+        </div>
+      </div>
+    ),
+  ],
+};
+
+export const LivePreviewVim: Story = {
+  args: { ...LivePreview.args, vim: true },
+  render: LivePreview.render,
+  play: async ({ canvasElement }) => {
+    await new Promise((r) => setTimeout(r, 500));
+    // Vim starts in normal mode and draws a block cursor.
+    await expect(canvasElement.querySelector(".cm-vimMode, .cm-fat-cursor")).not.toBeNull();
+  },
+};

@@ -3,7 +3,7 @@
 export type UserPreferences = {
   theme?: string;
   sidebar_collapsed?: boolean;
-  default_view?: "editor" | "source";
+  default_view?: "editor" | "source" | "live";
   font_size?: "base" | "sm" | "lg";
   editor_line_numbers?: boolean;
   vim_mode?: boolean;
@@ -12,6 +12,7 @@ export type UserPreferences = {
 export const LS_PRESET = "kiwifs-preset";
 export const LS_SIDEBAR = "kiwifs-sidebar";
 export const LS_EDITOR_MODE = "kiwifs-editor-mode";
+export const LS_EDITOR_VIM = "kiwifs-editor-vim";
 
 function readLS(key: string): string | null {
   try {
@@ -41,7 +42,12 @@ export function readLocalPreferences(): UserPreferences {
 
   const mode = readLS(LS_EDITOR_MODE);
   if (mode === "source") prefs.default_view = "source";
+  else if (mode === "live") prefs.default_view = "live";
   else if (mode === "visual") prefs.default_view = "editor";
+
+  const vim = readLS(LS_EDITOR_VIM);
+  if (vim === "on") prefs.vim_mode = true;
+  else if (vim === "off") prefs.vim_mode = false;
 
   return prefs;
 }
@@ -55,8 +61,10 @@ export function applyPreferencesToLocal(prefs: UserPreferences): void {
   }
 
   if (prefs.default_view) {
-    writeLS(LS_EDITOR_MODE, prefs.default_view === "source" ? "source" : "visual");
+    writeLS(LS_EDITOR_MODE, prefs.default_view === "editor" ? "visual" : prefs.default_view);
   }
+
+  if (prefs.vim_mode !== undefined) writeLS(LS_EDITOR_VIM, prefs.vim_mode ? "on" : "off");
 }
 
 /** Merge server preferences over localStorage (server wins on conflicts). */

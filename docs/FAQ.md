@@ -10,7 +10,7 @@
 - **Installation:** [Requirements?](#what-are-the-system-requirements) · [How to install?](#how-do-i-install-it) · [What's in .kiwi/?](#whats-in-kiwi)
 - **Agents:** [How agents write?](#how-do-agents-write-to-kiwifs) · [What is MCP?](#what-is-mcp-and-why-does-kiwifs-support-it) · [Without a server?](#can-agents-use-kiwifs-without-a-running-server) · [With Cursor/Claude Code?](#can-i-use-kiwifs-with-cursor--claude-code--windsurf) · [Auto-configure?](#how-does-kiwifs-connect-work) · [Provenance?](#how-does-provenance-tracking-work)
 - **Search:** [Backends?](#what-search-backends-are-available) · [Offline vector?](#can-i-run-vector-search-without-an-api-key) · [Rebuild index?](#how-do-i-rebuild-the-search-index)
-- **Web UI:** [Embed in my app?](#can-i-embed-the-ui-in-my-own-app) · [Custom theme?](#can-i-customize-the-theme) · [Mobile?](#does-the-web-ui-work-on-mobile)
+- **Web UI:** [Embed in my app?](#can-i-embed-the-ui-in-my-own-app) · [Custom theme?](#can-i-customize-the-theme) · [Editor modes?](#which-editor-mode-should-i-use) · [Mobile?](#does-the-web-ui-work-on-mobile)
 - **Protocols:** [Which one?](#when-should-i-use-nfs-vs-s3-vs-webdav-vs-fuse) · [Same pipeline?](#do-all-protocols-go-through-the-same-pipeline)
 - **POSIX:** [Compatible?](#is-kiwifs-posix-compatible) · [Symlinks?](#do-symlinks-work) · [Open-then-delete?](#what-happens-if-i-open-a-file-and-then-delete-it) · [mmap?](#can-i-mmap-files-on-a-kiwifs-mount) · [Two servers?](#what-prevents-two-kiwifs-servers-from-sharing-the-same-directory) · [Stuck git?](#what-happens-if-git-gets-stuck-mid-commit)
 - **Data:** [Crash mid-write?](#what-happens-if-kiwifs-crashes-mid-write) · [Backup?](#how-do-i-back-up-my-knowledge-base) · [Migrate from Obsidian/Notion?](#can-i-migrate-from-obsidian--notion--confluence) · [Import sources?](#what-data-sources-can-i-import-from) · [Idempotent?](#is-import-idempotent) · [Export?](#what-export-formats-are-available) · [ML training?](#can-i-use-exported-data-for-ml-training)
@@ -187,9 +187,34 @@ The web UI is built as React components (`<KiwiTree />`, `<KiwiPage />`, `<KiwiE
 
 Yes. The UI uses CSS variables prefixed with `--kiwi-`. KiwiFS ships with several built-in themes (kiwi, ocean, forest, sunset, neutral) and you can create your own. It's built on shadcn/ui + Tailwind, so it drops into any shadcn project.
 
+### Which editor mode should I use?
+
+The editor has three modes, switched from the toolbar. Your choice is
+remembered, and synced across devices when you are signed in.
+
+- **Live** shows the page much as it reads: syntax like `**`, `#` and `[[ ]]`
+  hides, and checkboxes, images and widget fences render in place. Click into
+  anything to see and edit its markdown. Live preview only changes how the
+  text is drawn, so the file is saved exactly as you typed it. It is the
+  default on touch devices.
+- **Visual** is a block editor (BlockNote) with drag handles and block menus.
+  It converts the page to blocks and back, so blocks you edit are rewritten
+  in its own markdown style, but the rest of the file, including
+  frontmatter, wiki links, reference links and raw HTML, keeps its original
+  bytes. In the rare case where an edit cannot be merged back safely, the
+  whole page is saved in Visual mode's style instead.
+- **Source** is the raw markdown, with line numbers and a preview pane for
+  the widget fence under the cursor.
+
+Live and Source share an optional Vim mode. If an agent or another tab saves
+the page while you have it open, Live and Source take the change in place
+when you have no unsaved edits; otherwise, and always in Visual mode, the
+editor asks whether to reload or keep your version.
+
 ### Does the web UI work on mobile?
 
-The UI is responsive but optimized for desktop. Mobile works for reading; editing is best on a larger screen.
+The UI is responsive. Editing on a phone or tablet defaults to Live mode,
+which works with the on-screen keyboard, including on iPad.
 
 ---
 

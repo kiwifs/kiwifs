@@ -22,6 +22,7 @@ var (
 	validDefaultViews = map[string]struct{}{
 		"editor": {},
 		"source": {},
+		"live":   {},
 	}
 	validFontSizes = map[string]struct{}{
 		"base": {},

@@ -121,4 +121,9 @@ func TestValidate(t *testing.T) {
 	if err := Validate(Preferences{DefaultView: "editor", FontSize: "base"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	for _, view := range []string{"editor", "source", "live"} {
+		if err := Validate(Preferences{DefaultView: view}); err != nil {
+			t.Fatalf("default_view %q: unexpected error: %v", view, err)
+		}
+	}
 }

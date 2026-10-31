@@ -35,7 +35,7 @@ import { KiwiControl } from "@kw/components/KiwiControl";
 import { WikiLinkPreview } from "@kw/components/WikiLinkPreview";
 import { ErrorBoundary } from "@kw/components/ErrorBoundary";
 import { decodeHref, dirOf, isCanvasFile, isExcalidrawFile, normalizePath } from "./paths";
-import { useRawUrl } from "./rawUrl";
+import { pageAssetUrl, useRawUrl } from "./rawUrl";
 import type { FigureWidth } from "./figureLayout";
 import { kiwiSanitizeSchema } from "./kiwiSanitizeSchema";
 import { remarkMark, remarkInlineTags, remarkPageControls, rehypeCodeMeta, rehypeTaskListLabels } from "./remarkPlugins";
@@ -312,16 +312,7 @@ export function kiwiMarkdownComponents({
       return <div {...(rest as any)}>{children}</div>;
     },
     img: ({ src, alt, node: _node, width, height, ...rest }) => {
-      let resolvedSrc = src as string;
-      if (resolvedSrc && !resolvedSrc.startsWith("http") && !resolvedSrc.startsWith("/raw/") && !resolvedSrc.startsWith("/api/")) {
-        if (resolvedSrc.startsWith("./") || (!resolvedSrc.startsWith("/") && !resolvedSrc.startsWith("data:"))) {
-          const pageDir = dirOf(path);
-          const rel = resolvedSrc.startsWith("./") ? resolvedSrc.slice(2) : resolvedSrc;
-          resolvedSrc = pageDir ? `/raw/${pageDir}/${rel}` : `/raw/${rel}`;
-        } else {
-          resolvedSrc = resolvedSrc.startsWith("/") ? `/raw${resolvedSrc}` : `/raw/${resolvedSrc}`;
-        }
-      }
+      const resolvedSrc = pageAssetUrl(src as string, path);
       const embedKind = ((rest as any)["data-kiwi-embed"] || (rest as any)["dataKiwiEmbed"]) as string | undefined;
       const embedTarget = ((rest as any)["data-kiwi-target"] || (rest as any)["dataKiwiTarget"]) as string | undefined;
       const rawPath = (resolvedSrc || "").replace(/^\/raw\//, "");

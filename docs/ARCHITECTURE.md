@@ -242,8 +242,9 @@ kiwifs/
 | Library | Purpose | License |
 |---|---|---|
 | shadcn/ui + Radix | UI primitives, accessible components | MIT |
-| BlockNote | Block-based markdown editor | MIT |
-| CodeMirror | Markdown source editor | MIT |
+| BlockNote | Block editor (Visual mode) | MPL-2.0 |
+| CodeMirror | Markdown source and live preview editor | MIT |
+| @replit/codemirror-vim | Vim keybindings for the editor | MIT |
 | Shiki | Syntax highlighting with line highlights | MIT |
 | Recharts | Charts (bar, line, area, pie, radar, scatter) | MIT |
 | Sigma.js + Graphology | Knowledge graph visualization | MIT |

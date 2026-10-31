@@ -13,6 +13,7 @@
     "src/**/*.stories.tsx",
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
-    "src/**/__mocks__/**"
+    "src/**/__mocks__/**",
+    "src/test/**"
   ]
 }
