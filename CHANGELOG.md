@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.19.82](https://github.com/kiwifs/kiwifs/compare/v0.19.81...v0.19.82) (2026-10-31)
+
+
+### Features
+
+* **ui:** kiwi-app kit, runtime and live theme updates ([#558](https://github.com/kiwifs/kiwifs/issues/558)) ([33016b3](https://github.com/kiwifs/kiwifs/commit/33016b358447c1a7753a143ac6e3c61b4c807996))
+* **ui:** live preview editor mode and lossless visual saves ([#564](https://github.com/kiwifs/kiwifs/issues/564)) ([56a9b62](https://github.com/kiwifs/kiwifs/commit/56a9b622ac74742fef81139e68ea54ba5a354e2f)), closes [#563](https://github.com/kiwifs/kiwifs/issues/563)
+
+
+### Bug Fixes
+
+* **api:** keep kiwi-app src= files linked and inert ([#560](https://github.com/kiwifs/kiwifs/issues/560)) ([c3fefb2](https://github.com/kiwifs/kiwifs/commit/c3fefb2c56da0a88357013761b936a09febe799a))
+
 ## [0.19.81](https://github.com/kiwifs/kiwifs/compare/v0.19.80...v0.19.81) (2026-10-28)
 
 
