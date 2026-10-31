@@ -49,6 +49,7 @@ import { usePinnedPages } from "./hooks/usePinnedPages";
 import { useKeybindings } from "./hooks/useKeybindings";
 import { useUIConfig } from "./hooks/useUIConfig";
 import { usePreferences } from "./hooks/usePreferences";
+import { viewFromEditorMode } from "./lib/editorMode";
 import { formatChordDisplay, isBareHelpKey, matchBoundAction, type KeybindingAction } from "./lib/kiwiKeybindings";
 import { resolveOverlayDismiss } from "./lib/overlayDismiss";
 import { hasDeepLinkPath, resolveDashboardPath, resolveStartPage, shouldApplyStartPage } from "./lib/startPage";
@@ -990,8 +991,10 @@ const handleSpaceSwitch = useCallback(() => {
                 saveRef={editorRef}
                 editorModePref={prefs.default_view}
                 onEditorModeChange={(mode) =>
-                  updatePreferences({ default_view: mode === "source" ? "source" : "editor" })
+                  updatePreferences({ default_view: viewFromEditorMode(mode) })
                 }
+                vimPref={prefs.vim_mode}
+                onVimChange={(on) => updatePreferences({ vim_mode: on })}
                 onClose={() => setEditing(false)}
                 onNavigate={navigate}
                 onSaved={() => {

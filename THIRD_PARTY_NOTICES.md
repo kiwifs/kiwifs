@@ -34,3 +34,46 @@ Source Sans Pro, Source Code Pro, Fuzzy Bubbles and Noto Color Emoji (v2.051)
 are licensed under the SIL Open Font License 1.1
 (https://openfontlicense.org). Diagrams rendered with them are not subject to
 the font license.
+
+## Editor code adapted from other projects
+
+The live preview editor (`ui/src/components/editor/livePreview/`) contains
+code adapted, with changes, from the projects below. Each adapted file names
+its source in a header comment.
+
+| File | Adapted from | License |
+|---|---|---|
+| `ios.ts` | SilverBullet `client/codemirror/editing/ios_enter.ts`, `ios_completion.ts` | MIT |
+| `tasks.ts` | SilverBullet `client/codemirror/syntax/task.ts` | MIT |
+| `hideMarks.ts` | SilverBullet `client/codemirror/syntax/hide_mark.ts`, itself forked from Ixora | MIT; Apache License 2.0 |
+
+SilverBullet (https://github.com/silverbulletmd/silverbullet):
+
+> Copyright 2022, Zef Hemel
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to
+> deal in the Software without restriction, including without limitation the
+> rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+> sell copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in
+> all copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+> FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+> IN THE SOFTWARE.
+
+Ixora (https://codeberg.org/retronav/ixora), by Pranav Karawale, is licensed
+under the Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+The hide-marks logic was rewritten for KiwiFS's syntax tree walk and reveal
+rules.
+
+The editor also depends, unmodified, on `@replit/codemirror-vim` (MIT) and on
+BlockNote (`@blocknote/*`, Mozilla Public License 2.0), whose source is at
+https://github.com/TypeCellOS/BlockNote.

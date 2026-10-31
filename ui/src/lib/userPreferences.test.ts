@@ -54,4 +54,13 @@ describe("userPreferences", () => {
     expect(localStorage.getItem("kiwifs-sidebar")).toBe("collapsed");
     expect(localStorage.getItem("kiwifs-editor-mode")).toBe("visual");
   });
+
+  it("round-trips live preview and the Vim toggle through localStorage", () => {
+    applyPreferencesToLocal({ default_view: "live", vim_mode: true });
+    expect(localStorage.getItem("kiwifs-editor-mode")).toBe("live");
+    expect(localStorage.getItem("kiwifs-editor-vim")).toBe("on");
+    expect(readLocalPreferences()).toEqual({ default_view: "live", vim_mode: true });
+    applyPreferencesToLocal({ default_view: "source", vim_mode: false });
+    expect(readLocalPreferences()).toEqual({ default_view: "source", vim_mode: false });
+  });
 });

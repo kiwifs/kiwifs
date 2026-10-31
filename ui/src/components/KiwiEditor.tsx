@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { BlockNoteEditor, filterSuggestionItems } from "@blocknote/core";
+import { BlockNoteEditor, createExtension, filterSuggestionItems } from "@blocknote/core";
 import {
   FormattingToolbarController,
   getDefaultReactSlashMenuItems,
@@ -10,7 +10,7 @@ import {
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { Check, ChevronDown, ChevronRight, Circle, Code, Info, Link as LinkIcon, ListTree, Loader2, PenLine, Puzzle, Save, TriangleAlert, User, X, XCircle } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Circle, Code, Eye, Info, Keyboard, Link as LinkIcon, ListTree, Loader2, PenLine, Puzzle, Save, TriangleAlert, User, X, XCircle } from "lucide-react";
 import { allFences } from "@kw/fences";
 import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
@@ -26,12 +26,20 @@ import { ExcalidrawMarkdownEditor, isExcalidrawMarkdown } from "./ExcalidrawMark
 import { frontmatterToText, joinFrontmatter, splitFrontmatter } from "@kw/lib/frontmatter";
 import {
   type EditorMode,
+  editorModeFromView,
+  joinVisualSource,
   loadEditorModePreference,
+  loadVimPreference,
   saveEditorModePreference,
-  sourceToVisualParts,
-  visualToSource,
+  saveVimPreference,
+  splitVisualSource,
+  type VisualSource,
   wikiPagesFromTree,
 } from "@kw/lib/editorMode";
+import { buildResolver } from "@kw/lib/wikiLinks";
+import { eventTouchesPath, type SSEEvent, useSSE } from "@kw/lib/useSSE";
+import { parseMarkdownToBlocks } from "@kw/lib/blockNoteMarkdown";
+import { visualSaveBody } from "@kw/lib/visualSave";
 import { formatDistanceToNow } from "date-fns";
 import { MarkdownSourceEditor } from "./editor/MarkdownSourceEditor";
 import { FencePreview } from "./editor/FencePreview";
@@ -109,6 +117,11 @@ function titleFromMarkdownSource(markdown: string): string | null {
   return null;
 }
 
+const wikiLinkExtension = createExtension(() => ({
+  key: "kiwi-wiki-links",
+  prosemirrorPlugins: [wikiLinkDecoPlugin()],
+}));
+
 function wikiLinkDecoPlugin() {
   return new Plugin({
     key: wikiLinkPluginKey,
@@ -149,6 +162,19 @@ function buildWikiDecos(doc: any): DecorationSet {
 
 type SaveStatus = "clean" | "dirty" | "saving" | "saved" | "error";
 
+/**
+ * The file on disk no longer matches what the editor loaded or last saved:
+ * changed by an agent or another tab ("changed"), found out by a rejected
+ * save ("conflict"), or deleted.
+ */
+type DiskChange =
+  | { kind: "changed" | "conflict"; content: string; etag: string | null }
+  | { kind: "deleted" };
+
+const bareEtag = (etag: string | null | undefined) => (etag ?? "").replace(/^W\//, "").replace(/"/g, "");
+
+const isConflict = (e: unknown) => (e as { status?: unknown } | null)?.status === 409;
+
 type SaveHandle = {
   save: () => Promise<void>;
   toggleMode?: () => void;
@@ -161,11 +187,13 @@ type Props = {
   onSaved: (path: string) => void;
   onNavigate?: (path: string) => void;
   saveRef?: React.MutableRefObject<SaveHandle | null>;
-  editorModePref?: "editor" | "source";
+  editorModePref?: "editor" | "source" | "live";
   onEditorModeChange?: (mode: EditorMode) => void;
+  vimPref?: boolean;
+  onVimChange?: (on: boolean) => void;
 };
 
-export function KiwiEditor({ path, tree, onClose, onSaved, onNavigate, saveRef, editorModePref, onEditorModeChange }: Props) {
+export function KiwiEditor({ path, tree, onClose, onSaved, onNavigate, saveRef, editorModePref, onEditorModeChange, vimPref, onVimChange }: Props) {
   const [initialMd, setInitialMd] = useState<string | null>(null);
   const etagRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -247,6 +275,8 @@ export function KiwiEditor({ path, tree, onClose, onSaved, onNavigate, saveRef, 
       saveRef={saveRef}
       editorModePref={editorModePref}
       onEditorModeChange={onEditorModeChange}
+      vimPref={vimPref}
+      onVimChange={onVimChange}
     />
   );
 }
@@ -386,6 +416,8 @@ function EditorInner({
   saveRef,
   editorModePref,
   onEditorModeChange,
+  vimPref,
+  onVimChange,
 }: {
   path: string;
   tree?: import("@kw/lib/api").TreeEntry | null;
@@ -399,8 +431,10 @@ function EditorInner({
   onSaved: (p: string) => void;
   onNavigate?: (path: string) => void;
   saveRef?: React.MutableRefObject<SaveHandle | null>;
-  editorModePref?: "editor" | "source";
+  editorModePref?: "editor" | "source" | "live";
   onEditorModeChange?: (mode: EditorMode) => void;
+  vimPref?: boolean;
+  onVimChange?: (on: boolean) => void;
 }) {
   const [editorMode, setEditorMode] = useState<EditorMode>(() => loadEditorModePreference());
   const [sourceText, setSourceText] = useState(initialMd);
@@ -422,19 +456,30 @@ function EditorInner({
   const [modeSwitchOpen, setModeSwitchOpen] = useState(false);
   const [pendingSwitchTarget, setPendingSwitchTarget] = useState<EditorMode | null>(null);
   const [visualParseError, setVisualParseError] = useState<string | null>(null);
+  const [diskChange, setDiskChangeState] = useState<DiskChange | null>(null);
+  // Read by the autosave timer, which can fire before the next render.
+  const diskChangeRef = useRef(diskChange);
+  const setDiskChange = useCallback((change: DiskChange | null) => {
+    diskChangeRef.current = change;
+    setDiskChangeState(change);
+  }, []);
   const titleHeadingId = useId();
   const frontmatterId = useId();
 
-  const frontmatterSplit = useMemo(() => splitFrontmatter(initialMd), [initialMd]);
-  const [fmText, setFmText] = useState<string>(() => frontmatterToText(frontmatterSplit.frontmatter));
-  const initialVisualBody = useMemo(
-    () => sourceToVisualParts(initialMd).body,
-    [initialMd],
-  );
-  const [visualParseBody, setVisualParseBody] = useState(initialVisualBody);
+  const initialVisualSource = useMemo(() => splitVisualSource(initialMd), [initialMd]);
+  const [fmText, setFmText] = useState<string>(initialVisualSource.fmText);
+  // What Visual mode loaded, as state so a new value reloads the editor.
+  const [visualSource, setVisualSource] = useState<VisualSource>(initialVisualSource);
+  // The same, advanced past each save without reloading the editor, plus the
+  // serializer's text for the document as of that point: the two inputs to
+  // the merge that keeps untouched markdown as it was (lib/visualSave.ts).
+  const visualSourceRef = useRef<VisualSource>(initialVisualSource);
+  const baselineRef = useRef<string | null>(null);
   const [lastEdit, setLastEdit] = useState<{ author: string; date: string } | null>(null);
 
   const wikiPages = useMemo(() => wikiPagesFromTree(tree), [tree]);
+  const wikiResolver = useMemo(() => buildResolver(tree ?? null), [tree]);
+  const resolveWikiLink = useCallback((target: string) => wikiResolver(target, path), [wikiResolver, path]);
   const customSlashCommands = useEditorSlashCommands();
   const [slashCommandError, setSlashCommandError] = useState<string | null>(null);
   const slashCommandErrorTimer = useRef<number | null>(null);
@@ -466,11 +511,12 @@ function EditorInner({
     savedRevisionRef.current = 0;
     setSourceText(initialMd);
     setEditorMode(loadEditorModePreference());
-    setFmText(frontmatterToText(frontmatterSplit.frontmatter));
-    setVisualParseBody(initialVisualBody);
+    setFmText(initialVisualSource.fmText);
+    setVisualSource(initialVisualSource);
     setSaveStatus("clean");
     setSaving(false);
     setVisualParseError(null);
+    setDiskChange(null);
     return () => {
       saveLifecycleRef.current = null;
       saveInFlightRef.current = null;
@@ -479,12 +525,24 @@ function EditorInner({
       autoSaveTimer.current = null;
       savedFlashTimer.current = null;
     };
-  }, [path, initialMd, frontmatterSplit.frontmatter, initialVisualBody, setSaving]);
+  }, [path, initialMd, initialVisualSource, setSaving]);
 
   useEffect(() => {
     if (!editorModePref) return;
-    setEditorMode(editorModePref === "source" ? "source" : "visual");
+    setEditorMode(editorModeFromView(editorModePref));
   }, [editorModePref]);
+
+  const [vim, setVim] = useState(() => vimPref ?? loadVimPreference());
+  useEffect(() => {
+    if (vimPref !== undefined) setVim(vimPref);
+  }, [vimPref]);
+  const toggleVim = useCallback(() => {
+    setVim((on) => {
+      saveVimPreference(!on);
+      onVimChange?.(!on);
+      return !on;
+    });
+  }, [onVimChange]);
 
   const persistEditorMode = useCallback(
     (mode: EditorMode) => {
@@ -516,35 +574,17 @@ function EditorInner({
     () => ({
       uploadFile,
       resolveFileUrl: resolveRawUrl,
-      _tiptapOptions: {
-        extensions: [] as any[],
-      },
+      extensions: [wikiLinkExtension()],
     }),
     [uploadFile],
   );
   const editor = useCreateBlockNote(editorOptions);
 
   useEffect(() => {
-    if (!editor) return;
-    const pm = (editor as any)._tiptapEditor?.view;
-    if (!pm) return;
-    const state = pm.state;
-    if (state.plugins.some((p: any) => p.key === (wikiLinkPluginKey as any).key)) return;
-    const newState = state.reconfigure({
-      plugins: [...state.plugins, wikiLinkDecoPlugin()],
-    });
-    pm.updateState(newState);
-  }, [editor]);
-
-  useEffect(() => {
     if (!editor || !ready) return;
-    try {
-      const pm = (editor as any)._tiptapEditor?.view;
-      pm.dom.setAttribute("aria-label", "Markdown visual editor");
-      pm.dom.setAttribute("aria-multiline", "true");
-    } catch {
-      // view not yet mounted
-    }
+    const dom = editor.domElement;
+    dom?.setAttribute("aria-label", "Markdown visual editor");
+    dom?.setAttribute("aria-multiline", "true");
   }, [editor, ready]);
 
   useEffect(() => {
@@ -552,13 +592,18 @@ function EditorInner({
     let cancelled = false;
     setReady(false);
     setVisualParseError(null);
+    baselineRef.current = null;
     (async () => {
       try {
-        const blocks = await editor.tryParseMarkdownToBlocks(visualParseBody);
+        const blocks = await parseMarkdownToBlocks(editor, visualSource.body);
         if (cancelled) return;
-        if (blocks && blocks.length > 0) {
-          editor.replaceBlocks(editor.document, blocks);
-        }
+        // An empty body must still clear what the editor showed before (a
+        // reload, a mode switch), or the merge would save it back.
+        editor.replaceBlocks(editor.document, blocks.length > 0 ? blocks : [{ type: "paragraph" }]);
+        const baseline = await editor.blocksToMarkdownLossy(editor.document);
+        if (cancelled) return;
+        visualSourceRef.current = visualSource;
+        baselineRef.current = baseline;
         setReady(true);
       } catch (e) {
         if (!cancelled) {
@@ -570,16 +615,36 @@ function EditorInner({
     return () => {
       cancelled = true;
     };
-  }, [editor, editorMode, visualParseBody]);
+  }, [editor, editorMode, visualSource]);
+
+  /**
+   * The page as Visual mode would save it now: the user's edits merged onto
+   * the bytes that were loaded, so untouched markdown keeps its formatting.
+   */
+  const visualMarkdown = useCallback(async () => {
+    const source = visualSourceRef.current;
+    const baseline = baselineRef.current;
+    let body: string;
+    let current: string;
+    if (baseline === null) {
+      body = current = await editor!.blocksToMarkdownLossy(editor!.document);
+    } else {
+      ({ body, current } = await visualSaveBody(editor!, { original: source.body, baseline }));
+    }
+    const next = joinVisualSource(source, fmText, body);
+    return { markdown: next.markdown, source: next, baseline: current };
+  }, [editor, fmText]);
 
   const onSaveRef = useRef<(opts?: { close?: boolean }) => Promise<boolean>>(async () => false);
   const scheduleAutoSave = useCallback(() => {
     const lifecycle = saveLifecycleRef.current;
-    if (!lifecycle) return;
+    // Saving now would overwrite a change the user has not seen yet.
+    if (!lifecycle || diskChangeRef.current) return;
     if (autoSaveTimer.current) window.clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = window.setTimeout(() => {
       if (saveLifecycleRef.current !== lifecycle) return;
       autoSaveTimer.current = null;
+      if (diskChangeRef.current) return;
       void onSaveRef.current();
     }, 2000);
   }, []);
@@ -599,16 +664,22 @@ function EditorInner({
       setError(null);
       try {
         let md: string;
-        if (editorMode === "source") {
+        let visual: Awaited<ReturnType<typeof visualMarkdown>> | null = null;
+        if (editorMode !== "visual") {
           md = sourceText;
         } else {
-          const body = await editor!.blocksToMarkdownLossy(editor!.document);
-          md = joinFrontmatter(fmText, body);
+          visual = await visualMarkdown();
+          md = visual.markdown;
         }
         if (!isCurrent()) return false;
         const res = await api.writeFile(path, md, etagRef.current || undefined);
         if (!isCurrent()) return false;
         etagRef.current = res.etag ? `"${res.etag}"` : null;
+        if (visual) {
+          // The file now holds `md`; later saves merge onto it.
+          visualSourceRef.current = visual.source;
+          baselineRef.current = visual.baseline;
+        }
         // A save acknowledges a snapshot, not a new document to load. Replacing
         // live state here loses transient blocks, selection, and newer edits.
         syncedMdRef.current = md;
@@ -628,8 +699,20 @@ function EditorInner({
         return true;
       } catch (e) {
         if (isCurrent()) {
-          setSaveStatus("error");
-          setError(String(e));
+          if (isConflict(e)) {
+            setSaveStatus("dirty");
+            void api.readFile(path).then(
+              (file) => {
+                if (isCurrent()) setDiskChange({ kind: "conflict", content: file.content, etag: file.etag });
+              },
+              () => {
+                if (isCurrent()) setDiskChange({ kind: "deleted" });
+              },
+            );
+          } else {
+            setSaveStatus("error");
+            setError(String(e));
+          }
         }
         return false;
       } finally {
@@ -667,24 +750,25 @@ function EditorInner({
   const performModeSwitch = useCallback(
     async (target: EditorMode, opts?: { discard?: boolean }) => {
       setVisualParseError(null);
-      if (target === "source") {
-        if (!opts?.discard && editor) {
-          const full = await visualToSource(fmText, async () =>
-            editor.blocksToMarkdownLossy(editor.document),
-          );
-          setSourceText(full);
-        } else {
+      if (target !== "visual") {
+        if (editorModeRef.current === "visual") {
+          if (!opts?.discard && editor) {
+            setSourceText((await visualMarkdown()).markdown);
+          } else {
+            setSourceText(syncedMdRef.current);
+          }
+        } else if (opts?.discard) {
           setSourceText(syncedMdRef.current);
         }
-        setEditorMode("source");
-        persistEditorMode("source");
+        setEditorMode(target);
+        persistEditorMode(target);
         setReady(true);
       } else {
         const text = opts?.discard ? syncedMdRef.current : sourceText;
         if (opts?.discard) setSourceText(text);
-        const { fmText: nextFm, body } = sourceToVisualParts(text);
-        setFmText(nextFm);
-        setVisualParseBody(body);
+        const next = splitVisualSource(text);
+        setFmText(next.fmText);
+        setVisualSource(next);
         setEditorMode("visual");
         persistEditorMode("visual");
       }
@@ -694,12 +778,19 @@ function EditorInner({
         autoSaveTimer.current = null;
       }
     },
-    [editor, fmText, sourceText, persistEditorMode],
+    [editor, visualMarkdown, sourceText, persistEditorMode],
   );
 
   const requestModeSwitch = useCallback(
     (target: EditorMode) => {
       if (target === editorMode) return;
+      // Source and live preview edit the same text: nothing to convert, so
+      // nothing to save or lose first.
+      if (editorMode !== "visual" && target !== "visual") {
+        setEditorMode(target);
+        persistEditorMode(target);
+        return;
+      }
       if (saveStatus === "saving" || saving) return;
       if (saveStatus === "dirty") {
         setPendingSwitchTarget(target);
@@ -708,7 +799,7 @@ function EditorInner({
       }
       void performModeSwitch(target);
     },
-    [editorMode, saveStatus, saving, performModeSwitch],
+    [editorMode, saveStatus, saving, performModeSwitch, persistEditorMode],
   );
 
   const handleModeSwitchSave = useCallback(async () => {
@@ -792,7 +883,89 @@ function EditorInner({
   const canSave =
     saveStatus !== "clean" &&
     !saving &&
-    (editorMode === "source" || ready);
+    (editorMode !== "visual" || ready);
+
+  /** Show the file as it is on disk now, dropping unsaved edits. */
+  const loadFromDisk = useCallback(
+    (content: string, etag: string | null) => {
+      if (autoSaveTimer.current) {
+        window.clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = null;
+      }
+      etagRef.current = etag;
+      syncedMdRef.current = content;
+      savedRevisionRef.current = editRevisionRef.current;
+      setSourceText(content);
+      const next = splitVisualSource(content);
+      setFmText(next.fmText);
+      // Reloads the block editor, which also restarts the save merge from the
+      // new file. Text modes take the new text as a diff instead.
+      if (editorModeRef.current === "visual") setVisualSource(next);
+      setSaveStatus("clean");
+      setError(null);
+      setDiskChange(null);
+    },
+    [etagRef, setError],
+  );
+
+  const onFileEvent = useCallback(
+    async (event: SSEEvent) => {
+      if (!eventTouchesPath(event, path)) return;
+      const lifecycle = saveLifecycleRef.current;
+      const isCurrent = () => saveLifecycleRef.current === lifecycle;
+      if (event.op === "delete") {
+        setDiskChange({ kind: "deleted" });
+        return;
+      }
+      const ours = () => event.etag !== undefined && bareEtag(event.etag) === bareEtag(etagRef.current);
+      if (ours()) return;
+      // The event for our own save can beat the save's response here.
+      if (saveInFlightRef.current) await saveInFlightRef.current;
+      if (!isCurrent() || ours()) return;
+      let file: { content: string; etag: string | null };
+      try {
+        file = await api.readFile(path);
+      } catch {
+        return;
+      }
+      if (!isCurrent()) return;
+      if (file.content === syncedMdRef.current) {
+        etagRef.current = file.etag;
+        return;
+      }
+      const clean = editRevisionRef.current === savedRevisionRef.current && !saveInFlightRef.current;
+      // Text modes take a clean reload in place, caret and all. BlockNote
+      // has no way to patch its document, so Visual mode always asks.
+      if (clean && editorModeRef.current !== "visual") loadFromDisk(file.content, file.etag);
+      else setDiskChange({ kind: "changed", content: file.content, etag: file.etag });
+    },
+    [path, etagRef, loadFromDisk],
+  );
+  useSSE(onFileEvent);
+
+  const keepMine = useCallback(() => {
+    const change = diskChangeRef.current;
+    // The next save overwrites the disk version on purpose; a deleted file
+    // is written fresh, with no If-Match to fail.
+    etagRef.current = change && change.kind !== "deleted" ? change.etag : null;
+    setDiskChange(null);
+    editRevisionRef.current += 1;
+    setSaveStatus("dirty");
+    scheduleAutoSave();
+  }, [etagRef, scheduleAutoSave]);
+
+  // Following a link leaves the editor, which would drop an unsaved edit.
+  const navigateFromEditor = useCallback(
+    async (target: string) => {
+      if (!onNavigate) return;
+      if (editRevisionRef.current !== savedRevisionRef.current) {
+        const ok = await onSaveRef.current();
+        if (!ok) return;
+      }
+      onNavigate(target);
+    },
+    [onNavigate],
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -822,7 +995,7 @@ function EditorInner({
                   <SaveIndicator status={saveStatus} />
                   {editorMode === "visual" && (
                     <span className="text-[10px] text-muted-foreground">
-                      Visual mode may reformat some markdown on save
+                      Only blocks you edit are reformatted on save
                     </span>
                   )}
                 </div>
@@ -833,6 +1006,19 @@ function EditorInner({
                   disabled={saving || saveStatus === "saving"}
                   onSelect={requestModeSwitch}
                 />
+                {editorMode !== "visual" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleVim}
+                    aria-pressed={vim}
+                    aria-label="Vim keybindings"
+                    className={cn(vim && "bg-muted")}
+                  >
+                    <Keyboard className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Vim</span>
+                  </Button>
+                )}
                 <Button
                   onClick={() => onSaveRef.current({ close: true })}
                   disabled={!canSave}
@@ -859,6 +1045,14 @@ function EditorInner({
               </div>
             )}
           </div>
+
+          {diskChange && (
+            <DiskChangeBanner
+              change={diskChange}
+              onReload={() => diskChange.kind !== "deleted" && loadFromDisk(diskChange.content, diskChange.etag)}
+              onKeepMine={keepMine}
+            />
+          )}
 
           {editorMode === "visual" && (
             <div className="max-w-3xl mb-4">
@@ -887,7 +1081,7 @@ function EditorInner({
           )}
 
           <div className="max-w-3xl min-h-[50vh]">
-            {editorMode === "source" ? (
+            {editorMode !== "visual" ? (
               <div className="flex flex-col gap-2">
                 <MarkdownSourceEditor
                   value={sourceText}
@@ -899,11 +1093,17 @@ function EditorInner({
                   customSlashCommands={customSlashCommands}
                   loadSlashTemplate={loadSlashTemplate}
                   onSlashTemplateError={onSlashTemplateError}
-                  onFenceUnderCursor={setFenceUnderCursor}
+                  onFenceUnderCursor={editorMode === "source" ? setFenceUnderCursor : undefined}
+                  livePreview={editorMode === "live"}
+                  vim={vim}
+                  pagePath={path}
+                  resolveWikiLink={resolveWikiLink}
+                  onNavigate={onNavigate ? navigateFromEditor : undefined}
                 />
                 {/* Only while the caret is in a widget fence, so the pane does
-                    not take height from ordinary prose editing. */}
-                <FencePreview target={fenceUnderCursor} />
+                    not take height from ordinary prose editing. Live preview
+                    draws fences in place instead. */}
+                {editorMode === "source" && <FencePreview target={fenceUnderCursor} />}
               </div>
             ) : visualParseError ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
@@ -950,9 +1150,9 @@ function EditorInner({
                       <SuggestionMenuController
                         triggerCharacter="["
                         getItems={async (query) => {
-                          const pm = (editor as any)._tiptapEditor;
-                          if (pm?.view) {
-                            const { state } = pm.view;
+                          const view = editor.prosemirrorView;
+                          if (view) {
+                            const { state } = view;
                             const pos = state.selection.from;
                             const checkPos = pos - query.length - 2;
                             if (checkPos < 0 || state.doc.textBetween(checkPos, checkPos + 1) !== "[") {
@@ -970,16 +1170,16 @@ function EditorInner({
                                 icon: <LinkIcon size={18} />,
                                 onItemClick: () => {
                                   queueMicrotask(() => {
-                                    const ttp = (editor as any)._tiptapEditor;
-                                    if (!ttp?.view) return;
-                                    const { state } = ttp.view;
+                                    const view = editor.prosemirrorView;
+                                    if (!view) return;
+                                    const { state } = view;
                                     const pos = state.selection.from;
                                     if (pos > 0 && state.doc.textBetween(pos - 1, pos) === "[") {
-                                      ttp.view.dispatch(
+                                      view.dispatch(
                                         state.tr.delete(pos - 1, pos).insertText(`[[${pageName}]]`, pos - 1),
                                       );
                                     } else {
-                                      ttp.view.dispatch(state.tr.insertText(`[[${pageName}]]`, pos));
+                                      view.dispatch(state.tr.insertText(`[[${pageName}]]`, pos));
                                     }
                                   });
                                 },
@@ -1031,6 +1231,12 @@ function EditorInner({
   );
 }
 
+const EDITOR_MODES: { mode: EditorMode; label: string; aria: string; Icon: typeof PenLine }[] = [
+  { mode: "visual", label: "Visual", aria: "Switch to visual editor mode", Icon: PenLine },
+  { mode: "live", label: "Live", aria: "Switch to live preview editor mode", Icon: Eye },
+  { mode: "source", label: "Source", aria: "Switch to source editor mode", Icon: Code },
+];
+
 function EditorModeToggle({
   mode,
   disabled,
@@ -1050,38 +1256,25 @@ function EditorModeToggle({
       aria-label="Editor mode"
       aria-disabled={disabled || undefined}
     >
-      <button
-        type="button"
-        disabled={disabled}
-        aria-pressed={mode === "visual"}
-        aria-label="Switch to visual editor mode"
-        className={cn(
-          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          mode === "visual"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-        onClick={() => onSelect("visual")}
-      >
-        <PenLine className="h-3 w-3" />
-        <span className="hidden sm:inline">Visual</span>
-      </button>
-      <button
-        type="button"
-        disabled={disabled}
-        aria-pressed={mode === "source"}
-        aria-label="Switch to source editor mode"
-        className={cn(
-          "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          mode === "source"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-        onClick={() => onSelect("source")}
-      >
-        <Code className="h-3 w-3" />
-        <span className="hidden sm:inline">Source</span>
-      </button>
+      {EDITOR_MODES.map(({ mode: value, label, aria, Icon }) => (
+        <button
+          key={value}
+          type="button"
+          disabled={disabled}
+          aria-pressed={mode === value}
+          aria-label={aria}
+          className={cn(
+            "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            mode === value
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+          onClick={() => onSelect(value)}
+        >
+          <Icon className="h-3 w-3" />
+          <span className="hidden sm:inline">{label}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -1129,6 +1322,47 @@ function EditorModeSwitchDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DiskChangeBanner({
+  change,
+  onReload,
+  onKeepMine,
+}: {
+  change: DiskChange;
+  onReload: () => void;
+  onKeepMine: () => void;
+}) {
+  const message =
+    change.kind === "deleted"
+      ? "This page was deleted on disk."
+      : change.kind === "conflict"
+        ? "This page changed on disk before your edits were saved."
+        : "This page changed on disk.";
+  return (
+    <div
+      role="alert"
+      className="max-w-3xl mb-4 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm"
+    >
+      <TriangleAlert className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
+      <p className="flex-1 min-w-[12rem]">
+        {message}{" "}
+        <span className="text-muted-foreground">
+          {change.kind === "deleted"
+            ? "Keep yours to save it again."
+            : "Reload to see it, or keep yours to overwrite it."}
+        </span>
+      </p>
+      {change.kind !== "deleted" && (
+        <Button size="sm" variant="outline" onClick={onReload}>
+          Reload
+        </Button>
+      )}
+      <Button size="sm" variant="outline" onClick={onKeepMine}>
+        Keep mine
+      </Button>
+    </div>
   );
 }
 

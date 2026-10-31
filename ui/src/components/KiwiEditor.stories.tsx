@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { action } from "storybook/actions";
+import { expect, waitFor } from "storybook/test";
 import { KiwiEditor } from "./KiwiEditor";
 import { MockApiProvider } from "./__mocks__/apiMock";
 import {
@@ -125,4 +126,39 @@ export const SourceModePreferred: Story = {
       );
     },
   ],
+};
+
+/** Open editor in Live mode: the CodeMirror text with live preview decorations. */
+export const LivePreviewPreferred: Story = {
+  ...MarkdownEditor,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Use this story for live preview checks: the content region is named Markdown live preview editor, the mode switch offers Visual, Live and Source, and the Vim toggle is a pressed/unpressed button.",
+      },
+    },
+  },
+  decorators: [
+    (Story) => {
+      try {
+        localStorage.setItem("kiwifs-editor-mode", "live");
+      } catch {
+        /* ignore */
+      }
+      return (
+        <MockApiProvider overrides={{ fileContent: mockMarkdownRich }}>
+          <main className="h-screen bg-background text-foreground">
+            <Story />
+          </main>
+        </MockApiProvider>
+      );
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    await waitFor(() => expect(canvasElement.querySelector('[aria-label="Markdown live preview editor"]')).not.toBeNull());
+    const modes = canvasElement.querySelectorAll('[aria-label="Editor mode"] button');
+    await expect([...modes].map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "true", "false"]);
+    await expect(canvasElement.querySelector('[aria-label="Vim keybindings"]')).toHaveAttribute("aria-pressed", "false");
+  },
 };

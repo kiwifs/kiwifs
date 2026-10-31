@@ -55,7 +55,7 @@ Each section is collapsible (state saved to localStorage).
 Fills the remaining width (`flex-1`). Renders one of:
 
 - **Page view** (`KiwiPage`) — markdown render with ToC, backlinks, comments, widgets.
-- **Editor** (`KiwiEditor`) — source-preserving BlockNote editor with slash commands.
+- **Editor** (`KiwiEditor`) — three modes over the same file: Live (CodeMirror with live preview decorations), Visual (BlockNote; saves merge edits onto the original bytes) and Source (CodeMirror), with slash commands and optional Vim keys.
 - **Graph** (`KiwiGraph`) — Sigma.js force-directed knowledge graph with link-type filtering.
 - **History** (`KiwiHistory`) — version diff viewer.
 - **Bases** (`KiwiBases`) — saved DQL views with table, cards, list, map layouts.

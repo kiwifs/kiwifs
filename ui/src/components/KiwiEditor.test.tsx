@@ -14,12 +14,21 @@ const harness = vi.hoisted(() => ({
       blocks.map((block) => block.text).filter(Boolean).join("\n\n")),
   },
   onChange: () => {},
+  sourceProps: null as null | Record<string, unknown>,
+  fileEvent: null as null | ((event: { op: string; path?: string; etag?: string }) => Promise<void> | void),
   readFile: vi.fn(),
   writeFile: vi.fn(),
 }));
 
 vi.mock("date-fns", () => ({ formatDistanceToNow: () => "just now" }));
-vi.mock("@blocknote/core", () => ({ filterSuggestionItems: vi.fn() }));
+vi.mock("@blocknote/core", () => ({
+  filterSuggestionItems: vi.fn(),
+  createExtension: (factory: unknown) => factory,
+}));
+vi.mock("@kw/lib/blockNoteMarkdown", () => ({
+  parseMarkdownToBlocks: (editor: typeof harness.editor, markdown: string) =>
+    editor.tryParseMarkdownToBlocks(markdown),
+}));
 vi.mock("@blocknote/react", () => ({
   useCreateBlockNote: () => harness.editor,
   FormattingToolbarController: () => null,
@@ -39,6 +48,12 @@ vi.mock("@kw/lib/api", () => ({
   },
 }));
 vi.mock("@kw/fences", () => ({ allFences: () => [] }));
+vi.mock("@kw/lib/useSSE", () => ({
+  useSSE: (handler: typeof harness.fileEvent) => {
+    harness.fileEvent = handler;
+  },
+  eventTouchesPath: (event: { path?: string }, path: string) => event.path === path,
+}));
 vi.mock("../hooks/useEditorSlashCommands", () => ({ useEditorSlashCommands: () => [] }));
 vi.mock("@kw/lib/editorSlashCommands", () => ({
   blockNoteSlashItems: () => [],
@@ -51,8 +66,17 @@ vi.mock("./ExcalidrawMarkdownPreview", () => ({
 vi.mock("./editor/FencePreview", () => ({ FencePreview: () => null }));
 vi.mock("./editor/markdownSlashCommands", () => ({ splitFenceExample: vi.fn() }));
 vi.mock("./editor/MarkdownSourceEditor", () => ({
-  MarkdownSourceEditor: ({ value, onChange }: { value: string; onChange: (text: string) => void }) =>
-    <textarea aria-label="Markdown source editor" value={value} onChange={(event) => onChange(event.target.value)} />,
+  MarkdownSourceEditor: (props: { value: string; onChange: (text: string) => void; livePreview?: boolean }) => {
+    harness.sourceProps = props;
+    return (
+      <textarea
+        aria-label="Markdown source editor"
+        data-live={props.livePreview ? "true" : undefined}
+        value={props.value}
+        onChange={(event) => props.onChange(event.target.value)}
+      />
+    );
+  },
 }));
 
 function deferred<T>() {
@@ -68,10 +92,10 @@ let unmounted: boolean;
 let onSaved: ReturnType<typeof vi.fn<(path: string) => void>>;
 let saveRef: { current: { save: () => Promise<void> } | null };
 
-async function mount(content = "", path = "note.md", etag = '\"initial\"') {
+async function mount(content = "", path = "note.md", etag = '\"initial\"', onNavigate?: (path: string) => void) {
   harness.readFile.mockResolvedValue({ content, etag });
   await act(async () => {
-    root.render(<KiwiEditor path={path} onClose={() => {}} onSaved={onSaved} saveRef={saveRef} />);
+    root.render(<KiwiEditor path={path} onClose={() => {}} onSaved={onSaved} saveRef={saveRef} onNavigate={onNavigate} />);
   });
 }
 
@@ -253,8 +277,9 @@ describe("editor save synchronization", () => {
 
   it("does not start a write if serialization finishes after unmount", async () => {
     const markdown = deferred<string>();
-    harness.editor.blocksToMarkdownLossy.mockReturnValueOnce(markdown.promise);
     await mount();
+    // After mount: loading serializes once to record the merge baseline.
+    harness.editor.blocksToMarkdownLossy.mockReturnValueOnce(markdown.promise);
     await editVisual("first");
     let closing!: Promise<void>;
     await act(async () => { closing = saveRef.current!.save(); });
@@ -351,6 +376,17 @@ describe("editor save synchronization", () => {
     expect(harness.writeFile).toHaveBeenCalledTimes(1);
   });
 
+  it("writes only the edited block, keeping the rest of the file and the title heading as they were", async () => {
+    await mount("---\ntitle: T\n---\n\n# T\n\n- a\n- b\n\nPara\n");
+    await editVisual("- a", "- b", "Para edited");
+    await advance();
+    expect(harness.writeFile.mock.calls[0][1]).toBe("---\ntitle: T\n---\n\n# T\n\n- a\n- b\n\nPara edited\n");
+    // The next save merges onto what is now on disk.
+    await editVisual("- a", "- b changed", "Para edited");
+    await advance();
+    expect(harness.writeFile.mock.calls[1][1]).toBe("---\ntitle: T\n---\n\n# T\n\n- a\n- b changed\n\nPara edited\n");
+  });
+
   it("still parses source edits when intentionally switching to Visual", async () => {
     localStorage.setItem("kiwifs-editor-mode", "source");
     await mount("original");
@@ -362,5 +398,170 @@ describe("editor save synchronization", () => {
     expect(container.querySelector<HTMLInputElement>('[aria-label="Page title"]')!.value).toBe("New");
     await click("Switch to source editor mode");
     expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Markdown source editor"]')!.value).toContain("changed");
+  });
+});
+
+describe("live preview mode", () => {
+  const sourceBox = () => container.querySelector<HTMLTextAreaElement>('[aria-label="Markdown source editor"]')!;
+
+  it("switches between live and source with no dialog, keeping unsaved text", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "live");
+    await mount("# Page\n\nBody\n");
+    expect(sourceBox().dataset.live).toBe("true");
+    await input("Markdown source editor", "# Page\n\nEdited\n");
+    await click("Switch to source editor mode");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(sourceBox().dataset.live).toBeUndefined();
+    expect(sourceBox().value).toBe("# Page\n\nEdited\n");
+    await click("Switch to live preview editor mode");
+    expect(sourceBox().value).toBe("# Page\n\nEdited\n");
+    expect(localStorage.getItem("kiwifs-editor-mode")).toBe("live");
+    await advance();
+    expect(harness.writeFile.mock.calls[0][1]).toBe("# Page\n\nEdited\n");
+  });
+
+  it("saves the loaded bytes untouched", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "live");
+    const content = "---\r\ntitle: T\r\n---\r\n\r\n# T\r\n\r\n- a\r\n* b\r\n";
+    await mount(content);
+    await input("Page title", "T");
+    await act(async () => { await saveRef.current!.save(); });
+    expect(harness.writeFile.mock.calls[0][1]).toBe(content);
+  });
+
+  it("goes through the save dialog when switching to visual with unsaved text", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "live");
+    await mount("Body\n");
+    await input("Markdown source editor", "Edited\n");
+    await click("Switch to visual editor mode");
+    await click("Save & switch");
+    expect(harness.writeFile.mock.calls[0][1]).toBe("Edited\n");
+    expect(container.querySelector('[aria-label="Mock visual editor"]')).not.toBeNull();
+  });
+
+  it("saves before following a wiki link out of the editor", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "live");
+    const onNavigate = vi.fn();
+    await mount("Body\n", "note.md", '"initial"', onNavigate);
+    await input("Markdown source editor", "Body [[other]]\n");
+    const navigate = harness.sourceProps!.onNavigate as (path: string) => Promise<void>;
+    await act(async () => { await navigate("other.md"); });
+    expect(harness.writeFile).toHaveBeenCalledWith("note.md", "Body [[other]]\n", '"initial"');
+    expect(onNavigate).toHaveBeenCalledWith("other.md");
+  });
+
+  it("toggles Vim keybindings and remembers the choice", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "source");
+    await mount("Body\n");
+    expect(harness.sourceProps!.vim).toBe(false);
+    await click("Vim keybindings");
+    expect(harness.sourceProps!.vim).toBe(true);
+    expect(localStorage.getItem("kiwifs-editor-vim")).toBe("on");
+  });
+});
+
+describe("changes made outside the editor", () => {
+  const sourceBox = () => container.querySelector<HTMLTextAreaElement>('[aria-label="Markdown source editor"]')!;
+  const banner = () => container.querySelector('[role="alert"]');
+  const fileEvent = async (event: { op: string; path?: string; etag?: string }) => {
+    await act(async () => { await harness.fileEvent!(event); });
+  };
+
+  it("takes an agent's write in place while the text editor has no unsaved edits", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "live");
+    await mount("Body\n");
+    harness.readFile.mockResolvedValueOnce({ content: "Body\n\nAdded by an agent\n", etag: '"agent"' });
+    await fileEvent({ op: "write", path: "note.md", etag: "agent" });
+    expect(sourceBox().value).toBe("Body\n\nAdded by an agent\n");
+    expect(banner()).toBeNull();
+    await input("Markdown source editor", "Body, edited\n\nAdded by an agent\n");
+    await advance();
+    expect(harness.writeFile.mock.calls[0][2]).toBe('"agent"');
+  });
+
+  it("asks before replacing unsaved edits, and reloads on request", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "source");
+    await mount("Body\n");
+    await input("Markdown source editor", "Mine\n");
+    harness.readFile.mockResolvedValueOnce({ content: "Theirs\n", etag: '"theirs"' });
+    await fileEvent({ op: "write", path: "note.md", etag: "theirs" });
+    expect(banner()!.textContent).toContain("changed on disk");
+    expect(sourceBox().value).toBe("Mine\n");
+    await advance();
+    expect(harness.writeFile).not.toHaveBeenCalled();
+    await click("Reload");
+    expect(sourceBox().value).toBe("Theirs\n");
+    expect(banner()).toBeNull();
+    expect(container.querySelector('[role="status"]')!.textContent).not.toContain("Unsaved");
+  });
+
+  it("keeps the user's text on request and saves it over the disk version", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "source");
+    await mount("Body\n");
+    await input("Markdown source editor", "Mine\n");
+    harness.readFile.mockResolvedValueOnce({ content: "Theirs\n", etag: '"theirs"' });
+    await fileEvent({ op: "write", path: "note.md", etag: "theirs" });
+    await click("Keep mine");
+    await advance();
+    expect(harness.writeFile).toHaveBeenCalledWith("note.md", "Mine\n", '"theirs"');
+  });
+
+  it("always asks in visual mode, and reloads the blocks from the new file", async () => {
+    await mount("Body\n");
+    harness.readFile.mockResolvedValueOnce({ content: "New body\n", etag: '"theirs"' });
+    await fileEvent({ op: "write", path: "note.md", etag: "theirs" });
+    expect(banner()).not.toBeNull();
+    await click("Reload");
+    expect(harness.editor.tryParseMarkdownToBlocks).toHaveBeenLastCalledWith("New body\n");
+  });
+
+  it("clears the visual editor when the reloaded file is empty, so the old text is not saved back", async () => {
+    await mount("Old body\n");
+    harness.readFile.mockResolvedValueOnce({ content: "", etag: '"emptied"' });
+    await fileEvent({ op: "write", path: "note.md", etag: "emptied" });
+    await click("Reload");
+    expect(harness.editor.document).toEqual([{ type: "paragraph" }]);
+  });
+
+  it("ignores the event for its own save", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "source");
+    await mount("Body\n");
+    await input("Markdown source editor", "Mine\n");
+    await advance();
+    harness.readFile.mockClear();
+    await fileEvent({ op: "write", path: "note.md", etag: "saved" });
+    expect(harness.readFile).not.toHaveBeenCalled();
+    expect(banner()).toBeNull();
+  });
+
+  it("ignores other pages", async () => {
+    await mount("Body\n");
+    harness.readFile.mockClear();
+    await fileEvent({ op: "write", path: "other.md", etag: "x" });
+    expect(harness.readFile).not.toHaveBeenCalled();
+  });
+
+  it("shows a rejected save as a disk change rather than an error string", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "source");
+    await mount("Body\n");
+    harness.writeFile.mockRejectedValueOnce(Object.assign(new Error("409 Conflict: etag mismatch"), { status: 409 }));
+    harness.readFile.mockResolvedValueOnce({ content: "Theirs\n", etag: '"theirs"' });
+    await input("Markdown source editor", "Mine\n");
+    await advance();
+    expect(banner()!.textContent).toContain("before your edits were saved");
+    expect(container.textContent).not.toContain("etag mismatch");
+    await input("Markdown source editor", "Mine, more\n");
+    await advance();
+    expect(harness.writeFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers to save a page deleted on disk again", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "source");
+    await mount("Body\n");
+    await fileEvent({ op: "delete", path: "note.md" });
+    expect(banner()!.textContent).toContain("deleted");
+    await click("Keep mine");
+    await advance();
+    expect(harness.writeFile).toHaveBeenCalledWith("note.md", "Body\n", undefined);
   });
 });

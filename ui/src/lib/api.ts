@@ -803,7 +803,7 @@ export const api = {
   async getPreferences(): Promise<{
     theme?: string;
     sidebar_collapsed?: boolean;
-    default_view?: "editor" | "source";
+    default_view?: "editor" | "source" | "live";
     font_size?: "base" | "sm" | "lg";
     editor_line_numbers?: boolean;
     vim_mode?: boolean;
@@ -814,14 +814,14 @@ export const api = {
   async putPreferences(prefs: {
     theme?: string;
     sidebar_collapsed?: boolean;
-    default_view?: "editor" | "source";
+    default_view?: "editor" | "source" | "live";
     font_size?: "base" | "sm" | "lg";
     editor_line_numbers?: boolean;
     vim_mode?: boolean;
   }): Promise<{
     theme?: string;
     sidebar_collapsed?: boolean;
-    default_view?: "editor" | "source";
+    default_view?: "editor" | "source" | "live";
     font_size?: "base" | "sm" | "lg";
     editor_line_numbers?: boolean;
     vim_mode?: boolean;

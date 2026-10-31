@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, apiBase } from "./api";
+import { dirOf } from "./paths";
 
 // <img>, <video> and <iframe> cannot send the Authorization header, so when
 // auth is on the server only serves /raw/ URLs that carry a short-lived
@@ -11,6 +12,20 @@ const RENEW_MARGIN_MS = 5 * 60 * 1000;
 
 const cache = new Map<string, { url: string; expiresAt: number }>();
 const inflight = new Map<string, Promise<string>>();
+
+/**
+ * The URL an image or embed `src` written on page `pagePath` loads from.
+ * Relative paths resolve against the page's folder and root-relative ones
+ * against the workspace, both through `/raw/`; absolute URLs, `data:` URIs,
+ * and `/raw/` or `/api/` paths pass through.
+ */
+export function pageAssetUrl(src: string, pagePath: string): string {
+  if (!src || /^(https?:|data:|blob:)/i.test(src) || src.startsWith("/raw/") || src.startsWith("/api/")) return src;
+  if (src.startsWith("/")) return `/raw${src}`;
+  const pageDir = dirOf(pagePath);
+  const rel = src.startsWith("./") ? src.slice(2) : src;
+  return pageDir ? `/raw/${pageDir}/${rel}` : `/raw/${rel}`;
+}
 
 /** Workspace path of a `/raw/...` URL, or null for any other URL. */
 export function rawPathOf(src: string | undefined): string | null {
