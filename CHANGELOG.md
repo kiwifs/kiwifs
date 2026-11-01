@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.83](https://github.com/kiwifs/kiwifs/compare/v0.19.82...v0.19.83) (2026-11-01)
+
+
+### Bug Fixes
+
+* **ui:** drop the typed query when accepting slash and wikilink completions ([#567](https://github.com/kiwifs/kiwifs/issues/567)) ([17a6bca](https://github.com/kiwifs/kiwifs/commit/17a6bcac82cb062ab823d7c94612636656c12bd3)), closes [#565](https://github.com/kiwifs/kiwifs/issues/565)
+
 ## [0.19.82](https://github.com/kiwifs/kiwifs/compare/v0.19.81...v0.19.82) (2026-10-31)
 
 
