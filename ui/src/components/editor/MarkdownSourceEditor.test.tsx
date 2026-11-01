@@ -5,6 +5,7 @@ import { EditorSelection } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { EditorView, runScopeHandlers } from "@codemirror/view";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { accept, typeText } from "@kw/test/completionTyping";
 import { markdownFixtures } from "@kw/test/markdownFixtures";
 import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
 
@@ -89,6 +90,18 @@ describe("MarkdownSourceEditor", () => {
     const head = view.state.selection.main.head;
     expect(view.state.sliceDoc(head, head + 4)).toBe("here");
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("replaces the whole slash query in live preview (#565)", async () => {
+    const { view, onChange } = await render("Intro\n\n", { livePreview: true });
+    await act(async () => {
+      view.dispatch({ selection: EditorSelection.cursor(view.state.doc.length) });
+      await typeText(view, "/to");
+      await accept(view);
+    });
+    expect(view.state.doc.toString()).toBe("Intro\n\n- [ ] ");
+    expect(view.state.selection.main.head).toBe(view.state.doc.length);
+    expect(onChange).toHaveBeenLastCalledWith("Intro\n\n- [ ] ");
   });
 
   it("labels live preview for assistive technology", async () => {

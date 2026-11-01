@@ -1,4 +1,5 @@
 import {
+  type Completion,
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
@@ -44,11 +45,15 @@ export function wikiLinkCompletionSource(pages: WikiPage[]) {
           displayLabel: p.title,
           detail: p.path,
           type: "text" as const,
-          apply: (view: EditorView) => {
+          // Use CodeMirror's live range: the trigger captured above goes stale
+          // as `validFor` lets the user keep typing without re-running this.
+          apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
             const insert = `[[${pageName}]]`;
+            // closeBrackets turns a typed `[[` into `[[]]`; swallow that `]]`.
+            if (view.state.sliceDoc(to, to + 2) === "]]") to += 2;
             view.dispatch({
-              changes: { from: trigger.from, to: trigger.to, insert },
-              selection: { anchor: trigger.from + insert.length },
+              changes: { from, to, insert },
+              selection: { anchor: from + insert.length },
               userEvent: "input.complete",
             });
           },
