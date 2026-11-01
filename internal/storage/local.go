@@ -19,8 +19,6 @@ import (
 // should map this to HTTP 400 rather than 500.
 var ErrPathDenied = errors.New("path denied")
 
-
-
 // Local implements Storage over a local directory.
 //
 // Methods accept context.Context to satisfy the interface but currently
@@ -65,8 +63,9 @@ func (l *Local) AbsPath(path string) string {
 // and should be accessible through the normal file API. Everything else
 // under .kiwi/ (config.toml, state/, templates/, etc.) stays blocked.
 var userEditableKiwiFiles = map[string]bool{
-	".kiwi/rules.md":    true,
-	".kiwi/playbook.md": true,
+	".kiwi/rules.md":            true,
+	".kiwi/playbook.md":         true,
+	".kiwi/slash-commands.toml": true,
 }
 
 // GuardPath resolves userPath against root and rejects any result that

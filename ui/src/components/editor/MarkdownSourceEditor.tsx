@@ -15,7 +15,7 @@ import { minimalChanges } from "./minimalChanges";
 import type { EditorSlashCommandConfig } from "@kw/lib/editorSlashCommands";
 import { markdownEditorExtensions } from "./markdownLanguage";
 import { livePreviewTheme, markdownEditorTheme } from "./markdownEditorTheme";
-import { customSlashCompletionSource, customSlashTemplateState, slashCompletionSource } from "./markdownSlashCommands";
+import { customSlashCompletionSource, slashCompletionSourceFor } from "./markdownSlashCommands";
 import {
   wikiLinkCompletionSource,
   type WikiPage,
@@ -41,8 +41,8 @@ export type MarkdownSourceEditorProps = {
   onSaveShortcut?: () => void;
   pages?: WikiPage[];
   customSlashCommands?: EditorSlashCommandConfig[];
-  loadSlashTemplate?: (templatePath: string) => Promise<string>;
-  onSlashTemplateError?: (message: string) => void;
+  /** Built-in slash command names to leave out of the menu. */
+  hiddenSlashCommands?: string[];
   /**
    * Fires with the widget fence the caret is in, or null. A source-mode pane
    * can render it live, so an author editing YAML can see the picture.
@@ -72,6 +72,7 @@ function isWidgetFence(fence: FencePreviewTarget): boolean {
 // Shared, so leaving the props out does not rebuild every extension each render.
 const NO_PAGES: WikiPage[] = [];
 const NO_SLASH_COMMANDS: EditorSlashCommandConfig[] = [];
+const NO_HIDDEN: string[] = [];
 
 export function MarkdownSourceEditor({
   value,
@@ -83,8 +84,7 @@ export function MarkdownSourceEditor({
   onSaveShortcut,
   pages = NO_PAGES,
   customSlashCommands = NO_SLASH_COMMANDS,
-  loadSlashTemplate,
-  onSlashTemplateError,
+  hiddenSlashCommands = NO_HIDDEN,
   onFenceUnderCursor,
   livePreview = false,
   vim = false,
@@ -110,6 +110,15 @@ export function MarkdownSourceEditor({
 
   const portals = useMemo(() => new WidgetPortals(), []);
   const widgets = useSyncExternalStore(portals.subscribe, portals.getSnapshot, portals.getSnapshot);
+
+  const builtinSlashSource = useMemo(
+    () =>
+      slashCompletionSourceFor(
+        new Set(hiddenSlashCommands.map((name) => name.toLowerCase())),
+        new Set(customSlashCommands.map((cmd) => cmd.id.toLowerCase())),
+      ),
+    [hiddenSlashCommands, customSlashCommands],
+  );
 
   const preview = useMemo(() => {
     if (!livePreview) return null;
@@ -164,12 +173,13 @@ export function MarkdownSourceEditor({
 
     // Fence keys come before the slash menu: inside a widget body an author
     // wants `activeIndices`, not `/table`.
-    const completionSources: CompletionSource[] = [fenceCompletion, slashCompletionSource];
-    if (customSlashCommands.length > 0 && loadSlashTemplate && onSlashTemplateError) {
-      completionSources.push(
-        customSlashCompletionSource(customSlashCommands, loadSlashTemplate, onSlashTemplateError),
-      );
+    // The space's own commands come before the built-ins, which is also the
+    // order the menu lists them in.
+    const completionSources: CompletionSource[] = [fenceCompletion];
+    if (customSlashCommands.length > 0) {
+      completionSources.push(customSlashCompletionSource(customSlashCommands));
     }
+    completionSources.push(builtinSlashSource);
     if (pages.length > 0) {
       completionSources.push(wikiLinkCompletionSource(pages));
     }
@@ -178,7 +188,6 @@ export function MarkdownSourceEditor({
       // First, so its keymap sees keys before the editor's own.
       vim ? vimMode() : [],
       history(),
-      customSlashTemplateState,
       ...markdownEditorExtensions(),
       highlightSelectionMatches(),
       autocompletion({
@@ -215,8 +224,7 @@ export function MarkdownSourceEditor({
   }, [
     pages,
     customSlashCommands,
-    loadSlashTemplate,
-    onSlashTemplateError,
+    builtinSlashSource,
     wantsFence,
     vim,
     livePreview,

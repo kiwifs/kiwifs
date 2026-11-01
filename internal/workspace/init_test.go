@@ -4,11 +4,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/schema"
+	"github.com/kiwifs/kiwifs/internal/slashcommands"
 )
 
 func TestListInitTemplatesIncludesKnown(t *testing.T) {
@@ -407,5 +409,89 @@ func TestPromptConfigHasAuthGuidance(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("config.toml missing %q:\n%s", want, content)
 		}
+	}
+}
+
+func TestInitWritesCommentedSlashCommandsFile(t *testing.T) {
+	t.Parallel()
+	for _, tmpl := range []string{"blank", "tasks"} {
+		root := filepath.Join(t.TempDir(), tmpl)
+		if err := Init(root, tmpl); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(root, slashcommands.DefaultFile))
+		if err != nil {
+			t.Fatalf("%s: missing slash-commands.toml: %v", tmpl, err)
+		}
+		if !strings.Contains(string(data), `insert = "[assigned:: agent]"`) {
+			t.Fatalf("%s: file should carry the assigned example", tmpl)
+		}
+		res := slashcommands.Resolve(slashcommands.Options{Root: root})
+		if len(res.Commands) != 0 || len(res.Hide) != 0 || len(res.Warnings) != 0 {
+			t.Fatalf("%s: commented file should change nothing: %+v", tmpl, res)
+		}
+	}
+}
+
+func TestInitKeepsExistingSlashCommandsFile(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	p := filepath.Join(root, slashcommands.DefaultFile)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mine := "hide = [\"quiz\"]\n"
+	if err := os.WriteFile(p, []byte(mine), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Init(root, "blank"); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(p)
+	if string(data) != mine {
+		t.Fatalf("Init overwrote the existing file: %q", data)
+	}
+}
+
+// The examples in the init file must work once uncommented, so a user who
+// follows them gets commands rather than warnings.
+func TestSlashCommandsTemplateExamplesParseWhenUncommented(t *testing.T) {
+	t.Parallel()
+	raw, err := fs.ReadFile(EmbeddedTemplates(), "templates/slash-commands.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tomlLine := regexp.MustCompile(`^(\[\[|\w+ = |> |""")`)
+	var lines []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		if code, ok := strings.CutPrefix(line, "# "); ok && tomlLine.MatchString(code) {
+			lines = append(lines, code)
+		}
+	}
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".kiwi/templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".kiwi/templates/decision.md"), []byte("## Decision\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, slashcommands.DefaultFile), []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res := slashcommands.Resolve(slashcommands.Options{Root: root})
+	if len(res.Warnings) != 0 {
+		t.Fatalf("uncommented examples produce warnings: %v\n%s", res.Warnings, strings.Join(lines, "\n"))
+	}
+	got := map[string]string{}
+	for _, c := range res.Commands {
+		got[c.ID] = c.Insert
+	}
+	for _, id := range []string{"assigned", "decision", "todo", "warn-box"} {
+		if _, ok := got[id]; !ok {
+			t.Fatalf("missing example %q in %v", id, got)
+		}
+	}
+	if len(res.Hide) != 2 {
+		t.Fatalf("hide example: %v", res.Hide)
 	}
 }

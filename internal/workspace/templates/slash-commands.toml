@@ -1,0 +1,39 @@
+# Slash commands for this space. Changes apply the next time an editor opens.
+#
+# Everything here is commented out, so the menu starts with only the built-in
+# commands. Uncomment an example to try it. Custom commands are listed before
+# the built-ins in the / menu.
+#
+# Built-in commands to remove from the menu, by name (e.g. quiz, d2, table).
+# hide = ["quiz", "d2"]
+#
+# Each [[commands]] entry needs an id and exactly one of insert or template.
+#
+# [[commands]]
+# id = "assigned"                # what you type after /
+# label = "Assign to agent"
+# icon = "Bot"                   # any lucide.dev icon name
+# description = "Hand this task to the agent"
+# aliases = ["agent"]            # other words that find this command
+# insert = "[assigned:: agent]"  # inline text; {{cursor}} marks the caret
+#
+# [[commands]]
+# id = "decision"
+# label = "Decision record"
+# icon = "Scale"
+# template = ".kiwi/templates/decision.md"   # or a page, relative to the space
+#
+# [[commands]]
+# id = "todo"                    # same id as a built-in replaces it
+# insert = "- [ ] {{cursor}} [assigned:: agent]"
+#
+# Multi-line inserts use TOML's triple quotes:
+#
+# [[commands]]
+# id = "warn-box"
+# label = "Warning box"
+# icon = "TriangleAlert"
+# insert = """
+# > [!warning] {{cursor}}
+# > Details here.
+# """

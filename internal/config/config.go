@@ -432,15 +432,22 @@ func (t UITagsConfig) ResolvedBanner() []string {
 // UIEditorConfig holds editor customization (slash commands, etc.).
 type UIEditorConfig struct {
 	SlashCommands []SlashCommandConfig `toml:"slash_commands"`
+	// SlashCommandsFile is the space-relative per-space commands file,
+	// default .kiwi/slash-commands.toml.
+	SlashCommandsFile string `toml:"slash_commands_file"`
 }
 
-// SlashCommandConfig is one [[ui.editor.slash_commands]] entry.
+// SlashCommandConfig is one [[ui.editor.slash_commands]] entry, or one
+// [[commands]] entry in .kiwi/slash-commands.toml. Exactly one of Insert and
+// Template must be set.
 type SlashCommandConfig struct {
-	ID          string `toml:"id"`
-	Label       string `toml:"label"`
-	Icon        string `toml:"icon"`
-	Description string `toml:"description"`
-	Template    string `toml:"template"` // workspace-relative markdown path
+	ID          string   `toml:"id"`
+	Label       string   `toml:"label"`
+	Icon        string   `toml:"icon"`
+	Description string   `toml:"description"`
+	Aliases     []string `toml:"aliases"`
+	Insert      string   `toml:"insert"`   // inline text; {{cursor}} marks the caret
+	Template    string   `toml:"template"` // workspace-relative markdown path
 }
 
 // BrandingConfig controls white-label app name, logo, favicon, and welcome copy.

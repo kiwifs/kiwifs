@@ -2,6 +2,7 @@
 // error handling and actor attribution stay consistent.
 
 import type { UIFeatureKey } from "./uiFeatures";
+import type { EditorSlashCommandConfig } from "./editorSlashCommands";
 
 export type TreeEntry = {
   path: string;
@@ -771,13 +772,9 @@ export const api = {
   },
 
   async getEditorSlashCommands(): Promise<{
-    commands: {
-      id: string;
-      label: string;
-      icon: string;
-      description: string;
-      template: string;
-    }[];
+    commands: EditorSlashCommandConfig[];
+    hide: string[];
+    warnings: string[];
   }> {
     return request(`${kiwiBase()}/editor/slash-commands`);
   },
