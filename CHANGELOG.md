@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.84](https://github.com/kiwifs/kiwifs/compare/v0.19.83...v0.19.84) (2026-11-01)
+
+
+### Features
+
+* per-space slash commands file and callout commands ([#569](https://github.com/kiwifs/kiwifs/issues/569)) ([36540a7](https://github.com/kiwifs/kiwifs/commit/36540a7afbbe5db946b52326fc41ed1ab44381a3)), closes [#566](https://github.com/kiwifs/kiwifs/issues/566)
+
 ## [0.19.83](https://github.com/kiwifs/kiwifs/compare/v0.19.82...v0.19.83) (2026-11-01)
 
 
