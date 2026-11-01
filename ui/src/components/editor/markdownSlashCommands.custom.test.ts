@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
-import { EditorState } from "@codemirror/state";
-import type { CompletionContext, CompletionResult, CompletionSource } from "@codemirror/autocomplete";
-import type { EditorView } from "@codemirror/view";
-import { customSlashCompletionSource } from "./markdownSlashCommands";
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { EditorState, StateEffect } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import { autocompletion, type CompletionContext, type CompletionResult, type CompletionSource } from "@codemirror/autocomplete";
+import { accept, typeText } from "@kw/test/completionTyping";
+import { customSlashCompletionSource, customSlashTemplateState } from "./markdownSlashCommands";
 
 async function invokeCompletionSource(
   source: CompletionSource,
@@ -12,36 +14,30 @@ async function invokeCompletionSource(
   return result instanceof Promise ? await result : result;
 }
 
-function mockView(doc: string) {
-  let currentDoc = doc;
-  const state = {
-    doc: {
-      toString: () => currentDoc,
-      length: currentDoc.length,
-      sliceString: (from: number, to: number) => currentDoc.slice(from, to),
-      lineAt: (pos: number) => {
-        const before = currentDoc.slice(0, pos);
-        const lineStart = before.lastIndexOf("\n") + 1;
-        return { from: lineStart, text: currentDoc.slice(lineStart, currentDoc.indexOf("\n", lineStart) === -1 ? undefined : currentDoc.indexOf("\n", lineStart)) };
-      },
-    },
-  };
-  const view = {
-    get state() {
-      return state;
-    },
-    dispatch: (update: { changes: { from: number; to: number; insert: string }; selection: { anchor: number } }) => {
-      currentDoc = update.changes.insert;
-      state.doc = {
-        toString: () => currentDoc,
-        length: currentDoc.length,
-        sliceString: (from: number, to: number) => currentDoc.slice(from, to),
-        lineAt: state.doc.lineAt,
-      };
-    },
-  } as unknown as EditorView;
-  return { view, getDoc: () => currentDoc };
+const views: EditorView[] = [];
+
+afterEach(() => {
+  for (const view of views.splice(0)) view.destroy();
+});
+
+function editor(doc: string, source?: CompletionSource): EditorView {
+  const parent = document.createElement("div");
+  document.body.append(parent);
+  const view = new EditorView({
+    parent,
+    state: EditorState.create({
+      doc,
+      selection: { anchor: doc.length },
+      extensions: source ? [autocompletion({ override: [source] })] : [],
+    }),
+  });
+  views.push(view);
+  return view;
 }
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const adr = [{ id: "adr", label: "ADR", icon: "", description: "", template: "templates/adr.md" }];
 
 describe("customSlashCompletionSource", () => {
   it("offers configured commands matching the slash query", async () => {
@@ -49,10 +45,7 @@ describe("customSlashCompletionSource", () => {
       { id: "adr", label: "ADR", icon: "FileCheck", description: "Insert ADR", template: "templates/adr.md" },
       { id: "runbook", label: "Runbook", icon: "Zap", description: "Runbook step", template: "templates/runbook.md" },
     ];
-    const loadTemplate = vi.fn().mockResolvedValue("# ADR\n");
-    const onError = vi.fn();
-
-    const source = customSlashCompletionSource(commands, loadTemplate, onError);
+    const source = customSlashCompletionSource(commands, vi.fn().mockResolvedValue("# ADR\n"), vi.fn());
     const state = EditorState.create({ doc: "# Note\n\n/ad" });
     const result = await invokeCompletionSource(source, {
       state,
@@ -66,13 +59,8 @@ describe("customSlashCompletionSource", () => {
   });
 
   it("loads template content on apply and reports errors", async () => {
-    const commands = [
-      { id: "adr", label: "ADR", icon: "", description: "", template: "templates/adr.md" },
-    ];
-    const loadTemplate = vi.fn().mockRejectedValue(new Error("missing file"));
     const onError = vi.fn();
-
-    const source = customSlashCompletionSource(commands, loadTemplate, onError);
+    const source = customSlashCompletionSource(adr, vi.fn().mockRejectedValue(new Error("missing file")), onError);
     const state = EditorState.create({ doc: "/adr" });
     const result = await invokeCompletionSource(source, {
       state,
@@ -84,21 +72,16 @@ describe("customSlashCompletionSource", () => {
     const apply = result?.options?.[0]?.apply;
     expect(typeof apply).toBe("function");
     if (typeof apply === "function") {
-      const { view } = mockView("/adr");
-      apply(view, result!.options![0], 0, 4);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      const view = editor("/adr");
+      apply(view, result!.options![0]!, 0, 4);
+      await flush();
       expect(onError).toHaveBeenCalledWith(expect.stringContaining("templates/adr.md"));
+      expect(view.state.doc.toString()).toBe("");
     }
   });
 
   it("inserts loaded template markdown into the document", async () => {
-    const commands = [
-      { id: "adr", label: "ADR", icon: "", description: "", template: "templates/adr.md" },
-    ];
-    const loadTemplate = vi.fn().mockResolvedValue("# ADR template\n");
-    const onError = vi.fn();
-
-    const source = customSlashCompletionSource(commands, loadTemplate, onError);
+    const source = customSlashCompletionSource(adr, vi.fn().mockResolvedValue("# ADR template\n"), vi.fn());
     const state = EditorState.create({ doc: "Intro\n/adr" });
     const result = await invokeCompletionSource(source, {
       state,
@@ -109,10 +92,60 @@ describe("customSlashCompletionSource", () => {
 
     const apply = result?.options?.[0]?.apply;
     if (typeof apply === "function") {
-      const { view, getDoc } = mockView("Intro\n/adr");
-      apply(view, result!.options![0], 6, 10);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(getDoc()).toBe("Intro\n# ADR template\n");
+      const view = editor("Intro\n/adr");
+      apply(view, result!.options![0]!, 6, 10);
+      await flush();
+      expect(view.state.doc.toString()).toBe("Intro\n# ADR template\n");
+      expect(view.state.selection.main.head).toBe(view.state.doc.length);
     }
+  });
+
+  it("replaces the whole query typed after the menu opened", async () => {
+    const view = editor("", customSlashCompletionSource(adr, vi.fn().mockResolvedValue("# ADR\n"), vi.fn()));
+    await typeText(view, "/a");
+    await typeText(view, "dr");
+    await accept(view);
+    await flush();
+    expect(view.state.doc.toString()).toBe("# ADR\n");
+  });
+
+  it("lands the template where the trigger was when the user types while it loads", async () => {
+    let resolve!: (content: string) => void;
+    const loadTemplate = vi.fn(() => new Promise<string>((r) => (resolve = r)));
+    const view = editor("Intro\n", customSlashCompletionSource(adr, loadTemplate, vi.fn()));
+    await typeText(view, "/adr");
+    await accept(view);
+    expect(view.state.doc.toString()).toBe("Intro\n");
+
+    view.dispatch({ changes: { from: 0, insert: ">> " }, userEvent: "input.type" });
+    const head = view.state.selection.main.head;
+    view.dispatch({ changes: { from: head, insert: "x" }, selection: { anchor: head + 1 }, userEvent: "input.type" });
+    resolve("# ADR\n");
+    await flush();
+
+    expect(view.state.doc.toString()).toBe(">> Intro\n# ADR\nx");
+    expect(view.state.selection.main.head).toBe(view.state.doc.length);
+  });
+
+  it("keeps a loading template across a reconfigure", async () => {
+    let resolve!: (content: string) => void;
+    const loadTemplate = vi.fn(() => new Promise<string>((r) => (resolve = r)));
+    const extensions = [
+      customSlashTemplateState,
+      autocompletion({ override: [customSlashCompletionSource(adr, loadTemplate, vi.fn())] }),
+    ];
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const view = new EditorView({ parent, state: EditorState.create({ doc: "", extensions }) });
+    views.push(view);
+    await typeText(view, "/adr");
+    await accept(view);
+
+    // What @uiw/react-codemirror does when the extensions prop changes.
+    view.dispatch({ effects: StateEffect.reconfigure.of([...extensions]) });
+    resolve("# ADR\n");
+    await flush();
+
+    expect(view.state.doc.toString()).toBe("# ADR\n");
   });
 });

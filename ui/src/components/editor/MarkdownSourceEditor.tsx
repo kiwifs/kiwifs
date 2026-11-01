@@ -15,7 +15,7 @@ import { minimalChanges } from "./minimalChanges";
 import type { EditorSlashCommandConfig } from "@kw/lib/editorSlashCommands";
 import { markdownEditorExtensions } from "./markdownLanguage";
 import { livePreviewTheme, markdownEditorTheme } from "./markdownEditorTheme";
-import { customSlashCompletionSource, slashCompletionSource } from "./markdownSlashCommands";
+import { customSlashCompletionSource, customSlashTemplateState, slashCompletionSource } from "./markdownSlashCommands";
 import {
   wikiLinkCompletionSource,
   type WikiPage,
@@ -178,6 +178,7 @@ export function MarkdownSourceEditor({
       // First, so its keymap sees keys before the editor's own.
       vim ? vimMode() : [],
       history(),
+      customSlashTemplateState,
       ...markdownEditorExtensions(),
       highlightSelectionMatches(),
       autocompletion({

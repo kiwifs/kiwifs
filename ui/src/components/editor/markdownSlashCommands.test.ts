@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getAvailableMarkdownSlashCommands,
   markdownSlashCommands,
-  replaceSlashCommandTrigger,
+  slashCommandChanges,
   splitFenceExample,
   widgetSlashCommands,
 } from "./markdownSlashCommands";
@@ -14,20 +14,25 @@ function command(name: string) {
 }
 
 describe("markdown slash commands", () => {
-  it("replaces the slash trigger line with a GFM table skeleton", () => {
-    const doc = "# Note\n\n/ta";
-    const result = replaceSlashCommandTrigger(doc, { from: 8, to: 11 }, command("table"));
+  it("replaces only the slash trigger with a GFM table skeleton", () => {
+    const result = slashCommandChanges({ from: 8, to: 11 }, command("table"));
 
-    expect(result.doc).toBe("# Note\n\n| Column | Value |\n| --- | --- |\n|  |  |\n");
-    expect(result.selection).toBe("# Note\n\n| Column | Value |\n| --- | --- |\n| ".length);
+    expect(result.changes).toEqual({ from: 8, to: 11, insert: "| Column | Value |\n| --- | --- |\n|  |  |\n" });
+    expect(result.selection.anchor).toBe(8 + "| Column | Value |\n| --- | --- |\n| ".length);
   });
 
-  it("keeps surrounding text when inserting a todo item", () => {
-    const doc = "Before\n/todo\nAfter";
-    const result = replaceSlashCommandTrigger(doc, { from: 7, to: 12 }, command("todo"));
+  it("puts the caret after a todo marker", () => {
+    const result = slashCommandChanges({ from: 7, to: 12 }, command("todo"));
 
-    expect(result.doc).toBe("Before\n- [ ] \nAfter");
-    expect(result.selection).toBe("Before\n- [ ] ".length);
+    expect(result.changes).toEqual({ from: 7, to: 12, insert: "- [ ] " });
+    expect(result.selection.anchor).toBe("Before\n- [ ] ".length);
+  });
+
+  it("inserts frontmatter like any other command", () => {
+    const result = slashCommandChanges({ from: 0, to: 3 }, command("frontmatter"));
+
+    expect(result.changes).toEqual({ from: 0, to: 3, insert: "---\ntitle: \ntags: []\n---\n\n" });
+    expect(result.selection.anchor).toBe("---\ntitle: ".length);
   });
 
   it("shows frontmatter when filtering slash commands for a document without frontmatter", () => {

@@ -1,5 +1,5 @@
 import { autocompletion, type Completion, type CompletionContext, type CompletionSource } from "@codemirror/autocomplete";
-import { type Extension } from "@codemirror/state";
+import { StateEffect, StateField, type Extension } from "@codemirror/state";
 import { type EditorView } from "@codemirror/view";
 import type { EditorSlashCommandConfig } from "@kw/lib/editorSlashCommands";
 import { filterSlashCommands, templateLoadErrorMessage } from "@kw/lib/editorSlashCommands";
@@ -23,8 +23,6 @@ export type SlashTriggerRange = {
 };
 
 export type CustomSlashCommandLoader = (templatePath: string) => Promise<string>;
-
-const frontmatterFieldInsert = "key: \n";
 
 /**
  * One entry per widget fence, generated from the registry rather than listed
@@ -120,7 +118,7 @@ const builtinSlashCommands: MarkdownSlashCommand[] = [
     name: "frontmatter",
     icon: "🧾",
     label: "Frontmatter",
-    detail: "Insert or edit YAML frontmatter",
+    detail: "Insert YAML frontmatter",
     insert: "---\ntitle: \ntags: []\n---\n\n",
     cursorOffset: "---\ntitle: ".length,
   },
@@ -136,13 +134,6 @@ export function hasYamlFrontmatter(doc: string): boolean {
   return /^---\s*\n[\s\S]*?\n---(?:\s*\n|$)/.test(doc);
 }
 
-function frontmatterCloseDelimiterStart(doc: string): number | null {
-  if (!doc.startsWith("---")) return null;
-  const match = doc.match(/^---\s*\n[\s\S]*?\n---(?:\s*\n|$)/);
-  if (!match) return null;
-  return match[0].lastIndexOf("---");
-}
-
 export function getAvailableMarkdownSlashCommands(doc: string, query: string): MarkdownSlashCommand[] {
   const normalizedQuery = query.toLowerCase();
   return markdownSlashCommands.filter((command) => {
@@ -151,38 +142,19 @@ export function getAvailableMarkdownSlashCommands(doc: string, query: string): M
   });
 }
 
-function applyFrontmatterCommand(
-  doc: string,
+/**
+ * The edit for a slash command, scoped to the trigger so undo and live
+ * preview see one small change rather than a whole-document rewrite.
+ * `/frontmatter` needs no special case: the menu hides it once the document
+ * has frontmatter.
+ */
+export function slashCommandChanges(
   trigger: SlashTriggerRange,
   command: MarkdownSlashCommand,
-): { doc: string; selection: number } {
-  const delimiterStart = frontmatterCloseDelimiterStart(doc);
-  if (delimiterStart === null) {
-    const nextDoc = `${doc.slice(0, trigger.from)}${command.insert}${doc.slice(trigger.to)}`;
-    return { doc: nextDoc, selection: trigger.from + command.cursorOffset };
-  }
-
-  const docWithoutTrigger = `${doc.slice(0, trigger.from)}${doc.slice(trigger.to)}`;
-  const nextDoc = `${docWithoutTrigger.slice(0, delimiterStart)}${frontmatterFieldInsert}${docWithoutTrigger.slice(delimiterStart)}`;
+): { changes: { from: number; to: number; insert: string }; selection: { anchor: number } } {
   return {
-    doc: nextDoc,
-    selection: delimiterStart + "key: ".length,
-  };
-}
-
-export function replaceSlashCommandTrigger(
-  doc: string,
-  trigger: SlashTriggerRange,
-  command: MarkdownSlashCommand,
-): { doc: string; selection: number } {
-  if (command.name === "frontmatter") {
-    return applyFrontmatterCommand(doc, trigger, command);
-  }
-
-  const nextDoc = `${doc.slice(0, trigger.from)}${command.insert}${doc.slice(trigger.to)}`;
-  return {
-    doc: nextDoc,
-    selection: trigger.from + command.cursorOffset,
+    changes: { from: trigger.from, to: trigger.to, insert: command.insert },
+    selection: { anchor: trigger.from + command.cursorOffset },
   };
 }
 
@@ -197,18 +169,18 @@ function slashTriggerBeforeCursor(context: CompletionContext): SlashTriggerRange
   return { from, to: context.pos };
 }
 
-function completionFor(command: MarkdownSlashCommand, trigger: SlashTriggerRange): Completion {
+// `apply` must use the range CodeMirror passes, not one captured when the
+// source ran: with `validFor`, CodeMirror re-filters the same result as the
+// user keeps typing, so a captured range would cover only the `/`.
+function completionFor(command: MarkdownSlashCommand): Completion {
   return {
     label: `/${command.name}`,
     displayLabel: `${command.icon} /${command.name}`,
     type: "keyword",
     detail: command.detail,
-    apply: (view: EditorView) => {
-      const currentDoc = view.state.doc.toString();
-      const { doc, selection } = replaceSlashCommandTrigger(currentDoc, trigger, command);
+    apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: doc },
-        selection: { anchor: selection },
+        ...slashCommandChanges({ from, to }, command),
         userEvent: "input.complete",
       });
     },
@@ -221,7 +193,7 @@ function slashCompletionSource(context: CompletionContext) {
 
   const doc = context.state.doc.toString();
   const query = context.state.doc.sliceString(trigger.from + 1, trigger.to).toLowerCase();
-  const options = getAvailableMarkdownSlashCommands(doc, query).map((command) => completionFor(command, trigger));
+  const options = getAvailableMarkdownSlashCommands(doc, query).map((command) => completionFor(command));
 
   return {
     from: trigger.from,
@@ -231,18 +203,72 @@ function slashCompletionSource(context: CompletionContext) {
   };
 }
 
-function insertCustomTemplate(
-  view: EditorView,
-  trigger: SlashTriggerRange,
-  content: string,
-): void {
-  const currentDoc = view.state.doc.toString();
-  const nextDoc = `${currentDoc.slice(0, trigger.from)}${content}${currentDoc.slice(trigger.to)}`;
+type PendingTemplate = { id: number; pos: number };
+
+const addPendingTemplate = StateEffect.define<PendingTemplate>();
+const removePendingTemplate = StateEffect.define<number>();
+
+/**
+ * Where each loading template will land. The `/adr` query is deleted as soon
+ * as the command is picked; the position is then mapped through whatever the
+ * user types while the template is fetched.
+ */
+const pendingTemplates = StateField.define<readonly PendingTemplate[]>({
+  create: () => [],
+  update(value, tr) {
+    let next = tr.docChanged ? value.map((p) => ({ id: p.id, pos: tr.changes.mapPos(p.pos) })) : value;
+    for (const effect of tr.effects) {
+      if (effect.is(addPendingTemplate)) next = [...next, effect.value];
+      else if (effect.is(removePendingTemplate)) next = next.filter((p) => p.id !== effect.value);
+    }
+    return next;
+  },
+});
+
+/**
+ * Install alongside `customSlashCompletionSource`. A field added on first use
+ * is dropped by the next reconfigure (a page list refresh, say), losing any
+ * template still loading.
+ */
+export const customSlashTemplateState: Extension = pendingTemplates;
+
+let nextPendingTemplateId = 0;
+
+function beginCustomTemplate(view: EditorView, from: number, to: number): number {
+  if (view.state.field(pendingTemplates, false) === undefined) {
+    view.dispatch({ effects: StateEffect.appendConfig.of(pendingTemplates) });
+  }
+  const id = nextPendingTemplateId++;
   view.dispatch({
-    changes: { from: 0, to: view.state.doc.length, insert: nextDoc },
-    selection: { anchor: trigger.from + content.length },
+    changes: { from, to, insert: "" },
+    selection: { anchor: from },
+    effects: addPendingTemplate.of({ id, pos: from }),
     userEvent: "input.complete",
   });
+  return id;
+}
+
+function pendingTemplatePos(view: EditorView, id: number): number | undefined {
+  return view.state.field(pendingTemplates, false)?.find((p) => p.id === id)?.pos;
+}
+
+function insertCustomTemplate(view: EditorView, id: number, content: string): void {
+  const at = pendingTemplatePos(view, id);
+  if (at === undefined) return;
+  // Only move the caret if it is still where the query was; otherwise the
+  // user has moved on and their selection is mapped past the insert.
+  const caretAtTrigger = view.state.selection.main.empty && view.state.selection.main.head === at;
+  view.dispatch({
+    changes: { from: at, insert: content },
+    ...(caretAtTrigger ? { selection: { anchor: at + content.length } } : {}),
+    effects: removePendingTemplate.of(id),
+    userEvent: "input.complete",
+  });
+}
+
+function abandonCustomTemplate(view: EditorView, id: number): void {
+  if (pendingTemplatePos(view, id) === undefined) return;
+  view.dispatch({ effects: removePendingTemplate.of(id) });
 }
 
 export function customSlashCompletionSource(
@@ -263,10 +289,14 @@ export function customSlashCompletionSource(
       displayLabel: `/${cmd.label || cmd.id}`,
       type: "keyword",
       detail: cmd.description || `Insert from ${cmd.template}`,
-      apply: (view: EditorView) => {
+      apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+        const id = beginCustomTemplate(view, from, to);
         void loadTemplate(cmd.template)
-          .then((content) => insertCustomTemplate(view, trigger, content))
-          .catch((err) => onError(templateLoadErrorMessage(cmd.template, err)));
+          .then((content) => insertCustomTemplate(view, id, content))
+          .catch((err) => {
+            abandonCustomTemplate(view, id);
+            onError(templateLoadErrorMessage(cmd.template, err));
+          });
       },
     }));
 
