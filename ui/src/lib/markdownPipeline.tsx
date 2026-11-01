@@ -358,7 +358,8 @@ export function kiwiMarkdownComponents({
       // `[^\S\n]*`, not `\s*`: the custom title must not run onto the next line.
       const admonitionRe = new RegExp(
         `^\\[!(${ADMONITION_TYPE_KEYS})\\]([+-])?[^\\S\\n]*(.*?)$`,
-        "m"
+        // GitHub and Obsidian accept `[!note]` as well as `[!NOTE]`.
+        "mi"
       );
       const match = flat.match(admonitionRe);
       if (match) {
@@ -536,7 +537,7 @@ const ADMONITION_TYPES: Record<string, { icon: typeof Info; cls: string; label: 
 };
 
 const ADMONITION_TYPE_KEYS = Object.keys(ADMONITION_TYPES).join("|");
-const ADMONITION_TAG_RE = new RegExp(`^\\[!(${ADMONITION_TYPE_KEYS})\\]`);
+const ADMONITION_TAG_RE = new RegExp(`^\\[!(${ADMONITION_TYPE_KEYS})\\]`, "i");
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif", ".bmp", ".heic", ".heif", ".ico"]);
 const VIDEO_EXTS = new Set([".mp4", ".webm", ".ogv", ".mov"]);

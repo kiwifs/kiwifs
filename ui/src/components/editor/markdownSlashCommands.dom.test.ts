@@ -42,6 +42,21 @@ describe("slash commands in a live editor", () => {
     expect(view.state.selection.main.head).toBe("- [ ] ".length);
   });
 
+  it("inserts a warning callout for /warn, caret at the end", async () => {
+    const view = slashEditor();
+    await typeText(view, "/warn");
+    await accept(view);
+    expect(view.state.doc.toString()).toBe("> [!warning] ");
+    expect(view.state.selection.main.head).toBe("> [!warning] ".length);
+  });
+
+  it("finds a command by alias while typing, not only by name", async () => {
+    const view = slashEditor();
+    await typeText(view, "/info");
+    await accept(view, "/note");
+    expect(view.state.doc.toString()).toBe("> [!note] ");
+  });
+
   it("works with no query at all", async () => {
     const view = slashEditor();
     await typeText(view, "/");

@@ -55,6 +55,31 @@ describe("markdown slash commands", () => {
   });
 });
 
+describe("callout slash commands", () => {
+  const names = (query: string) => getAvailableMarkdownSlashCommands("", query).map((item) => item.name);
+
+  it("offers warning for /warn by prefix and note for /info by alias", () => {
+    expect(names("warn")).toContain("warning");
+    expect(names("info")).toContain("note");
+  });
+
+  it("offers all five callouts for /callout", () => {
+    expect(names("callout")).toEqual(["note", "tip", "important", "warning", "caution"]);
+  });
+
+  it("inserts a > [!type] marker with the caret after it", () => {
+    for (const type of ["note", "tip", "important", "warning", "caution"]) {
+      const c = command(type);
+      expect(c.insert).toBe(`> [!${type}] `);
+      expect(c.cursorOffset).toBe(c.insert.length);
+    }
+  });
+
+  it("leaves out excluded names", () => {
+    expect(getAvailableMarkdownSlashCommands("", "qu", new Set(["quiz"])).map((c) => c.name)).not.toContain("quiz");
+  });
+});
+
 describe("widget slash entries", () => {
   it("gives every command a distinct name, so /table stays the GFM table", () => {
     const names = markdownSlashCommands.map((c) => c.name);

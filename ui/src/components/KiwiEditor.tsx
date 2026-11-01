@@ -43,9 +43,9 @@ import { visualSaveBody } from "@kw/lib/visualSave";
 import { formatDistanceToNow } from "date-fns";
 import { MarkdownSourceEditor } from "./editor/MarkdownSourceEditor";
 import { FencePreview } from "./editor/FencePreview";
-import { splitFenceExample } from "./editor/markdownSlashCommands";
+import { splitFenceExample, widgetCommandName } from "./editor/markdownSlashCommands";
 import type { FencePreviewTarget } from "./editor/fenceAssist";
-import { blockNoteSlashItems, loadSlashCommandTemplate } from "@kw/lib/editorSlashCommands";
+import { blockNoteSlashItems, uniqueSlashItemTitles } from "@kw/lib/editorSlashCommands";
 import { useEditorSlashCommands } from "../hooks/useEditorSlashCommands";
 import {
   Dialog,
@@ -480,28 +480,23 @@ function EditorInner({
   const wikiPages = useMemo(() => wikiPagesFromTree(tree), [tree]);
   const wikiResolver = useMemo(() => buildResolver(tree ?? null), [tree]);
   const resolveWikiLink = useCallback((target: string) => wikiResolver(target, path), [wikiResolver, path]);
-  const customSlashCommands = useEditorSlashCommands();
+  const {
+    commands: customSlashCommands,
+    hide: hiddenSlashCommands,
+    warnings: slashCommandWarnings,
+  } = useEditorSlashCommands();
+  // Built-ins the visual menu leaves out: hidden ones, and those a custom
+  // command replaces by id.
+  const excludedSlashItems = useMemo(
+    () => new Set([...hiddenSlashCommands, ...customSlashCommands.map((cmd) => cmd.id.toLowerCase())]),
+    [hiddenSlashCommands, customSlashCommands],
+  );
   const [slashCommandError, setSlashCommandError] = useState<string | null>(null);
-  const slashCommandErrorTimer = useRef<number | null>(null);
-  const onSlashTemplateError = useCallback((message: string) => {
-    setSlashCommandError(message);
-    if (slashCommandErrorTimer.current !== null) {
-      window.clearTimeout(slashCommandErrorTimer.current);
-    }
-    slashCommandErrorTimer.current = window.setTimeout(() => {
-      setSlashCommandError(null);
-      slashCommandErrorTimer.current = null;
-    }, 6000);
-  }, []);
-  const loadSlashTemplate = useCallback((templatePath: string) => loadSlashCommandTemplate(templatePath), []);
-
+  // Each load brings a new array, so a broken file is reported once per
+  // editor open rather than on every render.
   useEffect(() => {
-    return () => {
-      if (slashCommandErrorTimer.current !== null) {
-        window.clearTimeout(slashCommandErrorTimer.current);
-      }
-    };
-  }, []);
+    setSlashCommandError(slashCommandWarnings[0] ? `Slash commands: ${slashCommandWarnings[0]}` : null);
+  }, [slashCommandWarnings]);
 
   useEffect(() => {
     const lifecycle = {};
@@ -1091,8 +1086,7 @@ function EditorInner({
                   pages={wikiPages}
                   minHeight="60vh"
                   customSlashCommands={customSlashCommands}
-                  loadSlashTemplate={loadSlashTemplate}
-                  onSlashTemplateError={onSlashTemplateError}
+                  hiddenSlashCommands={hiddenSlashCommands}
                   onFenceUnderCursor={editorMode === "source" ? setFenceUnderCursor : undefined}
                   livePreview={editorMode === "live"}
                   vim={vim}
@@ -1134,15 +1128,15 @@ function EditorInner({
                         triggerCharacter="/"
                         getItems={async (query) =>
                           filterSuggestionItems(
-                            [
-                              ...getDefaultReactSlashMenuItems(editor as BlockNoteEditor),
-                              ...kiwiSlashItems(editor as BlockNoteEditor),
-                              ...blockNoteSlashItems(
-                                editor as BlockNoteEditor,
-                                customSlashCommands,
-                                onSlashTemplateError,
+                            uniqueSlashItemTitles([
+                              ...blockNoteSlashItems(editor as BlockNoteEditor, customSlashCommands, query),
+                              ...getDefaultReactSlashMenuItems(editor as BlockNoteEditor).filter(
+                                (item) => !excludedSlashItems.has(defaultSlashItemKey(item)),
                               ),
-                            ],
+                              ...kiwiSlashItems(editor as BlockNoteEditor).filter(
+                                (item) => !excludedSlashItems.has(item.key),
+                              ),
+                            ]),
                             query,
                           )
                         }
@@ -1415,7 +1409,16 @@ function relativeTime(d: string): string {
 }
 
 // Kiwifs-specific slash commands. Each returns a paragraph block that renders
-// as the desired output after we round-trip through markdown on save.
+// as the desired output after we round-trip through markdown on save. `key`
+// is what `hide` in .kiwi/slash-commands.toml matches; BlockNote's own items
+// use theirs (heading_2, bullet_list, ...), which Source/Live mode lacks.
+// BlockNote 0.57 keeps each default item's `key` (heading_2, bullet_list, ...)
+// at runtime but drops it from the React item type.
+function defaultSlashItemKey(item: { title: string }): string {
+  const key = (item as { key?: unknown }).key;
+  return typeof key === "string" ? key : item.title.toLowerCase();
+}
+
 function kiwiSlashItems(editor: BlockNoteEditor) {
   const insertParagraph = (text: string) => {
     const cur = editor.getTextCursorPosition().block;
@@ -1439,6 +1442,7 @@ function kiwiSlashItems(editor: BlockNoteEditor) {
 
   return [
     {
+      key: "wikilink",
       title: "Wiki link",
       subtext: "Insert a [[page-name]] link",
       aliases: ["link", "wiki", "[[", "ref"],
@@ -1447,6 +1451,7 @@ function kiwiSlashItems(editor: BlockNoteEditor) {
       onItemClick: () => insertParagraph("[[page-name]]"),
     },
     {
+      key: "callout-info",
       title: "Info callout",
       subtext: "ℹ️ Highlighted info block",
       aliases: ["callout", "info", "note"],
@@ -1455,6 +1460,7 @@ function kiwiSlashItems(editor: BlockNoteEditor) {
       onItemClick: () => insertParagraph("ℹ️ "),
     },
     {
+      key: "callout-warning",
       title: "Warning callout",
       subtext: "⚠️ Highlighted warning block",
       aliases: ["callout", "warn", "warning"],
@@ -1463,6 +1469,7 @@ function kiwiSlashItems(editor: BlockNoteEditor) {
       onItemClick: () => insertParagraph("⚠️ "),
     },
     {
+      key: "callout-error",
       title: "Error callout",
       subtext: "🛑 Highlighted error block",
       aliases: ["callout", "error", "danger"],
@@ -1471,6 +1478,7 @@ function kiwiSlashItems(editor: BlockNoteEditor) {
       onItemClick: () => insertParagraph("🛑 "),
     },
     {
+      key: "toc",
       title: "Table of contents marker",
       subtext: "Insert a <!-- toc --> marker",
       aliases: ["toc", "contents"],
@@ -1483,6 +1491,7 @@ function kiwiSlashItems(editor: BlockNoteEditor) {
     ...allFences()
       .filter((spec) => !spec.legacy)
       .map((spec) => ({
+        key: widgetCommandName(spec.lang),
         title: `${spec.lang} widget`,
         subtext: spec.description,
         aliases: ["widget", "fence", spec.lang, ...(spec.aliases ?? [])],

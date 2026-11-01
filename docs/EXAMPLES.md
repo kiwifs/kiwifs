@@ -728,6 +728,110 @@ Download an ONNX Runtime shared library that matches `github.com/yalue/onnxrunti
 
 ---
 
+### Slash commands
+
+Typing `/` in the editor opens a menu of commands. The built-ins include
+tables, task items, code blocks, widgets and callouts:
+
+| Command | Inserts | Also found by |
+| --- | --- | --- |
+| `/note` | `> [!note] ` | `/info`, `/callout` |
+| `/tip` | `> [!tip] ` | `/hint`, `/callout` |
+| `/important` | `> [!important] ` | `/callout` |
+| `/warning` | `> [!warning] ` | `/warn`, `/callout` |
+| `/caution` | `> [!caution] ` | `/danger`, `/callout` |
+
+The callout commands are in Source and Live mode. Visual mode has its own
+Info, Warning and Error callout items.
+
+Each space can add its own commands, replace built-ins and hide them in
+`.kiwi/slash-commands.toml`. `kiwifs init` writes this file with every line
+commented out. For a space created before this file existed, create it
+yourself. The file is read each time an editor opens, so changes apply
+without a restart, and each space has its own file. You can open and edit it
+from the UI like a page, and agents can edit it with the normal file tools.
+
+```toml
+# .kiwi/slash-commands.toml
+
+# Built-in commands to remove from the menu.
+hide = ["quiz", "d2"]
+
+# Hand a task to your agent: type "- [ ] buy milk /assigned".
+[[commands]]
+id = "assigned"                # what you type after /
+label = "Assign to agent"
+icon = "Bot"                   # any lucide.dev icon name
+description = "Hand this task to the agent"
+aliases = ["agent"]
+insert = "[assigned:: agent]"
+
+# A warning callout with the caret on its first line.
+[[commands]]
+id = "warn-box"
+label = "Warning box"
+icon = "TriangleAlert"
+insert = """
+> [!warning] {{cursor}}
+> Details here.
+"""
+
+# A longer snippet kept in its own file.
+[[commands]]
+id = "decision"
+template = ".kiwi/templates/decision.md"
+
+# Same id as a built-in: replaces it.
+[[commands]]
+id = "todo"
+insert = "- [ ] {{cursor}} [assigned:: agent]"
+```
+
+Fields of a `[[commands]]` entry:
+
+| Field | |
+| --- | --- |
+| `id` | Required. Letters, digits, `_` and `-`. This is what you type after `/`. |
+| `label` | Menu title. Defaults to `id`. |
+| `icon` | A [lucide](https://lucide.dev/icons) icon name. Defaults to `FileText`. |
+| `description` | The line shown under the label. |
+| `aliases` | Other words that find the command. |
+| `insert` | The text to insert. |
+| `template` | Path to a markdown file whose contents are inserted, relative to the space. It can be a page or a file under `.kiwi/templates/` (only `.md` files there). Files over 256 KB are skipped. |
+
+Rules:
+
+- Each command needs exactly one of `insert` or `template`.
+- `{{cursor}}` marks where the caret goes. Without it, the caret goes after
+  the inserted text. Only the first `{{cursor}}` counts. In Visual mode it is
+  removed and the caret goes after the text.
+- One line of text is inserted at the caret, so `/assigned` lands inside the
+  task you're writing. A one-line template's trailing newline is dropped for
+  the same reason. In Visual mode, text with more than one line becomes new
+  blocks after the current one.
+- Custom commands come first in the menu.
+- `hide` names built-in commands. Names in Source and Live mode are the ones
+  in the menu (`table`, `quiz`, `note`, widget languages such as `array`). In
+  Visual mode, a widget uses the same name. Visual mode's other items are
+  `wikilink`, `callout-info`, `callout-warning`, `callout-error`, `toc`, and
+  BlockNote's own keys such as `heading_2`, `bullet_list` and `table`. Those
+  keys have no equivalent in Source mode.
+- Commands are merged by `id`, in this order: built-ins, then
+  `[[ui.editor.slash_commands]]` in `config.toml`, then the space file. A
+  later entry with the same `id` replaces an earlier one.
+- Entries that can't be used (a bad `id`, a missing template, both or neither
+  of `insert` and `template`, or a TOML syntax error) are skipped. The editor
+  shows a "Slash commands:" warning so a typo doesn't go unnoticed.
+
+To use a different file, set it in `config.toml`:
+
+```toml
+[ui.editor]
+slash_commands_file = ".kiwi/slash-commands.toml"
+```
+
+---
+
 ## Deployment
 
 ### Docker

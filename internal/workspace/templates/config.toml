@@ -78,6 +78,11 @@ type = "none"
 # toggle_sidebar = "Ctrl+B"
 # shortcuts_help = "Ctrl+/"
 #
+# Per-space slash commands live in .kiwi/slash-commands.toml (see the
+# comments in that file). Point at a different file with:
+# [ui.editor]
+# slash_commands_file = ".kiwi/slash-commands.toml"
+#
 # Hide authoring chrome and header views for a public reader.
 # [ui.features]
 # graph = false

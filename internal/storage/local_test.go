@@ -346,6 +346,7 @@ func TestGuardPath_KiwiUserEditableFiles(t *testing.T) {
 	allowed := []string{
 		".kiwi/rules.md",
 		".kiwi/playbook.md",
+		".kiwi/slash-commands.toml",
 	}
 	for _, p := range allowed {
 		_, err := GuardPath(dir, p)

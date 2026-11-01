@@ -54,17 +54,18 @@ vi.mock("@kw/lib/useSSE", () => ({
   },
   eventTouchesPath: (event: { path?: string }, path: string) => event.path === path,
 }));
-vi.mock("../hooks/useEditorSlashCommands", () => ({ useEditorSlashCommands: () => [] }));
+const noSlashCommands = vi.hoisted(() => ({ commands: [], hide: [], warnings: [] }));
+vi.mock("../hooks/useEditorSlashCommands", () => ({ useEditorSlashCommands: () => noSlashCommands }));
 vi.mock("@kw/lib/editorSlashCommands", () => ({
   blockNoteSlashItems: () => [],
-  loadSlashCommandTemplate: vi.fn(),
+  uniqueSlashItemTitles: <T,>(items: T[]) => items,
 }));
 vi.mock("./ExcalidrawMarkdownPreview", () => ({
   isExcalidrawMarkdown: () => false,
   ExcalidrawMarkdownEditor: () => null,
 }));
 vi.mock("./editor/FencePreview", () => ({ FencePreview: () => null }));
-vi.mock("./editor/markdownSlashCommands", () => ({ splitFenceExample: vi.fn() }));
+vi.mock("./editor/markdownSlashCommands", () => ({ splitFenceExample: vi.fn(), widgetCommandName: (lang: string) => lang }));
 vi.mock("./editor/MarkdownSourceEditor", () => ({
   MarkdownSourceEditor: (props: { value: string; onChange: (text: string) => void; livePreview?: boolean }) => {
     harness.sourceProps = props;

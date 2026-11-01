@@ -96,6 +96,14 @@ describe("useKiwiMarkdownComponents", () => {
     expect(container.querySelector(".kiwi-admonition-note")).not.toBeNull();
     expect(container.innerHTML).not.toContain("language-mermaid");
   });
+
+  it("renders a lowercase callout type, as /warning inserts it", async () => {
+    const md = "> [!warning] Careful\n> Details.\n";
+    await act(async () => root.render(<Page md={md} onNavigate={() => {}} />));
+    const callout = await waitForElement(".kiwi-admonition-warning");
+    expect(callout.textContent).toContain("Careful");
+    expect(callout.textContent).not.toContain("[!warning]");
+  });
 });
 
 describe("kiwiRemarkPlugins + kiwiRehypePlugins", () => {

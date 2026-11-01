@@ -165,6 +165,14 @@ func Init(root, template string) error {
 		}
 	}
 
+	slashPath := filepath.Join(kiwiDir, "slash-commands.toml")
+	if _, err := os.Stat(slashPath); os.IsNotExist(err) {
+		data, _ := fs.ReadFile(templates, "templates/slash-commands.toml")
+		if err := os.WriteFile(slashPath, data, 0644); err != nil {
+			return fmt.Errorf("write slash-commands.toml: %w", err)
+		}
+	}
+
 	if template != "blank" {
 		playbookSrc := "templates/" + template + "/playbook.md"
 		if data, err := fs.ReadFile(templates, playbookSrc); err == nil {
