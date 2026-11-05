@@ -401,7 +401,13 @@ function parseFieldFilters(q: string): { text: string; filters: MetaFilter[] } {
       const field = token.slice(0, colonIdx);
       const value = token.slice(colonIdx + 1);
       if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(field)) {
-        filters.push({ field: `$.${field}`, op: "=", value });
+        // tag:foo searches the tags list; tags live under "tags" (plural)
+        // and are usually a list, so match any element.
+        if (field === "tag" || field === "tags") {
+          filters.push({ field: "$.tags[*]", op: "=", value });
+        } else {
+          filters.push({ field: `$.${field}`, op: "=", value });
+        }
         continue;
       }
     }
