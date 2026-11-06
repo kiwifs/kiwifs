@@ -21,7 +21,7 @@ RUN apk add --no-cache git
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+    sh -c 'for i in 1 2 3 4 5; do go mod download && exit 0; echo "go mod download attempt $i failed, retrying..."; sleep $((i * 10)); done; exit 1'
 
 COPY . .
 RUN rm -rf ui/dist
