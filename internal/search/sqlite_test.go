@@ -234,6 +234,36 @@ func TestQueryMeta(t *testing.T) {
 	}
 }
 
+func TestQueryMetaBareArrayScalarElements(t *testing.T) {
+	s := newTestSQLite(t)
+
+	files := map[string]string{
+		"list.md":   "---\ntags:\n  - foo\n  - bar\n---\n",
+		"scalar.md": "---\ntags: foo\n---\n",
+		"other.md":  "---\ntags:\n  - baz\n---\n",
+	}
+	for path, body := range files {
+		if err := s.IndexMeta(ctxBG, path, []byte(body)); err != nil {
+			t.Fatalf("IndexMeta(%s): %v", path, err)
+		}
+	}
+
+	// Bare [*] must compare j.value directly; json_extract on a bare
+	// string element is malformed JSON.
+	got, err := s.QueryMeta(ctxBG, []MetaFilter{{Field: "$.tags[*]", Op: "=", Value: "foo"}}, "", "", 0, 0)
+	if err != nil {
+		t.Fatalf("bare array filter: %v", err)
+	}
+	paths := map[string]bool{}
+	for _, r := range got {
+		paths[r.Path] = true
+	}
+	// json_each over a scalar yields one row, so the scalar form matches too.
+	if !paths["list.md"] || !paths["scalar.md"] || paths["other.md"] || len(paths) != 2 {
+		t.Fatalf("wrong matches: %v", paths)
+	}
+}
+
 func TestMaxFrontmatterIntInDirectory(t *testing.T) {
 	s := newTestSQLite(t)
 	ctx := ctxBG

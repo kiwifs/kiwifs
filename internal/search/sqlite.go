@@ -1518,6 +1518,15 @@ func (s *SQLite) QueryMetaOr(ctx context.Context, andFilters, orFilters []MetaFi
 			return "", nil, fmt.Errorf("filter[%d]: invalid op %q", i, f.Op)
 		}
 		if parent, sub, isArr := arrayPathPrefix(f.Field); isArr {
+			if sub == "$" {
+				// Bare "[*]" with no sub-field: elements are scalars
+				// (e.g. tags: [foo, bar]), so compare j.value directly.
+				// json_extract(j.value, '$') errors on bare strings.
+				return fmt.Sprintf(
+					"EXISTS (SELECT 1 FROM json_each(frontmatter, ?) AS j WHERE j.value %s ?)",
+					op,
+				), []any{parent, f.Value}, nil
+			}
 			return fmt.Sprintf(
 				"EXISTS (SELECT 1 FROM json_each(frontmatter, ?) AS j WHERE json_extract(j.value, ?) %s ?)",
 				op,
