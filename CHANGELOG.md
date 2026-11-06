@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.85](https://github.com/kiwifs/kiwifs/compare/v0.19.84...v0.19.85) (2026-11-06)
+
+
+### Bug Fixes
+
+* **search:** match tag: queries against tags list ([#572](https://github.com/kiwifs/kiwifs/issues/572)) ([f64b3dc](https://github.com/kiwifs/kiwifs/commit/f64b3dc824fecfc398000dbda38c546c32e758e9))
+
 ## [0.19.84](https://github.com/kiwifs/kiwifs/compare/v0.19.83...v0.19.84) (2026-11-01)
 
 
