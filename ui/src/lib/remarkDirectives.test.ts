@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import remarkDirective from "remark-directive";
 import remarkParse from "remark-parse";
+import remarkRehype from "remark-rehype";
+import rehypeStringify from "rehype-stringify";
 import { unified } from "unified";
 
 import { CLAIM_DATA_ATTRIBUTES, claimProperties, remarkKiwiDirectives } from "./remarkDirectives";
 import { kiwiSanitizeSchema } from "./kiwiMarkdown";
+import { kiwiRehypePlugins, kiwiRemarkPlugins } from "./markdownPipeline";
 
 /**
  * Run the real remark pipeline and hand back the transformed mdast. This is a
@@ -133,9 +136,66 @@ describe("remarkKiwiDirectives — existing directives still work", () => {
     expect(columns[0].data.hProperties["data-ratio"]).toBe("2:1");
   });
 
+  it("keeps ordinary clock times as text instead of empty inline directives", () => {
+    const tree = transform("The jobs run at 09:00, 08:57, and 14:30 UTC.\n");
+    const paragraph = tree.children[0];
+    expect(paragraph.children.map((child: any) => child.value || "").join("")).toBe(
+      "The jobs run at 09:00, 08:57, and 14:30 UTC.",
+    );
+    expect(paragraph.children.some((child: any) => child.type === "textDirective")).toBe(false);
+  });
+
+  it("drops nothing from an unknown leaf directive", () => {
+    const tree = transform("::foo[label]{a=b}\n");
+    expect(tree.children[0].type).toBe("paragraph");
+    expect(tree.children[0].children[0].value).toBe("::foo[label]{a=b}");
+  });
+
   // A directive named something else must not be claimed by the claim branch.
   it("ignores unrelated directive names", () => {
     const tree = transform(":::note{evidence=inferred}\nNot a claim.\n:::\n");
     expect(findByDirective(tree, "claim")).toHaveLength(0);
+  });
+});
+
+describe("remarkLiteralDirectives — colons in prose render as written", () => {
+  const render = (markdown: string) =>
+    String(
+      unified()
+        .use(remarkParse)
+        .use(kiwiRemarkPlugins())
+        .use(remarkRehype, { allowDangerousHtml: true })
+        .use(kiwiRehypePlugins({ autolinkHeadings: false }))
+        .use(rehypeStringify)
+        .processSync(markdown),
+    ).trim();
+
+  it.each([
+    "The jobs run at 09:00, 08:57, and 14:30 UTC.",
+    "At 12:00:30 sharp, 10:30am.",
+    "Ratio 2:1 and score 3:0.",
+    "Note:important stuff",
+    "IPv6 fe80::1ff:fe23:4567",
+    "Time 12:00[UTC] and 12:00{x}",
+    "Unknown :x[**bold** text]{#id .cls key=v} inline",
+  ])("keeps %j in one paragraph", (markdown) => {
+    expect(render(markdown)).toBe(`<p>${markdown}</p>`);
+  });
+
+  it("keeps times in lists, tables and emphasis", () => {
+    expect(render("- 09:00 standup")).toContain("<li>09:00 standup</li>");
+    expect(render("| t |\n| - |\n| 09:00 |")).toContain("<td>09:00</td>");
+    expect(render("**09:00** bold")).toBe("<p><strong>09:00</strong> bold</p>");
+  });
+
+  it("restores before the text transforms run", () => {
+    expect(render("==hi:00== there")).toBe("<p><mark>hi:00</mark> there</p>");
+    expect(render('{% select name="slot" options="09:00,10:30" %}')).toContain('data-control="select"');
+  });
+
+  it("still renders an inline claim", () => {
+    expect(render(":claim[x at 09:00]{evidence=stated}")).toContain(
+      '<span data-kiwi-directive="claim" data-evidence="stated" class="kiwi-claim kiwi-claim-inline">x at 09:00</span>',
+    );
   });
 });

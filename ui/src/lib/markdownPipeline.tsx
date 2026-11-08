@@ -39,7 +39,7 @@ import { pageAssetUrl, useRawUrl } from "./rawUrl";
 import type { FigureWidth } from "./figureLayout";
 import { kiwiSanitizeSchema } from "./kiwiSanitizeSchema";
 import { remarkMark, remarkInlineTags, remarkPageControls, rehypeCodeMeta, rehypeTaskListLabels } from "./remarkPlugins";
-import { remarkKiwiDirectives } from "./remarkDirectives";
+import { remarkKiwiDirectives, remarkLiteralDirectives } from "./remarkDirectives";
 import { remarkKiwiQuiz } from "./remarkQuiz";
 import { remarkWikiLinks, type LinkResolver } from "./wikiLinks";
 
@@ -52,6 +52,7 @@ export interface RemarkOptions {
 
 export function kiwiRemarkPlugins({ resolver, fromPath }: RemarkOptions = {}): PluggableList {
   const plugins: PluggableList = [
+    remarkLiteralDirectives,
     remarkKiwiQuiz,
     remarkGfm,
     remarkMath,
