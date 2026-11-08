@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.85](https://github.com/kiwifs/kiwifs/compare/v0.19.84...v0.19.85) (2026-11-08)
+
+
+### Bug Fixes
+
+* **search:** match tag: queries against tags list ([#572](https://github.com/kiwifs/kiwifs/issues/572)) ([f64b3dc](https://github.com/kiwifs/kiwifs/commit/f64b3dc824fecfc398000dbda38c546c32e758e9))
+* **ui:** keep times and other colons in prose from rendering as empty directives ([#574](https://github.com/kiwifs/kiwifs/issues/574)) ([72350b0](https://github.com/kiwifs/kiwifs/commit/72350b01dddf3fcb0b884008f92b82baf80a3ed1))
+
 ## [0.19.84](https://github.com/kiwifs/kiwifs/compare/v0.19.83...v0.19.84) (2026-11-01)
 
 
