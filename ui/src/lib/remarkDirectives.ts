@@ -9,7 +9,7 @@
  * data attributes that React components can pick up.
  */
 
-import { visit } from "unist-util-visit";
+import { SKIP, visit } from "unist-util-visit";
 import type { Root } from "mdast";
 import { parseFigureAttrs } from "./figureLayout";
 
@@ -56,9 +56,13 @@ export function claimProperties(attrs: Record<string, string> = {}): Record<stri
  * - :::columns / ::col — side-by-side column layouts
  * - :::claim{...} / :claim[text]{...} — claim-level provenance
  * - :::figure{width=wide} — figure with optional caption, stacked
+ *
+ * Unknown inline and leaf directives are restored to literal text first; see
+ * `remarkLiteralDirectives`.
  */
 export function remarkKiwiDirectives() {
-  return (tree: Root) => {
+  return (tree: Root, file?: { value?: unknown }) => {
+    restoreLiteralDirectives(tree, String(file?.value ?? ""));
     visit(tree, (node: any) => {
       // Inline directives: :name[label]{attrs}
       if (node.type === "textDirective" && node.name === "claim") {
@@ -188,6 +192,79 @@ export function remarkKiwiDirectives() {
       }
     });
   };
+}
+
+const TEXT_DIRECTIVES = new Set(["claim"]);
+const LEAF_DIRECTIVES = new Set(["tab", "col"]);
+
+/**
+ * remarkLiteralDirectives — put unknown inline and leaf directives back as
+ * the text they were written as.
+ *
+ * `remark-directive` reads any `:word` as an inline directive, so the `:00` in
+ * `09:00`, `Note:important` or `fe80::1ff:fe23:4567` become nodes that
+ * remark-rehype renders as empty divs, splitting the paragraph and hiding the
+ * text. Run this before the other transforms: `==mark==`, `#tags` and
+ * `{% controls %}` match within a single text node, and the restored pieces are
+ * merged back into their neighbours.
+ */
+export function remarkLiteralDirectives() {
+  return (tree: Root, file?: { value?: unknown }) => {
+    restoreLiteralDirectives(tree, String(file?.value ?? ""));
+  };
+}
+
+function restoreLiteralDirectives(tree: Root, source: string) {
+  const touched = new Set<any>();
+  visit(tree, (node: any, index, parent: any) => {
+    if (!parent || index === undefined) return;
+    if (node.type === "textDirective" && !TEXT_DIRECTIVES.has(node.name)) {
+      parent.children[index] = { type: "text", value: directiveSource(node, source, ":"), position: node.position };
+      touched.add(parent);
+      return SKIP;
+    }
+    if (node.type === "leafDirective" && !LEAF_DIRECTIVES.has(node.name)) {
+      const text = { type: "text", value: directiveSource(node, source, "::"), position: node.position };
+      parent.children[index] = { type: "paragraph", children: [text], position: node.position };
+      return SKIP;
+    }
+  });
+  for (const parent of touched) mergeAdjacentText(parent.children);
+}
+
+function directiveSource(node: any, source: string, marker: string): string {
+  const start = node.position?.start?.offset;
+  const end = node.position?.end?.offset;
+  if (source && typeof start === "number" && typeof end === "number" && end > start) {
+    return source.slice(start, end);
+  }
+  const label = node.children?.length ? `[${literalDirectiveChildren(node.children)}]` : "";
+  const attrs = Object.entries(node.attributes || {})
+    .map(([key, value]) => {
+      if (value === "") return key;
+      return /^[^\s"'=<>`{}]+$/.test(String(value)) ? `${key}=${value}` : `${key}=${JSON.stringify(value)}`;
+    })
+    .join(" ");
+  return `${marker}${node.name}${label}${attrs ? `{${attrs}}` : ""}`;
+}
+
+function mergeAdjacentText(children: any[]) {
+  for (let i = children.length - 1; i > 0; i--) {
+    const prev = children[i - 1];
+    const node = children[i];
+    if (prev.type !== "text" || node.type !== "text") continue;
+    prev.value += node.value;
+    if (prev.position && node.position) prev.position = { start: prev.position.start, end: node.position.end };
+    else delete prev.position;
+    children.splice(i, 1);
+  }
+}
+
+function literalDirectiveChildren(children: any[]): string {
+  return children.map((child) => {
+    if (child.type === "text") return child.value;
+    return child.children ? literalDirectiveChildren(child.children) : "";
+  }).join("");
 }
 
 /**

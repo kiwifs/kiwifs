@@ -49,7 +49,7 @@ export type { LinkResolver } from "./lib/wikiLinks";
 // ── Remark plugins (individual) ─────────────────────────────────────────────
 
 export { remarkMark, remarkInlineTags, rehypeCodeMeta } from "./lib/remarkPlugins";
-export { remarkKiwiDirectives } from "./lib/remarkDirectives";
+export { remarkKiwiDirectives, remarkLiteralDirectives } from "./lib/remarkDirectives";
 export { remarkKiwiQuiz } from "./lib/remarkQuiz";
 
 // ── Widget system ───────────────────────────────────────────────────────────
