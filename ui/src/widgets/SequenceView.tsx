@@ -148,7 +148,7 @@ export function SequenceView({
     x += gaps[i] ?? 0;
   });
   const lastX = xs[xs.length - 1] ?? x;
-  const totalW = Math.max(
+  let totalW = Math.max(
     lastX + (head[head.length - 1]?.w ?? 88) / 2 + marginX,
     lastX + selfRight + marginX,
   );
@@ -170,6 +170,7 @@ export function SequenceView({
       const lines = wrapText(it.note, 12, 220);
       noteLines.set(i, lines);
       h = lines.length * 15 + 22;
+      totalW = Math.max(totalW, Math.max(...lines.map((l) => textWidth(l, 12))) + 20 + 8);
     } else h = 32;
     rowH.push(h);
     y += h + padBelow[i]!;
@@ -329,8 +330,9 @@ export function SequenceView({
           const tw = Math.max(...lines.map((l) => textWidth(l, 12))) + 20;
           const lo = over.length ? xs[Math.min(...over)]! : xs[0]!;
           const hi = over.length ? xs[Math.max(...over)]! : xs[0]!;
-          const w = Math.max(tw, hi - lo + 40);
-          const cx = (lo + hi) / 2;
+          const w = Math.min(Math.max(tw, hi - lo + 40), totalW - 8);
+          // A note over an edge lane would hang off the canvas; slide it in.
+          const cx = Math.min(Math.max((lo + hi) / 2, w / 2 + 4), totalW - w / 2 - 4);
           return (
             <g key={`item-${i}`} opacity={opacityOf(i)}>
               <rect x={cx - w / 2} y={top + 4} width={w} height={h - 8} rx={4} fill={isActive ? alpha(activeColor, 16) : C.raised} stroke={isActive ? activeColor : C.border} />
