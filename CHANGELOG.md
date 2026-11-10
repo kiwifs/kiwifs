@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.87](https://github.com/kiwifs/kiwifs/compare/v0.19.86...v0.19.87) (2026-11-10)
+
+
+### Features
+
+* **ui:** Mermaid 12 with a real diagram palette ([#577](https://github.com/kiwifs/kiwifs/issues/577)) ([1a59ca3](https://github.com/kiwifs/kiwifs/commit/1a59ca386a45e6dd6bd874a13dbfe8f0c06198fa))
+
 ## [0.19.86](https://github.com/kiwifs/kiwifs/compare/v0.19.85...v0.19.86) (2026-11-10)
 
 
