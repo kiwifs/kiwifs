@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.86](https://github.com/kiwifs/kiwifs/compare/v0.19.85...v0.19.86) (2026-11-10)
+
+
+### Bug Fixes
+
+* **ui:** fit widget labels to their shapes and keep diagrams readable ([#575](https://github.com/kiwifs/kiwifs/issues/575)) ([1b3924b](https://github.com/kiwifs/kiwifs/commit/1b3924b191756887e0aec899cfc59cf5005ad0b5))
+
 ## [0.19.85](https://github.com/kiwifs/kiwifs/compare/v0.19.84...v0.19.85) (2026-11-08)
 
 
