@@ -10,6 +10,7 @@ import {
   prepareExportSvg,
   type MermaidThemeKey,
 } from "@kw/lib/mermaidTheme";
+import { isStaleChunkError, reloadForNewBuild } from "@kw/lib/staleBuild";
 
 let mermaidReady = false;
 let lastTheme: MermaidThemeKey | "" = "";
@@ -117,7 +118,9 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
         bindFunctionsRef.current = rendered.bindFunctions;
         setSvg(rendered.svg);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (cancelled) return;
+        if (isStaleChunkError(e) && reloadForNewBuild()) return;
+        setError(e instanceof Error ? e.message : String(e));
       }
     }
 
@@ -206,6 +209,28 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
       }
     }
   }, [svg, focus?.join("\u0000"), dim?.join("\u0000")]);
+
+  // A diagram held at MIN_FIT_SCALE scrolls sideways. Fade the edge that has
+  // more past it; a hard cut reads as a cropped or broken diagram.
+  const [edges, setEdges] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || !svg) return;
+    const update = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      const next = { left: max > 2 && el.scrollLeft > 2, right: max > 2 && el.scrollLeft < max - 2 };
+      setEdges((prev) => (prev.left === next.left && prev.right === next.right ? prev : next));
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    if (containerRef.current) ro?.observe(containerRef.current);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro?.disconnect();
+    };
+  }, [svg, zoom, naturalWidth, fullscreen]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -320,6 +345,11 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
   }
 
   const isDefaultView = zoom === 1 && pan.x === 0 && pan.y === 0;
+  const fade = 28;
+  const edgeMask =
+    edges.left || edges.right
+      ? `linear-gradient(to right, ${edges.left ? "transparent" : "#000"} 0, #000 ${edges.left ? fade : 0}px, #000 calc(100% - ${edges.right ? fade : 0}px), ${edges.right ? "transparent" : "#000"} 100%)`
+      : undefined;
 
   return (
     <figure
@@ -333,6 +363,11 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
             className="mb-1 flex items-center justify-end gap-1 px-0.5 text-xs"
             aria-label="Mermaid diagram controls"
           >
+            {isDefaultView && (edges.left || edges.right) && (
+              <span className="mr-auto pl-1 text-[11px] text-muted-foreground">
+                {edges.right ? "Wide diagram: scroll sideways →" : "← scroll back"}
+              </span>
+            )}
             <button
               type="button"
               className="h-7 w-7 rounded-sm border border-border bg-card font-semibold leading-none hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -396,7 +431,13 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
           <div
             ref={viewportRef}
             className="overflow-x-auto overflow-y-hidden"
-            style={{ cursor: "grab", touchAction: "none", flex: fullscreen ? 1 : undefined }}
+            style={{
+              cursor: "grab",
+              touchAction: "none",
+              flex: fullscreen ? 1 : undefined,
+              maskImage: edgeMask,
+              WebkitMaskImage: edgeMask,
+            }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}

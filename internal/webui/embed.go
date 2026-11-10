@@ -55,6 +55,14 @@ func Handler() echo.HandlerFunc {
 			return nil
 		}
 
+		// A hashed bundle from an older build. Answering with index.html would
+		// hand the browser HTML for a JS module, which fails as a MIME error the
+		// client can't tell apart from a real bug; a 404 lets it reload instead.
+		if strings.HasPrefix(path, "assets/") {
+			c.Response().Header().Set("Cache-Control", "no-store")
+			return c.String(http.StatusNotFound, "asset not found: this UI build has been replaced; reload the page")
+		}
+
 		c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 		c.Response().Header().Set("Cache-Control", "no-cache")
 		c.Response().WriteHeader(http.StatusOK)
