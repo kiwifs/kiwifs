@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.88](https://github.com/kiwifs/kiwifs/compare/v0.19.87...v0.19.88) (2026-11-10)
+
+
+### Bug Fixes
+
+* **ci:** auto-merge Cursor agent fix ([#579](https://github.com/kiwifs/kiwifs/issues/579)) ([6cd2c8d](https://github.com/kiwifs/kiwifs/commit/6cd2c8d86823888758da2bc09039cab92ccaa6db))
+* **ui:** widget crashes and clipping found by linting a large workspace ([#580](https://github.com/kiwifs/kiwifs/issues/580)) ([4d7fdba](https://github.com/kiwifs/kiwifs/commit/4d7fdbad8b1c96fe4ef20bb5140b2190816ab4dd))
+
 ## [0.19.87](https://github.com/kiwifs/kiwifs/compare/v0.19.86...v0.19.87) (2026-11-10)
 
 
