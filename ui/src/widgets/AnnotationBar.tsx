@@ -7,8 +7,9 @@ export interface AnnotationBarProps {
   text: string;
   /** Optional label prefix (e.g. step number). */
   label?: string;
-  /** Variant affects styling. "info" = neutral, "success" = green, "warning" = yellow. */
-  variant?: "info" | "success" | "warning";
+  /** Variant affects styling. "info" = neutral, "success" = green, "warning" = yellow, "error" = red.
+   *  Unknown values fall back to "info". */
+  variant?: "info" | "success" | "warning" | "error";
 }
 
 const VARIANT_STYLES = {
@@ -24,10 +25,14 @@ const VARIANT_STYLES = {
     border: "var(--kw-widget-accent-amber, #b45309)",
     bg: "var(--kw-widget-accent-amber, #b45309)",
   },
+  error: {
+    border: "var(--kw-widget-accent-red, #dc2626)",
+    bg: "var(--kw-widget-accent-red, #dc2626)",
+  },
 };
 
 export function AnnotationBar({ text, label, variant = "info" }: AnnotationBarProps) {
-  const style = VARIANT_STYLES[variant];
+  const style = VARIANT_STYLES[variant] ?? VARIANT_STYLES.info;
 
   return (
     <div aria-live="polite" style={{
