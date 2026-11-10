@@ -117,7 +117,7 @@
     "lz-string": "^1.5.0",
     "maplibre-gl": "^5.24.0",
     "markdown2typst": "^0.1.4",
-    "mermaid": "^11.14.0",
+    "mermaid": "^12.3.0",
     "prosemirror-state": "^1.4.4",
     "prosemirror-view": "^1.42.9",
     "react-arborist": "^3.7.0",
