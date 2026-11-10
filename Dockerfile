@@ -8,7 +8,7 @@ COPY ui/package.json ui/package-lock.json* ui/.npmrc* ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund --loglevel=error
 COPY ui ./
-ENV NODE_OPTIONS=--max-old-space-size=3072
+ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build
 
 # Stage 2: Cross-compile Go binary on the build host for the target arch.
