@@ -30,7 +30,7 @@ jobs:
               git clone --depth 1 https://github.com/kiwifs/kiwifs.git kiwifs-build
 
             cd kiwifs-build
-            sed -i 's/RUN npm run build/ENV NODE_OPTIONS=--max-old-space-size=3072\nRUN npm run build/' Dockerfile
+            sed -i 's/RUN npm run build/ENV NODE_OPTIONS=--max-old-space-size=4096\nRUN npm run build/' Dockerfile
             docker build -t kiwifs:latest -t "kiwifs:$TAG" .
 
             cd /opt/kiwifs
