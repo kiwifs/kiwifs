@@ -50,7 +50,8 @@ export interface BarBinning {
 }
 
 export interface BarViewProps {
-  /** Bar heights. May include negatives (drawn below a zero baseline). */
+  /** Bar heights. May include negatives (drawn below a zero baseline).
+   *  `Infinity` fills the plot and is labelled ∞; it does not set the scale. */
   values?: number[];
   /**
    * Build the bars by binning raw samples — a latency distribution, a hash
@@ -231,8 +232,11 @@ export function BarView({
   const bottomPad = 24; // room for index labels
   const sidePad = Math.max(12, Math.ceil((Math.min(widestLabel, labelRoom) - barWidth) / 2) + 4);
 
-  const dataMax = Math.max(...values);
-  const dataMin = Math.min(...values);
+  // ±Infinity ("not reached yet") must not set the scale; those bars are
+  // drawn to the edge of the plot instead.
+  const finite = values.filter((v) => Number.isFinite(v));
+  const dataMax = finite.length ? Math.max(...finite) : 0;
+  const dataMin = finite.length ? Math.min(...finite) : 0;
   const overlayMax = overlays.length ? Math.max(...overlays.map((o) => o.toValue)) : -Infinity;
   const guideMax = guides.length ? Math.max(...guides.map((g) => g.value)) : -Infinity;
 
@@ -273,7 +277,10 @@ export function BarView({
 
   const showValue = (i: number): string | null => {
     if (valueLabels === false) return null;
-    if (valueLabels === true) return String(values[i]);
+    if (valueLabels === true) {
+      const v = values[i];
+      return v === Infinity ? "∞" : v === -Infinity ? "−∞" : String(v);
+    }
     const v = valueLabels[i];
     return v == null ? null : String(v);
   };
@@ -361,7 +368,8 @@ export function BarView({
         })}
 
         {/* Bars */}
-        {values.map((v, i) => {
+        {values.map((raw, i) => {
+          const v = raw === Infinity ? axisMax : raw === -Infinity ? axisMin : Number.isNaN(raw) ? 0 : raw;
           const { fill, stroke, opacity } = resolveBarColor(
             i,
             activeIndices,

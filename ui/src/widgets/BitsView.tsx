@@ -184,7 +184,7 @@ export function BitsView({
       {showSummary && (
         <div style={{ fontSize: "0.75rem", color: DIM, fontVariantNumeric: "tabular-nums", lineHeight: 1.6 }}>
           <div><span style={{ color: TEXT, fontWeight: 700 }}>{masked.toString()}</span> = 0b{masked.toString(2).padStart(width, "0")}</div>
-          <div>{ones} bit{ones === 1 ? "" : "s"} set</div>
+          <div>{`${ones} bit${ones === 1 ? "" : "s"} set`}</div>
           {readings.map((reading, i) => (
             <div key={i}>
               {reading.label}: <span style={{ color: TEXT, fontWeight: 700 }}>{reading.text}</span>

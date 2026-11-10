@@ -131,6 +131,15 @@ describe("labelSegments", () => {
     expect(mathSource("(n+1)p^n")).toBe("(n+1)p^n");
   });
 
+  it("leaves snake_case identifiers as text", () => {
+    expect(hasMath("has_parent")).toBe(false);
+    expect(hasMath("dsu_parent")).toBe(false);
+    expect(hasMath("max_len = 3")).toBe(false);
+    expect(mathSource("x_i")).toBe("x_i");
+    expect(mathSource("a_{ij}")).toBe("a_{ij}");
+    expect(mathSource("x_1")).toBe("x_1");
+  });
+
   it("renders absolute values and numeric ratios", () => {
     expect(mathSource("|S|")).toBe("|S|");
     expect(mathSource("E|X-Y|")).toBe("E|X-Y|");

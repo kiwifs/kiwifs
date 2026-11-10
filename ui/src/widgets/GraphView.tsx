@@ -406,6 +406,14 @@ export function GraphView({
   for (const [id, g] of geom) {
     const above = (pointerMap.get(id)?.length ?? 0) * 14;
     grow({ x0: g.x - g.w / 2 - 6, y0: g.y - g.h / 2 - above - 10, x1: g.x + g.w / 2 + 10, y1: g.y + g.h / 2 + 6 });
+    const badge = lookupKeyed(badges, id);
+    if (badge != null && badge !== "") {
+      const circle = g.shape === "circle";
+      const bx = circle ? g.x + (g.w / 2) * 0.78 : g.x + g.w / 2 - 2;
+      const by = circle ? g.y - (g.w / 2) * 0.78 : g.y - g.h / 2 + 2;
+      const half = Math.max(18, textWidth(String(badge), 9, true) + 10) / 2;
+      grow({ x0: bx - half - 2, y0: by - 11, x1: bx + half + 2, y1: by + 11 });
+    }
   }
 
   // Groups: innermost first so a parent can wrap its children's boxes.

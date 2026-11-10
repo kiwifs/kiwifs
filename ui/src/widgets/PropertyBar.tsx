@@ -43,7 +43,7 @@ export function useChangedValues(pairs: [string, unknown][], enabled: boolean): 
   return st.changed;
 }
 
-export function PropertyBar({ entries, title, autoChanged = true }: PropertyBarProps) {
+export function PropertyBar({ entries = [], title, autoChanged = true }: PropertyBarProps) {
   const auto = useChangedValues(entries.map((e) => [e.label, e.value]), autoChanged);
   return (
     <div style={{

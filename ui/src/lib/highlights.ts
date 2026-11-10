@@ -38,6 +38,11 @@ function collectText(root: HTMLElement): { text: string; nodes: Text[]; offsets:
         if (parent.dataset && parent.dataset.kiwiComment === "wrap") {
           return NodeFilter.FILTER_REJECT;
         }
+        // Live widgets are React-owned; splitting their text nodes breaks
+        // React's next commit.
+        if (parent.classList.contains("kiwi-widget")) {
+          return NodeFilter.FILTER_REJECT;
+        }
         parent = parent.parentElement;
       }
       return NodeFilter.FILTER_ACCEPT;
@@ -145,15 +150,18 @@ export function clearWraps(root: HTMLElement) {
   const wraps = root.querySelectorAll<HTMLSpanElement>(
     'span[data-kiwi-comment="wrap"]'
   );
+  const touched = new Set<Node>();
   wraps.forEach((span) => {
     const parent = span.parentNode;
     if (!parent) return;
     while (span.firstChild) parent.insertBefore(span.firstChild, span);
     parent.removeChild(span);
+    touched.add(parent);
   });
-  // Merge adjacent text nodes so repeated wrap/clear cycles don't fragment
-  // the DOM further.
-  root.normalize();
+  // Merge the split text back so repeated wrap/clear cycles don't fragment
+  // the DOM. Only where a wrap was: React renders adjacent text nodes (e.g.
+  // `{n} bit{s}`) inside widgets, and merging those breaks its next commit.
+  touched.forEach((parent) => parent.normalize());
 }
 
 // Capture an anchor from the current window selection, constrained to

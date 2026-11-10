@@ -272,7 +272,7 @@ function isMathCallee(name: string): boolean {
 }
 
 function atTokenStart(text: string, i: number): boolean {
-  return i === 0 || !/[A-Za-z0-9]/.test(text[i - 1]!);
+  return i === 0 || !/[A-Za-z0-9_]/.test(text[i - 1]!);
 }
 
 function matchCall(text: string, i: number): { end: number; math: string } | null {
@@ -385,6 +385,8 @@ function matchScriptToken(text: string, i: number): { end: number; math: string 
       continue;
     }
     if (c === "^" || c === "_") {
+      // `has_parent`, `max_len`: a bare underscore before a word is a code identifier.
+      if (c === "_" && brace === 0 && /^[A-Za-z]{2}/.test(text.slice(j + 1))) return null;
       sawScript = true;
       j += 1;
       continue;
