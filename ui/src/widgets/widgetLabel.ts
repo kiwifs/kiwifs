@@ -190,7 +190,16 @@ function matchDollars(text: string, i: number): { end: number; math: string } | 
   if (text[i] !== "$") return null;
   const display = text.startsWith("$$", i);
   const delim = display ? "$$" : "$";
-  const end = text.indexOf(delim, i + delim.length);
+  let end = text.indexOf(delim, i + delim.length);
+  if (!display) {
+    // Pandoc's rule, so prices stay prose: `$x$` opens on a non-space, and a
+    // closing `$` follows a non-space and is not followed by a digit.
+    // "$256 with $45 off" has no valid closer.
+    if (/\s/.test(text[i + 1] ?? " ")) return null;
+    while (end >= 0 && (/\s/.test(text[end - 1]!) || /[0-9]/.test(text[end + 1] ?? ""))) {
+      end = text.indexOf("$", end + 1);
+    }
+  }
   if (end < 0) return null;
   const math = text.slice(i + delim.length, end).trim();
   if (!math) return null;

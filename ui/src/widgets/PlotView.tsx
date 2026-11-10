@@ -285,8 +285,13 @@ export function PlotView({
   const sx = (x: number) => PAD.left + ((x - domain.xMin) / (domain.xMax - domain.xMin)) * plotW;
   const sy = (y: number) => PAD.top + ((domain.yMax - y) / (domain.yMax - domain.yMin)) * plotH;
 
-  const xt = xTicks ?? niceTicks(domain.xMin, domain.xMax, 5);
-  const yt = yTicks ?? niceTicks(domain.yMin, domain.yMax, 5);
+  // A tick past the domain would draw outside the frame, over the edge.
+  const within = (lo: number, hi: number) => {
+    const eps = (hi - lo) * 1e-9;
+    return (t: number) => t >= lo - eps && t <= hi + eps;
+  };
+  const xt = (xTicks ?? niceTicks(domain.xMin, domain.xMax, 5)).filter(within(domain.xMin, domain.xMax));
+  const yt = (yTicks ?? niceTicks(domain.yMin, domain.yMax, 5)).filter(within(domain.yMin, domain.yMax));
 
   const legend = showLegend ?? series.some((s) => s.label);
 

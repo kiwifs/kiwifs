@@ -2,6 +2,7 @@ import { useId } from "react";
 import { alpha } from "./colors";
 import { toSet, type Many } from "./sets";
 import { SvgLabel } from "./WidgetText";
+import { textWidth } from "./graphGeometry";
 import { expandRange, niceTicks, sampleRegion } from "./plotLayout";
 import { objectsOf, shortText, summarizePlane } from "./widgetA11y";
 import { partHandlers, useInspect, whyFor, type InspectRef } from "./inspect";
@@ -659,18 +660,24 @@ export function PlaneView({
             >
               {picked && <circle cx={x} cy={y} r={8} fill="none" stroke={activeColor} strokeWidth={1.5} />}
               {pointMarker(p, x, y, tone.color)}
-              {p.label && (
-                <SvgLabel
-                  x={x + 7}
-                  y={y - 7}
-                  text={shortText(p.label)}
-                  fill={tone.color}
-                  fontSize={10}
-                  fontWeight={700}
-                  fontFamily="ui-monospace, SFMono-Regular, monospace"
-                  halo={DEFAULTS.surface}
-                />
-              )}
+              {p.label && (() => {
+                const text = shortText(p.label);
+                // Near the right edge the label goes on the left of the point.
+                const flip = x + 7 + textWidth(text, 10, true) > width - 2;
+                return (
+                  <SvgLabel
+                    x={flip ? x - 7 : x + 7}
+                    y={y - 7}
+                    text={text}
+                    anchor={flip ? "end" : "start"}
+                    fill={tone.color}
+                    fontSize={10}
+                    fontWeight={700}
+                    fontFamily="ui-monospace, SFMono-Regular, monospace"
+                    halo={DEFAULTS.surface}
+                  />
+                );
+              })()}
             </g>
           );
         })}

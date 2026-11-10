@@ -131,6 +131,13 @@ describe("labelSegments", () => {
     expect(mathSource("(n+1)p^n")).toBe("(n+1)p^n");
   });
 
+  it("leaves prices as text", () => {
+    expect(hasMath("best: $256,466 with $45,845 contacts")).toBe(false);
+    expect(hasMath("costs $5 or $10")).toBe(false);
+    expect(mathSource("$x^2$")).toBe("x^2");
+    expect(kinds("area $\\pi r^2$ here")).toBe("area [\\pi r^2] here");
+  });
+
   it("leaves snake_case identifiers as text", () => {
     expect(hasMath("has_parent")).toBe(false);
     expect(hasMath("dsu_parent")).toBe(false);
