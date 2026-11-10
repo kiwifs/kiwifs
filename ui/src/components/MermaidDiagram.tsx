@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  adaptMermaidColors,
   applyMermaidEmphasis,
   findMermaidNodes,
   mermaidInitConfig,
@@ -22,8 +23,21 @@ const ZOOM_STEP = 0.25;
  */
 const MIN_FIT_SCALE = 0.58;
 
+/** Iconify packs for `logos:aws`-style icons; each is fetched the first time a diagram names it. */
+const ICON_PACKS = ["logos", "mdi"];
+let iconsRegistered = false;
+
 async function getMermaid() {
   const { default: mermaid } = await import("mermaid");
+  if (!iconsRegistered) {
+    iconsRegistered = true;
+    mermaid.registerIconPacks(
+      ICON_PACKS.map((name) => ({
+        name,
+        loader: () => fetch(`https://unpkg.com/@iconify-json/${name}@1/icons.json`).then((res) => res.json()),
+      })),
+    );
+  }
   return mermaid;
 }
 
@@ -141,6 +155,7 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
 
     const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${mermaidShadowStyles()}</style>${svg}`;
+    adaptMermaidColors(root, theme);
     const svgEl = root.querySelector("svg");
     if (svgEl) bindFunctionsRef.current?.(svgEl);
     const viewBoxWidth = Number(svgEl?.getAttribute("viewBox")?.split(/[\s,]+/)[2]);
@@ -170,7 +185,7 @@ export function MermaidDiagram({ chart, focus, dim, onNavigate, onNodeClick }: P
         });
       });
     }
-  }, [svg, chart, handleHref, hasNodeClick]);
+  }, [svg, chart, theme, handleHref, hasNodeClick]);
 
   useEffect(() => {
     const host = containerRef.current;
