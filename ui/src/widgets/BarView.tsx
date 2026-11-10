@@ -2,6 +2,10 @@ import { alpha } from "./colors";
 import { toSet, type Many } from "./sets";
 import { SvgLabel } from "./WidgetText";
 import { summarizeBars } from "./widgetA11y";
+import { fitFontSize, labelWidth, truncateLabel } from "./textFit";
+
+const LABEL_PX = 10;
+const MAX_SLOT = 120;
 
 export interface BarPointer {
   /** Column index the pointer sits above. */
@@ -194,7 +198,7 @@ export function BarView({
   minValue,
   chartHeight = DEFAULTS.chartHeight,
   barWidth = DEFAULTS.barWidth,
-  gap = DEFAULTS.gap,
+  gap: gapIn = DEFAULTS.gap,
   activeColor = DEFAULTS.activeColor,
   highlightColor = DEFAULTS.highlightColor,
   overlayColor = DEFAULTS.overlay,
@@ -216,9 +220,16 @@ export function BarView({
   }
 
   const n = values.length;
+  // Long category labels widen the gap between bars (up to a cap) instead of
+  // running into their neighbours; past the cap they shrink, then truncate.
+  const labelText = (i: number) => (labels ? (labels[i] == null ? "" : String(labels[i])) : String(i));
+  const widestLabel = Math.max(0, ...values.map((_, i) => labelWidth(labelText(i), LABEL_PX, { bold: false })));
+  const slot = Math.max(barWidth + gapIn, Math.min(MAX_SLOT, Math.ceil(widestLabel) + 8));
+  const gap = slot - barWidth;
+  const labelRoom = slot - 4;
   const topPad = 34; // room for value labels + pointers
   const bottomPad = 24; // room for index labels
-  const sidePad = 12;
+  const sidePad = Math.max(12, Math.ceil((Math.min(widestLabel, labelRoom) - barWidth) / 2) + 4);
 
   const dataMax = Math.max(...values);
   const dataMin = Math.min(...values);
@@ -268,12 +279,12 @@ export function BarView({
   };
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflowX: "auto" }}>
+    <div style={{ padding: "0.5rem 0", overflowX: "auto" }}>
       <svg
         width={svgWidth}
         height={svgHeight}
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        style={{ fontVariantNumeric: "tabular-nums", maxWidth: "100%" }}
+        style={{ display: "block", margin: "0 auto", fontVariantNumeric: "tabular-nums", maxWidth: "100%" }}
         role="img"
         aria-label={ariaLabel ?? summarizeBars({ values, labels, activeIndices })}
       >
@@ -473,14 +484,18 @@ export function BarView({
         {values.map((_, i) => {
           const lbl = labels ? labels[i] : i;
           if (lbl == null) return null;
+          const text = String(lbl);
+          const px = fitFontSize(text, labelRoom, LABEL_PX, { bold: false, min: 8.5 });
+          const shown = truncateLabel(text, labelRoom, px, { bold: false });
           return (
             <SvgLabel
               key={`idx-${i}`}
               x={xFor(i) + barWidth / 2}
               y={svgHeight - 8}
-              text={lbl}
+              text={shown}
+              title={shown === text ? undefined : text}
               anchor="middle"
-              fontSize={10}
+              fontSize={px}
               fill={DEFAULTS.dimColor}
             />
           );

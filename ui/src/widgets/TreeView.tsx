@@ -5,6 +5,7 @@ import { partHandlers, useInspect, whyFor, type InspectRef } from "./inspect";
 import { inspectLinked } from "./inspectLinked";
 import { alpha, lookupKeyed, type KeyedValues } from "./colors";
 import { SvgLabel } from "./WidgetText";
+import { fitFontSize, fitInCircle } from "./textFit";
 import {
   DEFAULT_KEY_CELL,
   childAnchorX,
@@ -255,10 +256,21 @@ export function TreeView({
   }
 
   const pad = nodeSize + 20;
-  const width = nodes.length ? bounds.maxX - bounds.minX + pad * 2 : 0;
-  const height = nodes.length ? bounds.maxY - bounds.minY + pad * 2 : 0;
-  const ox = -bounds.minX + pad / 2;
-  const oy = -bounds.minY + pad / 2 + nodeSize / 2;
+  // Pointer labels stack upward from the node; on the top row they need room
+  // the default padding doesn't leave once there are two or more.
+  const topPointers = Math.max(
+    0,
+    ...pointers
+      .map((p) => p.id ?? p.value)
+      .filter((k) => k !== undefined && nodes.some((n) => n.y === bounds.minY && String(n.key) === String(k)))
+      .map((k) => pointers.filter((p) => String(p.id ?? p.value) === String(k)).length),
+  );
+  const extraTop = topPointers > 0 ? Math.max(0, 18 + (topPointers - 1) * 14 - pad / 2) : 0;
+  const sidePad = pad * 0.75;
+  const width = nodes.length ? bounds.maxX - bounds.minX + sidePad * 2 : 0;
+  const height = nodes.length ? bounds.maxY - bounds.minY + pad * 2 + extraTop : 0;
+  const ox = -bounds.minX + sidePad;
+  const oy = -bounds.minY + pad / 2 + nodeSize / 2 + extraTop;
 
   const target = new Map<string, Point>();
   for (const n of nodes) target.set(renderKey.get(n)!, { x: n.x + ox, y: n.y + oy });
@@ -339,7 +351,7 @@ export function TreeView({
   );
 
   return (
-    <div tabIndex={0} style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
+    <div tabIndex={0} style={{ padding: "0.5rem 0", overflow: "auto" }}>
       <svg
         width={width}
         height={height}
@@ -347,7 +359,7 @@ export function TreeView({
           ariaLabel ?? summarizeTree({ root, roots, parents, activeNodes }),
           onSelect !== undefined || Object.keys(mergedWhy).length > 0,
         )}
-        style={{ display: "block", overflow: "visible" }}
+        style={{ display: "block", overflow: "visible", margin: "0 auto" }}
       >
         <defs>
           <marker
@@ -604,7 +616,7 @@ export function TreeView({
                           anchor="middle"
                           dominantBaseline="central"
                           fill={on ? "var(--kw-widget-active-foreground, #111827)" : textColor}
-                          fontSize={11}
+                          fontSize={fitFontSize(String(kv), cell - 6, 11, { mono: true, min: 8 })}
                           fontWeight={700}
                           fontFamily="ui-monospace, SFMono-Regular, monospace"
                         />
@@ -624,18 +636,26 @@ export function TreeView({
                     strokeDasharray={dash}
                     style={{ transition: "fill 0.25s ease, stroke 0.25s ease" }}
                   />
-                  <SvgLabel
-                    x={cx}
-                    y={cy}
-                    text={isGhost ? "∅" : n.value}
-                    anchor="middle"
-                    dominantBaseline="central"
-                    fill={textColor}
-                    fontSize={isGhost ? 11 : nodeSize > 36 ? 14 : 12}
-                    fontWeight={700}
-                    fontFamily="ui-monospace, SFMono-Regular, monospace"
-                    style={isPruned ? { textDecoration: "line-through" } : undefined}
-                  />
+                  {(() => {
+                    const fit = isGhost
+                      ? { text: "∅", fontSize: 11 }
+                      : fitInCircle(String(n.value ?? ""), radius * 2, nodeSize > 36 ? 14 : 12, { mono: true });
+                    return (
+                      <SvgLabel
+                        x={cx}
+                        y={cy}
+                        text={fit.text}
+                        title={fit.full}
+                        anchor="middle"
+                        dominantBaseline="central"
+                        fill={textColor}
+                        fontSize={fit.fontSize}
+                        fontWeight={700}
+                        fontFamily="ui-monospace, SFMono-Regular, monospace"
+                        style={isPruned ? { textDecoration: "line-through" } : undefined}
+                      />
+                    );
+                  })()}
                 </>
               )}
               {hasBadge && (

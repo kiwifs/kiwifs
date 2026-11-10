@@ -1,4 +1,6 @@
+import { useId } from "react";
 import { alpha } from "./colors";
+import { fitFontSize, labelWidth, truncateLabel } from "./textFit";
 import { toSet, type Many } from "./sets";
 import { SvgLabel } from "./WidgetText";
 import { canvasAria, summarizeLinkedList } from "./widgetA11y";
@@ -78,10 +80,10 @@ const NEXT_W = 18;
 const BOX_H = 36;
 const GAP = 26;
 const LABEL_BAND = 16;
+const POINTER_STEP = 13;
 const NULL_W = 40;
-
-const ARROW = "kw-ll-arrow";
-const ARROW_ACTIVE = "kw-ll-arrow-active";
+const VALUE_PX = 13;
+const MAX_NODE_W = 120;
 
 interface Arc {
   from: number;
@@ -107,7 +109,7 @@ export function LinkedListView({
   showNull = true,
   activeColor = DEFAULTS.activeColor,
   highlightColor = DEFAULTS.highlightColor,
-  nodeWidth = DEFAULTS.nodeWidth,
+  nodeWidth: nodeWidthIn,
   ariaLabel,
   onSelect,
   why,
@@ -117,6 +119,11 @@ export function LinkedListView({
   const highlightIndices = toSet(highlightIndicesIn);
   const dimIndices = toSet(dimIndicesIn);
   const bus = useInspect();
+  // Markers are looked up by id document-wide; two lists with different
+  // active colors must not share one.
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const ARROW = `kw-ll-${uid}-arrow`;
+  const ARROW_ACTIVE = `kw-ll-${uid}-arrow-active`;
   const mergedWhy = { ...bus.why, ...(why ?? {}) };
   const linked = bus.linkedKeys(widgetId);
   const selectable = (i: number) =>
@@ -141,8 +148,20 @@ export function LinkedListView({
     );
   }
 
-  const boxW = nodeWidth + NEXT_W;
-  const stride = boxW + GAP;
+  // Each box grows to its own value, up to a cap; past that the font shrinks.
+  const valueW = nodes.map(
+    (n) =>
+      nodeWidthIn ??
+      Math.min(MAX_NODE_W, Math.max(DEFAULTS.nodeWidth, Math.ceil(labelWidth(String(n.value), VALUE_PX, { mono: true })) + 18)),
+  );
+  const boxWOf = (i: number) => valueW[i]! + NEXT_W;
+  const starts: number[] = [];
+  let run = 0;
+  nodes.forEach((_, i) => {
+    starts.push(run);
+    run += boxWOf(i) + GAP;
+  });
+  const chainW = run - GAP;
 
   const arcs: Arc[] = [];
   nodes.forEach((n, i) => {
@@ -164,21 +183,25 @@ export function LinkedListView({
   const lastNext = nodes[nodes.length - 1]!.next;
   const hasNull = showNull && lastNext !== false && typeof lastNext !== "number";
 
-  const padX = 12;
-  const boxTop = LABEL_BAND + 6 + aboveSpace;
-  const centerY = boxTop + BOX_H / 2;
-  const width = padX * 2 + nodes.length * boxW + (nodes.length - 1) * GAP + (hasNull ? GAP + NULL_W : 0);
-  const height = boxTop + BOX_H + belowSpace + 6;
-
-  const boxX = (i: number) => padX + i * stride;
-  const centerX = (i: number) => boxX(i) + boxW / 2;
-
   const ptrMap = new Map<number, LinkedListPointer[]>();
   for (const p of pointers) {
     const list = ptrMap.get(p.index) ?? [];
     list.push(p);
     ptrMap.set(p.index, list);
   }
+  const maxStack = Math.max(1, ...[...ptrMap.values()].map((l) => l.length));
+  const labelBand = LABEL_BAND + (maxStack - 1) * POINTER_STEP;
+
+  const padX = 12;
+  const boxTop = labelBand + 6 + aboveSpace;
+  const centerY = boxTop + BOX_H / 2;
+  const width = padX * 2 + chainW + (hasNull ? GAP + NULL_W : 0);
+  const height = boxTop + BOX_H + belowSpace + 6;
+
+  const boxX = (i: number) => padX + starts[i]!;
+  const centerX = (i: number) => boxX(i) + boxWOf(i) / 2;
+  const last = nodes.length - 1;
+  const chainEnd = boxX(last) + boxWOf(last);
 
   function styleFor(i: number) {
     if (i === activeIndex) {
@@ -199,7 +222,7 @@ export function LinkedListView({
   }
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0", overflow: "auto" }}>
+    <div style={{ padding: "0.5rem 0", overflow: "auto" }}>
       <svg
         width={width}
         height={height}
@@ -207,7 +230,7 @@ export function LinkedListView({
           ariaLabel ?? summarizeLinkedList({ nodes, doubly, pointers }),
           onSelect !== undefined || Object.keys(mergedWhy).length > 0,
         )}
-        style={{ display: "block" }}
+        style={{ display: "block", margin: "0 auto" }}
       >
         <defs>
           <marker id={ARROW} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
@@ -222,7 +245,7 @@ export function LinkedListView({
         {nodes.map((node, i) => {
           const goesToNeighbour = node.next === undefined || node.next === true;
           if (!goesToNeighbour || i >= nodes.length - 1) return null;
-          const x1 = boxX(i) + boxW + 3;
+          const x1 = boxX(i) + boxWOf(i) + 3;
           const x2 = boxX(i + 1) - 4;
           const y = doubly ? centerY - 6 : centerY;
           return (
@@ -281,8 +304,11 @@ export function LinkedListView({
           const s = styleFor(i);
           const x = boxX(i);
           const ptrs = ptrMap.get(i);
+          const nodeWidth = valueW[i]!;
+          const boxW = boxWOf(i);
           const nextCellX = x + nodeWidth;
           const terminates = node.next === false || node.next === null;
+          const valuePx = fitFontSize(String(node.value), nodeWidth - 8, VALUE_PX, { mono: true });
 
           return (
             <g
@@ -312,11 +338,12 @@ export function LinkedListView({
               />
               <SvgLabel
                 x={x + nodeWidth / 2} y={centerY}
-                text={node.value}
+                text={truncateLabel(String(node.value), nodeWidth - 8, valuePx, { mono: true })}
+                title={String(node.value)}
                 anchor="middle"
                 dominantBaseline="central"
                 fill={s.text}
-                fontSize={13}
+                fontSize={valuePx}
                 fontWeight={700}
                 fontFamily="ui-monospace, SFMono-Regular, monospace"
               />
@@ -332,7 +359,7 @@ export function LinkedListView({
                 <SvgLabel
                   key={j}
                   x={x + boxW / 2}
-                  y={LABEL_BAND - 4 - j * 13}
+                  y={labelBand - 4 - j * POINTER_STEP}
                   text={p.label}
                   anchor="middle"
                   fill={p.color ?? activeColor}
@@ -349,16 +376,16 @@ export function LinkedListView({
         {hasNull && (
           <g opacity={0.6}>
             <line
-              x1={boxX(nodes.length - 1) + boxW + 3}
+              x1={chainEnd + 3}
               y1={centerY}
-              x2={boxX(nodes.length - 1) + boxW + GAP - 4}
+              x2={chainEnd + GAP - 4}
               y2={centerY}
               stroke={DEFAULTS.border}
               strokeWidth={1.5}
               markerEnd={`url(#${ARROW})`}
             />
             <rect
-              x={boxX(nodes.length - 1) + boxW + GAP}
+              x={chainEnd + GAP}
               y={boxTop + 4}
               width={NULL_W}
               height={BOX_H - 8}
@@ -368,7 +395,7 @@ export function LinkedListView({
               strokeWidth={2}
             />
             <text
-              x={boxX(nodes.length - 1) + boxW + GAP + NULL_W / 2}
+              x={chainEnd + GAP + NULL_W / 2}
               y={centerY}
               textAnchor="middle"
               dominantBaseline="central"

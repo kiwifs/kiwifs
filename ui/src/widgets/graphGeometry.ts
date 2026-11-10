@@ -94,11 +94,15 @@ const LABEL_MAX = 150;
 
 export function measureNode({ label, sublabel, shape, nodeSize, width, height }: NodeBoxInput): NodeBox {
   if (shape === "circle") {
-    const fontSize = nodeSize > 32 ? 13 : 11;
+    const base = nodeSize > 32 ? 13 : 11;
     const lines = label.split(/\n/);
-    const tw = Math.max(...lines.map((l) => textWidth(l, fontSize, true)));
+    const tw = Math.max(...lines.map((l) => textWidth(l, base, true)));
     // Keep the author's size unless the label would spill; then grow, capped.
     const d = width ?? Math.min(Math.max(nodeSize, tw + 10), nodeSize * 2.2);
+    // Past the cap, shrink the text instead of letting it run over the rim.
+    // Stacked lines sit nearer the poles, where the circle is narrower.
+    const room = d * (lines.length > 1 ? 0.72 : 0.84) - 4;
+    const fontSize = tw > room ? Math.max(8, Math.floor(((base * room) / tw) * 2) / 2) : base;
     return {
       w: d, h: height ?? d, lines, sublines: [], fontSize, subFontSize: 10,
       lineHeight: fontSize + 2, textDy: 0,

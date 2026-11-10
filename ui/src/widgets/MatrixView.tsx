@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { alpha } from "./colors";
+import { fitFontSize, labelWidth } from "./textFit";
 import { WidgetText } from "./WidgetText";
 import { headerGutterPx } from "./widgetLabel";
 import { cellKey, parseCell, toCellSet, type CellRef, type ManyCells } from "./sets";
@@ -508,7 +509,7 @@ export function MatrixView({
                     <div
                       key={`${c}-${versions.get(key) ?? 0}`}
                       data-cell={key}
-                      title={tooltips?.[r]?.[c] ?? undefined}
+                      title={tooltips?.[r]?.[c] ?? (labelWidth(cell.text, 8) > size - 11 ? cell.text : undefined)}
                       className={flashSet.has(key) ? "kw-cell-flash" : undefined}
                       {...(selectable(key)
                         ? partHandlers(widgetId, "cell", key, bus, {
@@ -532,7 +533,7 @@ export function MatrixView({
                         flexDirection: "column",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontSize: size > 40 ? "0.85rem" : size > 32 ? "0.75rem" : "0.68rem",
+                        fontSize: `${fitFontSize(cell.text, size - 11, size > 40 ? 13.6 : size > 32 ? 12 : 10.9, { min: 8 }) / 16}rem`,
                         fontWeight: 700,
                         fontVariantNumeric: "tabular-nums",
                         transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease",

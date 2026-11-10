@@ -118,6 +118,8 @@ export interface SvgLabelProps {
   plain?: boolean;
   /** Extra inline styles on the text element. */
   style?: CSSProperties;
+  /** Hover tooltip — the full text when the drawn label was shortened. */
+  title?: string;
 }
 
 /**
@@ -137,6 +139,7 @@ export function SvgLabel({
   halo,
   plain = false,
   style,
+  title,
 }: SvgLabelProps) {
   if (text == null) return null;
   const raw = String(text);
@@ -156,6 +159,7 @@ export function SvgLabel({
           ...style,
         }}
       >
+        {title && <title>{title}</title>}
         {raw}
       </text>
     );
