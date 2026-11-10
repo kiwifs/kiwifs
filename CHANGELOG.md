@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.89](https://github.com/kiwifs/kiwifs/compare/v0.19.88...v0.19.89) (2026-11-10)
+
+
+### Bug Fixes
+
+* **ui:** keep widget labels inside the canvas; prices are not math ([#582](https://github.com/kiwifs/kiwifs/issues/582)) ([3b93200](https://github.com/kiwifs/kiwifs/commit/3b932003b971fdc6f6a03b79e1a43c827cf66334))
+
 ## [0.19.88](https://github.com/kiwifs/kiwifs/compare/v0.19.87...v0.19.88) (2026-11-10)
 
 
