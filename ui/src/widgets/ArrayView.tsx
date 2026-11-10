@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { alpha } from "./colors";
+import { fitFontSize, labelWidth } from "./textFit";
 import { WidgetText } from "./WidgetText";
 import { headerGutterPx } from "./widgetLabel";
 import { toSet, type Many } from "./sets";
@@ -232,6 +233,35 @@ export function autoCellSize(n: number): number {
   return 32;
 }
 
+/** Room lost to a cell's 2px borders and a little breathing space. */
+const CELL_INSET = 14;
+/** Cells widen for long values up to this, then the text shrinks or cuts. */
+const MAX_CELL_W = 96;
+/** Widening aims to keep values at least this size. */
+const WIDEN_PX = 12;
+
+/** A cell's preferred font size in px, before fitting it to the value. */
+export function cellFontPx(cellSize: number, hasSub: boolean): number {
+  if (hasSub) return cellSize > 40 ? 13.6 : 12;
+  return cellSize > 40 ? 16 : cellSize > 34 ? 13.6 : 12.5;
+}
+
+/**
+ * Width for every cell of an auto-sized array: square unless some value
+ * (a word, a large number, a tuple) would need to drop below a readable size.
+ */
+export function autoCellWidth(size: number, texts: string[]): number {
+  const widest = Math.max(0, ...texts.map((t) => labelWidth(t, WIDEN_PX)));
+  return Math.min(MAX_CELL_W, Math.max(size, Math.ceil(widest + CELL_INSET)));
+}
+
+const CUT_STYLE = (room: number): CSSProperties => ({
+  maxWidth: room,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+});
+
 function activeSet(row: ArrayRowProps): Set<number> {
   const s = new Set(toSet(row.activeIndices));
   const a = row.activeIndex;
@@ -378,7 +408,8 @@ function ArrayRow({
   row,
   lanes,
   cellSize,
-  labelWidth,
+  cellWidth,
+  labelWidth: gutterWidth,
   indexBase,
   indexLabels,
   wrap,
@@ -400,6 +431,7 @@ function ArrayRow({
   row: ArrayRowProps;
   lanes: Lanes;
   cellSize: number;
+  cellWidth: number;
   labelWidth: number;
   indexBase: number;
   indexLabels?: (string | number | null | undefined)[];
@@ -450,11 +482,11 @@ function ArrayRow({
   const offset = Math.max(0, row.offset ?? 0);
 
   let label: ReactNode = null;
-  if (labelWidth > 0) {
+  if (gutterWidth > 0) {
     label = (
       <div
         style={{
-          width: labelWidth,
+          width: gutterWidth,
           flexShrink: 0,
           marginTop: topPad + POINTER_H + COL_GAP,
           height: cellSize,
@@ -483,16 +515,18 @@ function ArrayRow({
           : { display: "flex", gap: GAP }}
       >
         {Array.from({ length: offset }, (_, i) => (
-          <div key={`pad-${i}`} style={{ width: cellSize, flexShrink: 0 }} aria-hidden />
+          <div key={`pad-${i}`} style={{ width: cellWidth, flexShrink: 0 }} aria-hidden />
         ))}
         {row.values.map((raw, i) => {
           const cell = formatCell(raw, row.empty);
           const style = getCellStyle(i, sets, colors, row.cellColors?.[i], cell);
           const sub = row.sublabels?.[i];
           const hasSub = sub != null && sub !== "";
-          const mainFontSize = hasSub
-            ? (cellSize > 40 ? "0.85rem" : "0.75rem")
-            : (cellSize > 40 ? "1rem" : cellSize > 34 ? "0.85rem" : "0.78rem");
+          const basePx = cellFontPx(cellSize, hasSub);
+          const room = cellWidth - CELL_INSET;
+          const mainPx = fitFontSize(cell.text, room, basePx);
+          const cut = !cell.text.includes("$") && labelWidth(cell.text, mainPx) > room;
+          const mainFontSize = `${mainPx / 16}rem`;
           const key = `${rowIdx}:${i}`;
           const caption = idxCaptions?.[i] ?? indexBase + i;
 
@@ -504,7 +538,7 @@ function ArrayRow({
                 key={`c${versions.get(key) ?? 0}`}
                 data-cell={key}
                 data-active={sets.active.has(i) ? "" : undefined}
-                title={row.tooltips?.[i] ?? undefined}
+                title={row.tooltips?.[i] ?? (cut ? cell.text : undefined)}
                 className={flash.has(key) ? "kw-cell-flash" : undefined}
                 {...(selectable(i)
                   ? partHandlers(widgetId, "cell", partKey(i), bus, {
@@ -514,7 +548,7 @@ function ArrayRow({
                     })
                   : {})}
                 style={{
-                  width: cellSize,
+                  width: cellWidth,
                   height: cellSize,
                   borderRadius: 8,
                   border: `2px ${style.borderStyle ?? "solid"} ${style.border}`,
@@ -549,10 +583,10 @@ function ArrayRow({
                     {cell.text}
                   </span>
                 ) : (
-                  <span><WidgetText text={cell.text} /></span>
+                  <span style={cut ? CUT_STYLE(room) : undefined}><WidgetText text={cell.text} /></span>
                 )}
                 {hasSub && (
-                  <span style={{ fontSize: "0.55rem", fontWeight: 500, opacity: 0.6, lineHeight: 1 }}>
+                  <span style={{ fontSize: "0.55rem", fontWeight: 500, opacity: 0.6, lineHeight: 1, ...(String(sub).includes("$") ? null : CUT_STYLE(room)) }}>
                     <WidgetText text={sub} />
                   </span>
                 )}
@@ -603,6 +637,7 @@ export function ArrayStack({
   });
   const longest = Math.max(0, ...rows.map((r) => r.values.length + Math.max(0, r.offset ?? 0)));
   const size = cellSize ?? autoCellSize(longest);
+  const cellW = cellSize ?? autoCellWidth(size, rows.flatMap((r) => r.values.map((v) => formatCell(v, r.empty).text)));
   const anyLabel = rows.some((r) => r.label);
   const gutter = labelWidth ?? (anyLabel ? headerGutterPx(rows.map((r) => r.label ?? null), { min: 28 }) : 0);
   const colors = { active: activeColor, read: readColor ?? activeColor, highlight: highlightColor };
@@ -697,6 +732,7 @@ export function ArrayStack({
             row={r}
             lanes={lanes[ri]!}
             cellSize={size}
+            cellWidth={cellW}
             labelWidth={gutter}
             indexBase={indexBase}
             indexLabels={indexLabels}

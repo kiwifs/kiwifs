@@ -203,7 +203,15 @@ export function SequenceView({
       width={Math.round(displayW)}
       height={Math.round((displayW * totalH) / totalW)}
       viewBox={`0 0 ${totalW} ${totalH}`}
-      style={{ display: "block", maxWidth: "100%", height: "auto" }}
+      style={{
+        display: "block",
+        maxWidth: "100%",
+        // Shrinking a wide diagram past this makes its 12px labels unreadable;
+        // it scrolls sideways instead.
+        minWidth: zoomable ? undefined : Math.round(Math.min(displayW, totalW * 0.8)),
+        height: "auto",
+        margin: "0 auto",
+      }}
       role="img"
       aria-label={ariaLabel ?? summarizeSequence({ participants, items, step })}
     >
@@ -349,7 +357,11 @@ export function SequenceView({
 
   return (
     <div style={{ display: "flex", justifyContent: "center", padding: "0.5rem 0" }}>
-      {zoomable ? <div style={{ width: "100%" }}><ZoomPanel>{svg}</ZoomPanel></div> : svg}
+      {zoomable ? (
+        <div style={{ width: "100%" }}><ZoomPanel>{svg}</ZoomPanel></div>
+      ) : (
+        <div style={{ width: "100%", overflowX: "auto" }}>{svg}</div>
+      )}
     </div>
   );
 }

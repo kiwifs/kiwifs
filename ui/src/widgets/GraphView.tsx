@@ -204,6 +204,12 @@ const DEFAULTS = {
   height: 300,
 };
 
+/**
+ * Fitting a wide graph to a narrow column scales its text with it; below this
+ * scale labels drop under ~8px, so the graph keeps it and scrolls sideways.
+ */
+const MIN_FIT_SCALE = 0.8;
+
 const SANS = "ui-sans-serif, system-ui, sans-serif";
 const MONO = "ui-monospace, SFMono-Regular, monospace";
 
@@ -602,7 +608,13 @@ export function GraphView({
       width={Math.round(displayW)}
       height={Math.round(displayH)}
       viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
-      style={{ display: "block", maxWidth: "100%", height: "auto" }}
+      style={{
+        display: "block",
+        maxWidth: "100%",
+        minWidth: zoomable ? undefined : Math.round(Math.min(displayW, vbW * MIN_FIT_SCALE)),
+        height: "auto",
+        margin: "0 auto",
+      }}
       {...canvasAria(
         ariaLabel ?? summarizeGraph({ nodes, edges, directed, groups }),
         Boolean(onNodeClick) || onSelect !== undefined || Object.keys(mergedWhy).length > 0,
@@ -936,7 +948,11 @@ export function GraphView({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0.5rem 0" }}>
-      {zoomable ? <div style={{ width: "100%" }}><ZoomPanel>{svg}</ZoomPanel></div> : svg}
+      {zoomable ? (
+        <div style={{ width: "100%" }}><ZoomPanel>{svg}</ZoomPanel></div>
+      ) : (
+        <div style={{ width: "100%", overflowX: "auto" }}>{svg}</div>
+      )}
       {editable && (
         // Sketching a graph beats typing coordinates, and this is what turns
         // the sketch into a fence body the author can paste back into the page.

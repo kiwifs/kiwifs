@@ -1,5 +1,6 @@
 import { alpha } from "./colors";
 import { toSet, type Many } from "./sets";
+import { fitFontSize } from "./textFit";
 import { WidgetText } from "./WidgetText";
 import { canvasAria, objectsOf, sentence, shortText } from "./widgetA11y";
 import { partHandlers, useInspect, whyFor, type InspectRef } from "./inspect";
@@ -287,7 +288,7 @@ export function QueueView({
                   textAnchor="middle"
                   dominantBaseline="central"
                   fill={st.color}
-                  fontSize={13}
+                  fontSize={fitFontSize(String(slotContent(i)), slotSize - 8, 13, { mono: true, min: 8 })}
                   fontWeight={700}
                   fontFamily="ui-monospace, SFMono-Regular, monospace"
                 >
@@ -363,7 +364,7 @@ export function QueueView({
                   alignItems: "center",
                   justifyContent: "center",
                   fontWeight: 700,
-                  fontSize: "0.8rem",
+                  fontSize: `${fitFontSize(String(slotContent(i)), slotSize - 8, 12.8, { mono: true, min: 8 }) / 16}rem`,
                   fontVariantNumeric: "tabular-nums",
                   fontFamily: "ui-monospace, SFMono-Regular, monospace",
                   cursor: selectable(i) ? "pointer" : undefined,
