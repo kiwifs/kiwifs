@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.90](https://github.com/kiwifs/kiwifs/compare/v0.19.89...v0.19.90) (2026-11-11)
+
+
+### Bug Fixes
+
+* **ui:** recover from stale build chunks and show wide-diagram scroll cue ([#584](https://github.com/kiwifs/kiwifs/issues/584)) ([65ee8f0](https://github.com/kiwifs/kiwifs/commit/65ee8f00f1778233fd3a5067f6f6aa7c88af1f55))
+
 ## [0.19.89](https://github.com/kiwifs/kiwifs/compare/v0.19.88...v0.19.89) (2026-11-10)
 
 
