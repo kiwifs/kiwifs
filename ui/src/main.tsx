@@ -9,6 +9,7 @@ import {
 } from "./lib/kiwiTheme";
 import type { KiwiHostConfig } from "./lib/hostConfig";
 import { useUIConfigStore } from "./lib/uiConfigStore";
+import { listenForStaleBuild } from "./lib/staleBuild";
 
 declare global {
   interface Window {
@@ -25,6 +26,7 @@ function getThemeOrigins(): string[] {
 }
 
 async function boot() {
+  listenForStaleBuild();
   applyKiwiThemeFromUrl();
   await applyKiwiThemeFromThemeUrl();
   listenForKiwiTheme(getThemeOrigins());
