@@ -288,6 +288,25 @@ GET    /api/kiwi/janitor                   → content health scan
 GET    /api/kiwi/memory/report             → episodic vs merged-from coverage (JSON)
 ```
 
+**External link rot.** `GET /api/kiwi/janitor` can also report `external-link-rot` warnings
+for `http(s)` URLs in page bodies that answer 4xx/5xx or cannot be reached. It is off by
+default; enable it in `.kiwi/config.toml`:
+
+```toml
+[janitor]
+external_link_check     = true
+external_link_timeout   = "5s"                          # per request
+external_link_ignore    = ["localhost", "example.com"]  # hosts and their subdomains
+external_link_cache_ttl = "24h"
+```
+
+Frontmatter, fenced code blocks and inline code are not scanned. Each URL is probed with
+`HEAD` (falling back to a `Range: bytes=0-0` `GET`), redirects are followed up to 3 hops,
+at most 10 requests run at once and starts are spaced 100ms apart. Results are cached in
+`.kiwi/cache/link-check.json`, so only the scheduled scan or a `?fresh=true` request after
+the TTL expires touches the network. The same findings appear in `kiwifs janitor` and
+`kiwifs check`.
+
 ---
 
 ## Real-time Events

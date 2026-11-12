@@ -287,6 +287,21 @@ type JanitorConfig struct {
 	StaleDays          int                      `toml:"stale_days"`
 	StartupScan        bool                     `toml:"startup_scan"`
 	ExecutionStaleness ExecutionStalenessConfig `toml:"execution_staleness"`
+
+	// External link rot detection. Opt-in: when ExternalLinkCheck is true the
+	// janitor sends HEAD requests (falling back to a ranged GET) to every
+	// http(s) URL in page bodies and flags 4xx/5xx and unreachable ones as
+	// external-link-rot. Results are cached in .kiwi/cache/link-check.json.
+	//
+	//	[janitor]
+	//	external_link_check     = true
+	//	external_link_timeout   = "5s"            # per request
+	//	external_link_ignore    = ["localhost", "example.com"]  # hosts and subdomains
+	//	external_link_cache_ttl = "24h"
+	ExternalLinkCheck    bool     `toml:"external_link_check"`
+	ExternalLinkTimeout  string   `toml:"external_link_timeout"`
+	ExternalLinkIgnore   []string `toml:"external_link_ignore"`
+	ExternalLinkCacheTTL string   `toml:"external_link_cache_ttl"`
 }
 
 // ExecutionStalenessConfig flags runbooks (or other directory-scoped pages) when
