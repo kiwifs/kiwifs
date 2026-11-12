@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/links"
 	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/search"
@@ -127,6 +128,7 @@ type Scanner struct {
 	searcher           search.Searcher
 	staleDays          int
 	executionStaleness *ExecutionStalenessRule
+	externalLinks      *ExternalLinkOptions
 }
 
 type Option func(*Scanner)
@@ -162,6 +164,14 @@ func OptionsFromExecutionStaleness(directory, dateField string, maxAgeDays int, 
 		return nil
 	}
 	return []Option{WithExecutionStaleness(rule)}
+}
+
+// OptionsFromConfig returns the scanner options for the opt-in rules enabled
+// in the [janitor] section of config.toml.
+func OptionsFromConfig(jc config.JanitorConfig) []Option {
+	es := jc.ExecutionStaleness
+	opts := OptionsFromExecutionStaleness(es.Directory, es.DateField, es.MaxAgeDays, es.FlagValues)
+	return append(opts, OptionsFromExternalLinks(jc.ExternalLinkCheck, jc.ExternalLinkTimeout, jc.ExternalLinkIgnore, jc.ExternalLinkCacheTTL)...)
 }
 
 func New(root string, store storage.Storage, searcher search.Searcher, staleDays int, opts ...Option) *Scanner {
@@ -223,6 +233,7 @@ func (s *Scanner) Scan(ctx context.Context) (*ScanResult, error) {
 	result.Issues = append(result.Issues, s.checkDuplicates(pages)...)
 	result.Issues = append(result.Issues, s.checkContradictions(pages)...)
 	result.Issues = append(result.Issues, s.checkExecutionStaleness(pages)...)
+	result.Issues = append(result.Issues, s.checkExternalLinks(ctx, pages)...)
 
 	for _, is := range result.Issues {
 		pagesWithIssues[is.Path] = true

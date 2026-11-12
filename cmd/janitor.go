@@ -27,6 +27,7 @@ Reports:
 
   - expired-memory — memory past expires_at or ttl
   - execution-stale — runbook not executed recently or last run failed
+  - external-link-rot — http(s) link that returns 4xx/5xx or is unreachable (opt-in)
 
 Runbook execution staleness is opt-in via .kiwi/config.toml:
 
@@ -42,6 +43,19 @@ Files under directory with date_field older than max_age_days are flagged.
 Any flag_values match (e.g. last_outcome = failure) is flagged regardless of
 age. max_age_days falls back to stale_days when unset; date_field defaults to
 last_executed. The same rule applies to kiwifs check and GET /api/kiwi/janitor.
+
+External link checking is opt-in via .kiwi/config.toml:
+
+  [janitor]
+  external_link_check     = true
+  external_link_timeout   = "5s"
+  external_link_ignore    = ["localhost", "example.com"]
+  external_link_cache_ttl = "24h"
+
+Every http(s) URL in page bodies (frontmatter, fenced code and inline code are
+skipped) is probed with HEAD, falling back to a ranged GET. At most 10 requests
+run at once, started 100ms apart, and results are cached in
+.kiwi/cache/link-check.json. Findings are warnings, so they never fail the run.
 
 Exits 0 on a clean run, 1 if any error-severity issues are found.`,
 	Example: `  kiwifs janitor --root ~/my-knowledge

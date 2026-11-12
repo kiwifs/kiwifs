@@ -78,11 +78,10 @@ func runKnowledgeScan(cmd *cobra.Command) (*janitor.ScanResult, string, int, boo
 
 func janitorOptsFromConfig(root string) []janitor.Option {
 	cfg, err := config.Load(root)
-	if err != nil || !cfg.Janitor.ExecutionStaleness.Enabled() {
+	if err != nil {
 		return nil
 	}
-	es := cfg.Janitor.ExecutionStaleness
-	return janitor.OptionsFromExecutionStaleness(es.Directory, es.DateField, es.MaxAgeDays, es.FlagValues)
+	return janitor.OptionsFromConfig(cfg.Janitor)
 }
 
 type checkOutput struct {
