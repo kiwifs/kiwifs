@@ -3,9 +3,12 @@ package janitor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"reflect"
 	"strings"
@@ -97,6 +100,7 @@ func scanExternal(t *testing.T, files map[string]string, opts ExternalLinkOption
 	t.Helper()
 	store, root := buildStore(t, files)
 	opts.Enabled = true
+	opts.AllowPrivate = true
 	if opts.Delay == 0 {
 		opts.Delay = -1
 	}
@@ -213,7 +217,7 @@ func TestScan_ExternalLinkCache(t *testing.T) {
 	files := map[string]string{"a.md": "A page that links to " + ls.URL + "/gone and " + ls.URL + "/ok."}
 	store, root := buildStore(t, files)
 	scan := func(ttl time.Duration) *ScanResult {
-		sc := New(root, store, nil, 90, WithExternalLinks(ExternalLinkOptions{Enabled: true, CacheTTL: ttl, Delay: -1}))
+		sc := New(root, store, nil, 90, WithExternalLinks(ExternalLinkOptions{Enabled: true, CacheTTL: ttl, Delay: -1, AllowPrivate: true}))
 		res, err := sc.Scan(context.Background())
 		if err != nil {
 			t.Fatal(err)
@@ -279,7 +283,7 @@ func TestLinkChecker_ConcurrencyLimit(t *testing.T) {
 	for i := 0; i < 12; i++ {
 		urls = append(urls, fmt.Sprintf("%s/%d", srv.URL, i))
 	}
-	c := newLinkChecker(ExternalLinkOptions{Concurrency: 3, Delay: -1}, nil)
+	c := newLinkChecker(ExternalLinkOptions{Concurrency: 3, Delay: -1, AllowPrivate: true}, nil)
 	if res := c.checkAll(context.Background(), urls); len(res) != len(urls) {
 		t.Fatalf("results = %d, want %d", len(res), len(urls))
 	}
@@ -297,7 +301,7 @@ func TestLinkChecker_DelaySpacesRequests(t *testing.T) {
 		mu.Unlock()
 	}))
 	defer srv.Close()
-	c := newLinkChecker(ExternalLinkOptions{Delay: 60 * time.Millisecond, Concurrency: 4}, nil)
+	c := newLinkChecker(ExternalLinkOptions{Delay: 60 * time.Millisecond, Concurrency: 4, AllowPrivate: true}, nil)
 	begin := time.Now()
 	c.checkAll(context.Background(), []string{srv.URL + "/1", srv.URL + "/2", srv.URL + "/3"})
 	if el := time.Since(begin); el < 110*time.Millisecond {
@@ -312,7 +316,7 @@ func TestLinkChecker_CancelledResultsAreNotCached(t *testing.T) {
 	defer srv.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	c := newLinkChecker(ExternalLinkOptions{Timeout: 5 * time.Second, Delay: -1}, nil)
+	c := newLinkChecker(ExternalLinkOptions{Timeout: 5 * time.Second, Delay: -1, AllowPrivate: true}, nil)
 	res := c.checkAll(ctx, []string{srv.URL + "/slow"})
 	if len(res) != 0 || len(c.cache) != 0 {
 		t.Fatalf("cancelled probe recorded: results=%v cache=%v", res, c.cache)
@@ -320,11 +324,107 @@ func TestLinkChecker_CancelledResultsAreNotCached(t *testing.T) {
 }
 
 func TestOptionsFromExternalLinks(t *testing.T) {
-	if OptionsFromExternalLinks(false, "5s", nil, "1h") != nil {
+	if OptionsFromExternalLinks(false, "5s", nil, "1h", false) != nil {
 		t.Fatal("disabled config must yield no options")
 	}
-	s := New(t.TempDir(), nil, nil, 90, OptionsFromExternalLinks(true, "2s", []string{"x.test"}, "bogus")...)
-	if s.externalLinks == nil || s.externalLinks.Timeout != 2*time.Second || s.externalLinks.CacheTTL != 0 || len(s.externalLinks.Ignore) != 1 {
+	s := New(t.TempDir(), nil, nil, 90, OptionsFromExternalLinks(true, "2s", []string{"x.test"}, "bogus", true)...)
+	if s.externalLinks == nil || s.externalLinks.Timeout != 2*time.Second || s.externalLinks.CacheTTL != 0 || len(s.externalLinks.Ignore) != 1 || !s.externalLinks.AllowPrivate {
 		t.Fatalf("options = %+v", s.externalLinks)
+	}
+}
+
+func TestScan_ExternalLinkSkipsNonPublicAddresses(t *testing.T) {
+	ls := newLinkServer(t)
+	store, root := buildStore(t, map[string]string{"a.md": "An internal link " + ls.URL + "/gone in the body of this page."})
+	sc := New(root, store, nil, 90, WithExternalLinks(ExternalLinkOptions{Enabled: true, Delay: -1}))
+	res, err := sc.Scan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rot := issuesByKind(res.Issues)[IssueExternalLinkRot]; len(rot) != 0 {
+		t.Fatalf("a loopback link must be skipped, got %+v", rot)
+	}
+	if n := ls.count("/gone"); n != 0 {
+		t.Fatalf("loopback server received %d requests", n)
+	}
+	raw, _ := os.ReadFile(linkCachePath(root))
+	if strings.Contains(string(raw), ls.URL) {
+		t.Fatalf("a skipped link must not be cached: %s", raw)
+	}
+}
+
+func TestLinkChecker_RateLimitedIsNotReported(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	c := newLinkChecker(ExternalLinkOptions{Delay: -1, AllowPrivate: true}, nil)
+	if res := c.checkAll(context.Background(), []string{srv.URL + "/busy"}); len(res) != 0 || len(c.cache) != 0 {
+		t.Fatalf("a 429 must be neither reported nor cached: results=%v cache=%v", res, c.cache)
+	}
+}
+
+func TestIsPublicAddr(t *testing.T) {
+	for addr, want := range map[string]bool{
+		"8.8.8.8":         true,
+		"2606:4700::1111": true,
+		"127.0.0.1":       false,
+		"10.1.2.3":        false,
+		"172.16.0.1":      false,
+		"192.168.1.1":     false,
+		"169.254.169.254": false,
+		"100.100.1.1":     false,
+		"0.0.0.0":         false,
+		"::1":             false,
+		"fd00::1":         false,
+		"fe80::1":         false,
+		"::ffff:10.0.0.1": false,
+		"::ffff:8.8.8.8":  true,
+	} {
+		if got := isPublicAddr(netip.MustParseAddr(addr)); got != want {
+			t.Errorf("isPublicAddr(%s) = %v, want %v", addr, got, want)
+		}
+	}
+}
+
+func TestPublicOnlyDial(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			conn.Close()
+		}
+	}()
+	d := &net.Dialer{Timeout: time.Second}
+	addr := ln.Addr().String()
+
+	if _, err := publicOnlyDial(d, nil)(context.Background(), "tcp", addr); !errors.Is(err, errNonPublicAddress) {
+		t.Fatalf("dial %s: err = %v, want errNonPublicAddress", addr, err)
+	}
+	if _, err := publicOnlyDial(d, nil)(context.Background(), "tcp", "localhost:"+strings.Split(addr, ":")[1]); !errors.Is(err, errNonPublicAddress) {
+		t.Fatalf("a hostname resolving to loopback must be refused, got %v", err)
+	}
+	conn, err := publicOnlyDial(d, map[string]bool{addr: true})(context.Background(), "tcp", addr)
+	if err != nil {
+		t.Fatalf("a configured proxy must be reachable: %v", err)
+	}
+	conn.Close()
+}
+
+func TestProxyAddrsFromEnv(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "proxy.internal:3128")
+	t.Setenv("http_proxy", "")
+	t.Setenv("HTTPS_PROXY", "https://secure.internal")
+	t.Setenv("https_proxy", "")
+	got := proxyAddrsFromEnv()
+	if !got["proxy.internal:3128"] || !got["secure.internal:443"] || len(got) != 2 {
+		t.Fatalf("proxyAddrsFromEnv() = %v", got)
 	}
 }

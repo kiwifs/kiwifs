@@ -294,18 +294,25 @@ default; enable it in `.kiwi/config.toml`:
 
 ```toml
 [janitor]
-external_link_check     = true
-external_link_timeout   = "5s"                          # per request
-external_link_ignore    = ["localhost", "example.com"]  # hosts and their subdomains
-external_link_cache_ttl = "24h"
+external_link_check         = true
+external_link_timeout       = "5s"                          # per request
+external_link_ignore        = ["localhost", "example.com"]  # hosts and their subdomains
+external_link_cache_ttl     = "24h"
+external_link_allow_private = false                         # see below
 ```
 
 Frontmatter, fenced code blocks and inline code are not scanned. Each URL is probed with
 `HEAD` (falling back to a `Range: bytes=0-0` `GET`), redirects are followed up to 3 hops,
 at most 10 requests run at once and starts are spaced 100ms apart. Results are cached in
-`.kiwi/cache/link-check.json`, so only the scheduled scan or a `?fresh=true` request after
+`.kiwi/state/link-check.json`, so only the scheduled scan or a `?fresh=true` request after
 the TTL expires touches the network. The same findings appear in `kiwifs janitor` and
 `kiwifs check`.
+
+Links that resolve to loopback, private (RFC 1918, `fc00::/7`), link-local (including
+`169.254.169.254`) or carrier-grade NAT addresses are skipped, including after a redirect,
+because page authors choose the URLs and the results are visible through the API. Set
+`external_link_allow_private = true` for an intranet wiki whose links point at internal
+hosts. A `429 Too Many Requests` is not reported or cached; the link is re-checked next scan.
 
 ---
 

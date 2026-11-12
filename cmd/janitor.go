@@ -47,15 +47,18 @@ last_executed. The same rule applies to kiwifs check and GET /api/kiwi/janitor.
 External link checking is opt-in via .kiwi/config.toml:
 
   [janitor]
-  external_link_check     = true
-  external_link_timeout   = "5s"
-  external_link_ignore    = ["localhost", "example.com"]
-  external_link_cache_ttl = "24h"
+  external_link_check         = true
+  external_link_timeout       = "5s"
+  external_link_ignore        = ["localhost", "example.com"]
+  external_link_cache_ttl     = "24h"
+  external_link_allow_private = false
 
 Every http(s) URL in page bodies (frontmatter, fenced code and inline code are
 skipped) is probed with HEAD, falling back to a ranged GET. At most 10 requests
 run at once, started 100ms apart, and results are cached in
-.kiwi/cache/link-check.json. Findings are warnings, so they never fail the run.
+.kiwi/state/link-check.json. Findings are warnings, so they never fail the run.
+Loopback, private, link-local and CGNAT addresses are skipped unless
+external_link_allow_private is true.
 
 Exits 0 on a clean run, 1 if any error-severity issues are found.`,
 	Example: `  kiwifs janitor --root ~/my-knowledge
