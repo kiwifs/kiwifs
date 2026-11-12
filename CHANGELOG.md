@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.91](https://github.com/kiwifs/kiwifs/compare/v0.19.90...v0.19.91) (2026-11-12)
+
+
+### Features
+
+* **janitor:** detect external link rot ([#586](https://github.com/kiwifs/kiwifs/issues/586)) ([4c57e46](https://github.com/kiwifs/kiwifs/commit/4c57e466f9c9a280387db3abaf169a0bd9e589db)), closes [#423](https://github.com/kiwifs/kiwifs/issues/423)
+
+
+### Bug Fixes
+
+* **janitor:** keep the link checker off internal addresses ([#588](https://github.com/kiwifs/kiwifs/issues/588)) ([df4f896](https://github.com/kiwifs/kiwifs/commit/df4f896c6fc0a50703b7d94baaa827cd69b516f7))
+
 ## [0.19.90](https://github.com/kiwifs/kiwifs/compare/v0.19.89...v0.19.90) (2026-11-11)
 
 
