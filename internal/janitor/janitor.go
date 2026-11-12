@@ -171,7 +171,7 @@ func OptionsFromExecutionStaleness(directory, dateField string, maxAgeDays int, 
 func OptionsFromConfig(jc config.JanitorConfig) []Option {
 	es := jc.ExecutionStaleness
 	opts := OptionsFromExecutionStaleness(es.Directory, es.DateField, es.MaxAgeDays, es.FlagValues)
-	return append(opts, OptionsFromExternalLinks(jc.ExternalLinkCheck, jc.ExternalLinkTimeout, jc.ExternalLinkIgnore, jc.ExternalLinkCacheTTL)...)
+	return append(opts, OptionsFromExternalLinks(jc.ExternalLinkCheck, jc.ExternalLinkTimeout, jc.ExternalLinkIgnore, jc.ExternalLinkCacheTTL, jc.ExternalLinkAllowPrivate)...)
 }
 
 func New(root string, store storage.Storage, searcher search.Searcher, staleDays int, opts ...Option) *Scanner {

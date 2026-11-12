@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -42,6 +43,11 @@ type ExternalLinkOptions struct {
 	Ignore []string
 	// CacheTTL is how long a probe result is reused. Defaults to 24h.
 	CacheTTL time.Duration
+	// AllowPrivate lets probes reach loopback, private, link-local and
+	// carrier-grade NAT addresses. Off by default: page authors choose the
+	// URLs, and the results come back through the API, so without this an
+	// editor could map the server's internal network.
+	AllowPrivate bool
 
 	// Concurrency caps in-flight requests (default 10). Delay spaces request
 	// starts apart (default 100ms; negative disables pacing).
@@ -62,15 +68,16 @@ func WithExternalLinks(o ExternalLinkOptions) Option {
 // OptionsFromExternalLinks builds scanner options from the [janitor]
 // external_link_* config.toml fields. It returns nil when the check is
 // disabled. Unparseable or non-positive durations fall back to the defaults.
-func OptionsFromExternalLinks(enabled bool, timeout string, ignore []string, cacheTTL string) []Option {
+func OptionsFromExternalLinks(enabled bool, timeout string, ignore []string, cacheTTL string, allowPrivate bool) []Option {
 	if !enabled {
 		return nil
 	}
 	return []Option{WithExternalLinks(ExternalLinkOptions{
-		Enabled:  true,
-		Timeout:  parsePositiveDuration(timeout),
-		Ignore:   ignore,
-		CacheTTL: parsePositiveDuration(cacheTTL),
+		Enabled:      true,
+		Timeout:      parsePositiveDuration(timeout),
+		Ignore:       ignore,
+		CacheTTL:     parsePositiveDuration(cacheTTL),
+		AllowPrivate: allowPrivate,
 	})}
 }
 
@@ -181,9 +188,14 @@ func newLinkChecker(o ExternalLinkOptions, cache map[string]linkResult) *linkChe
 	case o.Delay < 0:
 		o.Delay = 0
 	}
+	dialer := &net.Dialer{Timeout: o.Timeout}
+	dial := dialer.DialContext
+	if !o.AllowPrivate {
+		dial = publicOnlyDial(dialer, proxyAddrsFromEnv())
+	}
 	rt := &http.Transport{
 		Proxy:               http.ProxyFromEnvironment,
-		DialContext:         (&net.Dialer{Timeout: o.Timeout}).DialContext,
+		DialContext:         dial,
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
 		TLSHandshakeTimeout: o.Timeout,
 		MaxIdleConnsPerHost: 2,
@@ -317,6 +329,12 @@ func (c *linkChecker) probe(ctx context.Context, u string) (res linkResult, ok b
 			return linkResult{}, false
 		}
 	}
+	// A refused private address is a policy decision, and a 429 says the
+	// host is rate-limiting us; neither says the link is dead, and caching
+	// either would hide the real answer for a whole TTL.
+	if errors.Is(err, errNonPublicAddress) || (err == nil && status == http.StatusTooManyRequests) {
+		return linkResult{}, false
+	}
 	res = linkResult{Status: status, CheckedAt: time.Now().UTC()}
 	if err != nil {
 		res.Status = 0
@@ -354,8 +372,101 @@ func describeLinkError(err error) string {
 	return err.Error()
 }
 
+var errNonPublicAddress = errors.New("refusing to probe a non-public address")
+
+var nonPublicPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+}
+
+func isPublicAddr(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	if !ip.IsValid() || ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() || ip.IsMulticast() {
+		return false
+	}
+	for _, p := range nonPublicPrefixes {
+		if p.Contains(ip) {
+			return false
+		}
+	}
+	return true
+}
+
+// publicOnlyDial resolves the host itself and connects only when every
+// address is public, dialing the checked IP so a second DNS answer cannot
+// swap in an internal one. Connections to a configured proxy are let through:
+// the proxy is the operator's choice, and it does its own resolving.
+func publicOnlyDial(d *net.Dialer, proxies map[string]bool) func(context.Context, string, string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if proxies[addr] {
+			return d.DialContext(ctx, network, addr)
+		}
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+		if err != nil {
+			return nil, err
+		}
+		for _, ip := range ips {
+			if !isPublicAddr(ip) {
+				return nil, errNonPublicAddress
+			}
+		}
+		var lastErr error
+		for _, ip := range ips {
+			conn, err := d.DialContext(ctx, network, net.JoinHostPort(ip.Unmap().String(), port))
+			if err == nil {
+				return conn, nil
+			}
+			lastErr = err
+		}
+		if lastErr == nil {
+			lastErr = &net.DNSError{Err: "no addresses", Name: host, IsNotFound: true}
+		}
+		return nil, lastErr
+	}
+}
+
+// proxyAddrsFromEnv returns the host:port of every proxy http.ProxyFromEnvironment
+// could pick, in the form the transport dials them.
+func proxyAddrsFromEnv() map[string]bool {
+	out := map[string]bool{}
+	for _, name := range []string{"HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"} {
+		raw := strings.TrimSpace(os.Getenv(name))
+		if raw == "" {
+			continue
+		}
+		if !strings.Contains(raw, "://") {
+			raw = "http://" + raw
+		}
+		u, err := url.Parse(raw)
+		if err != nil || u.Hostname() == "" {
+			continue
+		}
+		port := u.Port()
+		if port == "" {
+			switch u.Scheme {
+			case "https":
+				port = "443"
+			case "socks5", "socks5h":
+				port = "1080"
+			default:
+				port = "80"
+			}
+		}
+		out[net.JoinHostPort(u.Hostname(), port)] = true
+	}
+	return out
+}
+
 func linkCachePath(root string) string {
-	return filepath.Join(root, ".kiwi", "cache", externalLinkCacheFile)
+	return filepath.Join(root, ".kiwi", "state", externalLinkCacheFile)
 }
 
 func loadLinkCache(root string) map[string]linkResult {
