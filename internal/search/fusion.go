@@ -80,6 +80,14 @@ func RRF(lists [][]string, k float64) []ScoredPath {
 	for path, a := range byPath {
 		out = append(out, ScoredPath{Path: path, Score: a.score, Ranks: a.ranks})
 	}
+	SortScored(out)
+	return out
+}
+
+// SortScored orders fused results the way RRF returns them: score
+// descending, ties broken by best rank then by path. Callers that rescale
+// scores after fusion (a trust boost, say) use it to restore that order.
+func SortScored(out []ScoredPath) {
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Score != out[j].Score {
 			return out[i].Score > out[j].Score
@@ -90,7 +98,6 @@ func RRF(lists [][]string, k float64) []ScoredPath {
 		}
 		return out[i].Path < out[j].Path
 	})
-	return out
 }
 
 // bestRank is the smallest non-zero rank, or a large sentinel when the path

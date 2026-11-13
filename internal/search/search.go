@@ -153,6 +153,34 @@ type ScopeFilterer interface {
 	FilterByScope(ctx context.Context, paths []string, scope string) ([]string, error)
 }
 
+// ConfidenceReader is implemented by search backends that index frontmatter
+// and can report the `confidence` of many pages in one round trip. Paths
+// without a usable confidence are absent from the returned map.
+type ConfidenceReader interface {
+	Confidences(ctx context.Context, paths []string) (map[string]float64, error)
+}
+
+// Confidence interprets a frontmatter `confidence` value. Only numbers in
+// (0, 1] count: a string such as "0.6", zero, or an out-of-range value
+// carries no usable signal and is reported as absent.
+func Confidence(v any) (float64, bool) {
+	var cv float64
+	switch n := v.(type) {
+	case float64:
+		cv = n
+	case int:
+		cv = float64(n)
+	case int64:
+		cv = float64(n)
+	default:
+		return 0, false
+	}
+	if cv > 0 && cv <= 1 {
+		return cv, true
+	}
+	return 0, false
+}
+
 // TrustSearcher is implemented by search backends that support trust-boosted ranking.
 type TrustSearcher interface {
 	// SearchVerified returns only pages whose trust signals clear a

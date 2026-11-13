@@ -42,7 +42,7 @@ No. Git runs under the hood (every write is an atomic commit) but users never in
 
 ### Is KiwiFS production-ready?
 
-KiwiFS is in active development (v0.19.x). The core is stable: file CRUD, search, versioning, web UI, MCP (78 tools), data import/export, DQL queries, workflows, schemas, widgets, publishing, and all access protocols work. We use it in production internally. That said, APIs may evolve before v1.0.
+KiwiFS is in active development (v0.19.x). The core is stable: file CRUD, search, versioning, web UI, MCP (79 tools), data import/export, DQL queries, workflows, schemas, widgets, publishing, and all access protocols work. We use it in production internally. That said, APIs may evolve before v1.0.
 
 ---
 

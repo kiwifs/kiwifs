@@ -672,6 +672,7 @@ func (s *Server) setupRoutes() {
 	api.GET("/render/d2", h.RenderD2)
 	api.POST("/render/d2", h.RenderD2)
 	api.POST("/brief", h.Brief)
+	api.POST("/recall", h.Recall)
 	api.POST("/webhooks", h.CreateWebhook)
 	api.GET("/webhooks", h.ListWebhooks)
 	api.DELETE("/webhooks/:id", h.DeleteWebhook)
