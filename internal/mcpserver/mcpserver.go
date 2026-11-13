@@ -26,6 +26,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/memory"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/tracing"
+	"github.com/kiwifs/kiwifs/internal/trash"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -199,12 +200,31 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 		},
 		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_delete",
-				mcp.WithDescription("Delete a file from the knowledge base. The deletion is a git commit — the file's history is preserved and can be restored. Use sparingly; prefer updating content over deleting."),
+				mcp.WithDescription("Delete a file from the knowledge base. By default the file moves to the trash and the result gives a restore_id for kiwi_trash_restore; the deletion is also a git commit, so history is preserved. Use sparingly; prefer updating content over deleting."),
 				mcp.WithString("path", pathOpts...),
 				mcp.WithString("actor", mcp.Description("Who is deleting")),
+				mcp.WithBoolean("permanent", mcp.Description("Skip the trash and delete outright (default false)")),
 				mcp.WithDestructiveHintAnnotation(true),
 			),
 			Handler: handleDelete(b),
+		},
+		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_trash_list",
+				mcp.WithDescription("List files in the trash, most recently deleted first, with each one's restore_id, original path, deletion time and actor. Use it to find a file to bring back with kiwi_trash_restore."),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleTrashList(b),
+		},
+		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_trash_restore",
+				mcp.WithDescription("Restore a trashed file to its original path as a git commit. Fails, without overwriting anything, if a file already exists at that path."),
+				mcp.WithString("restore_id", mcp.Required(), mcp.Description("restore_id from kiwi_delete or kiwi_trash_list")),
+				mcp.WithString("actor", mcp.Description("Who is restoring")),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(false),
+			),
+			Handler: handleTrashRestore(b),
 		},
 		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_rename",
@@ -1978,13 +1998,70 @@ func handleDelete(b Backend) server.ToolHandlerFunc {
 		if actor == "" {
 			actor = "mcp-agent"
 		}
-		if err := b.DeleteFile(ctx, path, actor); err != nil {
+		permanent, _ := args["permanent"].(bool)
+		res, err := b.DeleteFile(ctx, path, actor, permanent)
+		if err != nil {
 			if isNotFound(err) {
 				return mcp.NewToolResultError(fmt.Sprintf("File not found at %s. Use kiwi_tree to see available files.", path)), nil
 			}
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to delete %s: %v", path, err)), nil
 		}
+		if res.Trashed {
+			return mcp.NewToolResultText(fmt.Sprintf("Moved %s to the trash (restore_id: %s). Use kiwi_trash_restore to bring it back.", path, res.RestoreID)), nil
+		}
 		return mcp.NewToolResultText(fmt.Sprintf("Deleted %s", path)), nil
+	}
+}
+
+func handleTrashList(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		items, err := b.TrashList(ctx)
+		if err != nil {
+			if isTrashDisabled(err) {
+				return mcp.NewToolResultError("The trash is disabled for this workspace; deletes are permanent."), nil
+			}
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to list the trash: %v", err)), nil
+		}
+		if len(items) == 0 {
+			return mcp.NewToolResultText("The trash is empty."), nil
+		}
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "%d file(s) in the trash:\n", len(items))
+		for _, it := range items {
+			fmt.Fprintf(&sb, "  - %s (restore_id: %s, deleted %s", it.OriginalPath, it.ID, it.DeletedAt.Format(time.RFC3339))
+			if it.Actor != "" {
+				fmt.Fprintf(&sb, " by %s", it.Actor)
+			}
+			sb.WriteString(")\n")
+		}
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+}
+
+func handleTrashRestore(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		id, _ := args["restore_id"].(string)
+		if id == "" {
+			return mcp.NewToolResultError("restore_id is required. Use kiwi_trash_list to find it."), nil
+		}
+		actor, _ := args["actor"].(string)
+		if actor == "" {
+			actor = "mcp-agent"
+		}
+		item, err := b.TrashRestore(ctx, id, actor)
+		if err != nil {
+			switch {
+			case isTrashDisabled(err):
+				return mcp.NewToolResultError("The trash is disabled for this workspace; deletes are permanent."), nil
+			case isConflict(err):
+				return mcp.NewToolResultError(fmt.Sprintf("%v. Rename or delete the file at that path first.", err)), nil
+			case isNotFound(err) || errors.Is(err, trash.ErrNotFound):
+				return mcp.NewToolResultError(fmt.Sprintf("No trashed file with restore_id %s. Use kiwi_trash_list to see what can be restored.", id)), nil
+			}
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to restore %s: %v", id, err)), nil
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("Restored %s", item.OriginalPath)), nil
 	}
 }
 
@@ -3058,6 +3135,22 @@ func handleRelease(b Backend) server.ToolHandlerFunc {
 
 		return mcp.NewToolResultText(fmt.Sprintf("Released claim on %s", path)), nil
 	}
+}
+
+func isTrashDisabled(err error) bool {
+	var he *httpError
+	if errors.As(err, &he) {
+		return he.StatusCode == 404 && he.Message == pipeline.ErrTrashDisabled.Error()
+	}
+	return errors.Is(err, pipeline.ErrTrashDisabled)
+}
+
+func isConflict(err error) bool {
+	var he *httpError
+	if errors.As(err, &he) {
+		return he.StatusCode == 409
+	}
+	return errors.Is(err, trash.ErrExists)
 }
 
 func isNotFound(err error) bool {

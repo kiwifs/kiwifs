@@ -18,6 +18,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/refactor"
 	"github.com/kiwifs/kiwifs/internal/similar"
+	"github.com/kiwifs/kiwifs/internal/trash"
 )
 
 type RemoteBackend struct {
@@ -185,17 +186,66 @@ func (r *RemoteBackend) WriteFileIfMatch(ctx context.Context, path, content, act
 	return result.ETag, nil
 }
 
-func (r *RemoteBackend) DeleteFile(ctx context.Context, path, actor string) error {
+func (r *RemoteBackend) DeleteFile(ctx context.Context, path, actor string, permanent bool) (*DeleteResult, error) {
 	var hdrs []string
 	if actor != "" {
 		hdrs = append(hdrs, "X-Actor", actor)
 	}
-	resp, err := r.do(ctx, http.MethodDelete, r.apiPrefix+"/file?path="+url.QueryEscape(path), nil, hdrs...)
-	if err != nil {
-		return err
+	q := r.apiPrefix + "/file?path=" + url.QueryEscape(path)
+	if permanent {
+		q += "&permanent=true"
 	}
-	_, err = r.readBody(resp)
-	return err
+	resp, err := r.do(ctx, http.MethodDelete, q, nil, hdrs...)
+	if err != nil {
+		return nil, err
+	}
+	data, err := r.readBody(resp)
+	if err != nil {
+		return nil, err
+	}
+	var result DeleteResult
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &result); err != nil {
+			return nil, err
+		}
+	}
+	return &result, nil
+}
+
+func (r *RemoteBackend) TrashList(ctx context.Context) ([]trash.Item, error) {
+	var result struct {
+		Items []trash.Item `json:"items"`
+	}
+	if err := r.getJSON(ctx, r.apiPrefix+"/trash", &result); err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+func (r *RemoteBackend) TrashRestore(ctx context.Context, id, actor string) (*trash.Item, error) {
+	body, err := json.Marshal(map[string]string{"restore_id": id})
+	if err != nil {
+		return nil, err
+	}
+	hdrs := []string{"Content-Type", "application/json"}
+	if actor != "" {
+		hdrs = append(hdrs, "X-Actor", actor)
+	}
+	resp, err := r.do(ctx, http.MethodPost, r.apiPrefix+"/trash/restore", bytes.NewReader(body), hdrs...)
+	if err != nil {
+		return nil, err
+	}
+	data, err := r.readBody(resp)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Item trash.Item `json:"item"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return &result.Item, nil
 }
 
 func (r *RemoteBackend) Append(ctx context.Context, path, content, separator, actor string) (string, error) {

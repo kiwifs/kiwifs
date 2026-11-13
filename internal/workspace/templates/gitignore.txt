@@ -1,2 +1,5 @@
 # KiwiFS — rebuildable state (SQLite indexes, WAL, vector cache)
 .kiwi/state/
+
+# KiwiFS — trashed files (their history is already in git)
+.kiwi/trash/

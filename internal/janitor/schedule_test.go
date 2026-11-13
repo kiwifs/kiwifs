@@ -103,3 +103,32 @@ func writeFile(t *testing.T, root, rel, content string) {
 		t.Fatalf("write: %v", err)
 	}
 }
+
+func TestSchedulerRunsSweepAfterEveryScan(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "index.md", "# Home\n")
+	store, err := storage.NewLocal(root)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+	sweeps := 0
+	s := NewScheduler(New(root, store, search.NewGrep(root), 90), nil, nil, ScheduleOptions{
+		Interval: time.Hour,
+		Sweep:    func(context.Context) { sweeps++ },
+	})
+
+	s.runOnce(context.Background())
+	if sweeps != 1 {
+		t.Fatalf("sweeps after a scan = %d, want 1", sweeps)
+	}
+	if s.LastResult() == nil {
+		t.Fatal("scan did not run")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s.runOnce(ctx)
+	if sweeps != 2 {
+		t.Fatalf("sweeps after a cancelled scan = %d, want 2", sweeps)
+	}
+}

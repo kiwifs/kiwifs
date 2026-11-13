@@ -11,6 +11,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/refactor"
 	"github.com/kiwifs/kiwifs/internal/similar"
+	"github.com/kiwifs/kiwifs/internal/trash"
 )
 
 func sanitizePathPrefix(s string) string {
@@ -49,6 +50,12 @@ type HybridSearchResult struct {
 type MetaResult struct {
 	Path        string          `json:"path"`
 	Frontmatter json.RawMessage `json:"frontmatter"`
+}
+
+// DeleteResult reports whether a delete went to the trash.
+type DeleteResult struct {
+	Trashed   bool   `json:"trashed,omitempty"`
+	RestoreID string `json:"restore_id,omitempty"`
 }
 
 type Version struct {
@@ -203,7 +210,14 @@ type Backend interface {
 	RawMoves(ctx context.Context) ([]pipeline.RawMove, *refactor.Manifest, error)
 	// RefactorRevert previews (apply false) or applies the undo of commit.
 	RefactorRevert(ctx context.Context, commit, digest, actor string, apply bool) (*RefactorApplyResult, error)
-	DeleteFile(ctx context.Context, path, actor string) error
+	// DeleteFile moves path to the trash when the workspace has one, and
+	// removes it outright when permanent is set or the trash is disabled.
+	DeleteFile(ctx context.Context, path, actor string, permanent bool) (*DeleteResult, error)
+	// TrashList lists trashed files, most recently deleted first.
+	TrashList(ctx context.Context) ([]trash.Item, error)
+	// TrashRestore moves a trashed file back to its original path. It
+	// fails rather than overwrite a file that has taken that path since.
+	TrashRestore(ctx context.Context, id, actor string) (*trash.Item, error)
 	Tree(ctx context.Context, path string) (json.RawMessage, error)
 	Search(ctx context.Context, query string, limit, offset int, pathPrefix string) ([]SearchResult, error)
 	SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error)
