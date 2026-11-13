@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.92](https://github.com/kiwifs/kiwifs/compare/v0.19.91...v0.19.92) (2026-11-13)
+
+
+### Features
+
+* **search:** kiwi_recall fusion retrieval over keyword, vector and graph ([#590](https://github.com/kiwifs/kiwifs/issues/590)) ([771c855](https://github.com/kiwifs/kiwifs/commit/771c85581e070e41adcaad85b17c372008b40f8e)), closes [#422](https://github.com/kiwifs/kiwifs/issues/422)
+
+
+### Bug Fixes
+
+* **api:** let read-scoped keys call read-only POST endpoints ([#592](https://github.com/kiwifs/kiwifs/issues/592)) ([44e4be5](https://github.com/kiwifs/kiwifs/commit/44e4be56b50f0ad08dfc1586919845bb40ccf52b))
+
 ## [0.19.91](https://github.com/kiwifs/kiwifs/compare/v0.19.90...v0.19.91) (2026-11-12)
 
 
