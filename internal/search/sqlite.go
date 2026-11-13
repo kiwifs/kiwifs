@@ -67,17 +67,8 @@ func trustBoost(fm map[string]any, c trustCoeffs) float64 {
 			boost *= c.sot
 		}
 	}
-	if conf, ok := fm["confidence"]; ok {
-		var cv float64
-		switch v := conf.(type) {
-		case float64:
-			cv = v
-		case int:
-			cv = float64(v)
-		}
-		if cv > 0 && cv <= 1 {
-			boost *= 1.0 + c.confScale*cv
-		}
+	if cv, ok := Confidence(fm["confidence"]); ok {
+		boost *= 1.0 + c.confScale*cv
 	}
 	return boost
 }
@@ -1846,6 +1837,43 @@ func (s *SQLite) FilterByScope(ctx context.Context, paths []string, scope string
 		}
 	}
 	return out, nil
+}
+
+// Confidences reads the frontmatter `confidence` of each path in one query.
+// Paths with no usable confidence (absent, non-numeric, or outside (0, 1])
+// are left out of the map rather than reported as zero, so callers can tell
+// "unannotated" from "annotated as uncertain".
+func (s *SQLite) Confidences(ctx context.Context, paths []string) (map[string]float64, error) {
+	out := make(map[string]float64)
+	if len(paths) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(paths))
+	for i, p := range paths {
+		args[i] = p
+	}
+	rows, err := s.readDB.QueryContext(ctx, fmt.Sprintf(
+		`SELECT path, json_extract(frontmatter, '$.confidence') FROM file_meta
+		 WHERE path IN (%s) AND json_extract(frontmatter, '$.confidence') IS NOT NULL`,
+		placeholders(len(paths)),
+	), args...)
+	if err != nil {
+		return nil, fmt.Errorf("confidence lookup: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			path string
+			raw  any
+		)
+		if err := rows.Scan(&path, &raw); err != nil {
+			return nil, err
+		}
+		if cv, ok := Confidence(raw); ok {
+			out[path] = cv
+		}
+	}
+	return out, rows.Err()
 }
 
 // SearchBoosted runs a normal FTS5 search and then applies a *soft*

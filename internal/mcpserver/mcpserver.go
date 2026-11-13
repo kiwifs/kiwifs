@@ -21,6 +21,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/dataview"
 	"github.com/kiwifs/kiwifs/internal/docexport"
 	"github.com/kiwifs/kiwifs/internal/exporter"
+	"github.com/kiwifs/kiwifs/internal/hybrid"
 	"github.com/kiwifs/kiwifs/internal/importer"
 	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/memory"
@@ -369,6 +370,21 @@ func registerTools(s *server.MCPServer, b Backend, opts Options) {
 				mcp.WithDestructiveHintAnnotation(false),
 			),
 			Handler: handleSearchHybrid(b),
+		},
+		server.ServerTool{
+			Tool: mcp.NewTool("kiwi_recall",
+				mcp.WithDescription("Recall what the knowledge base knows about a question in one call. Fuses keyword (BM25), semantic (vector) and link-graph evidence with Reciprocal Rank Fusion: the graph signal ranks pages that link to the best keyword and semantic hits, so a page that cites several relevant pages surfaces even when it shares no words with the query. Each result says which signals found it. Signals that are not configured are skipped and reported, not errors."),
+				mcp.WithString("query", mcp.Required(), mcp.Description("What to recall")),
+				mcp.WithNumber("limit", mcp.Description("Max results (default 10, max 50)")),
+				mcp.WithArray("sources", mcp.Description(`Signals to fuse: any of "fts", "vector", "graph" (default all). graph needs fts or vector.`), mcp.WithStringItems()),
+				mcp.WithString("scope", mcp.Description("Filter to pages whose frontmatter scope exactly matches, e.g. user:alice")),
+				mcp.WithString("path_prefix", mcp.Description("Restrict results to paths under this prefix")),
+				mcp.WithBoolean("boost_verified", mcp.Description("Multiply each score by (1 + confidence) for pages with a numeric frontmatter confidence in (0, 1] (default false)")),
+				mcp.WithNumber("rrf_k", mcp.Description("RRF rank constant (default 60). Smaller values let one signal's top hit dominate.")),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+			),
+			Handler: handleRecall(b),
 		},
 		server.ServerTool{
 			Tool: mcp.NewTool("kiwi_brief",
@@ -1874,6 +1890,82 @@ func handleSearchHybrid(b Backend) server.ToolHandlerFunc {
 		}
 		return mcp.NewToolResultText(sb.String()), nil
 	}
+}
+
+func handleRecall(b Backend) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := req.GetArguments()
+		query, _ := args["query"].(string)
+		if query == "" {
+			return mcp.NewToolResultError("query is required"), nil
+		}
+		limit := intArg(args, "limit", hybrid.DefaultRecallTopK)
+		if limit > 50 {
+			limit = 50
+		}
+		sources, err := hybrid.ParseSources(stringArrayArg(args, "sources"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		pathPrefix, err := optionalReadOnlyPathArg(args, "path_prefix")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		rrfK, err := floatArg(args, "rrf_k", 0)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		if rrfK < 0 {
+			return mcp.NewToolResultError("rrf_k must be greater than 0"), nil
+		}
+		scope, _ := args["scope"].(string)
+
+		resp, err := b.Recall(ctx, RecallRequest{
+			Query:         query,
+			Limit:         limit,
+			Sources:       sources,
+			Scope:         scope,
+			PathPrefix:    pathPrefix,
+			BoostVerified: boolArg(args, "boost_verified"),
+			RRFK:          rrfK,
+		})
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Recall failed: %v", err)), nil
+		}
+		if len(resp.Results) == 0 {
+			return mcp.NewToolResultText("No results found."), nil
+		}
+
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "Signals used: %s\n\n", strings.Join(resp.Engines, ", "))
+		for i, r := range resp.Results {
+			fmt.Fprintf(&sb, "%d. %s (%s)\n", i+1, r.Path, describeRecallRanks(r))
+			if len(r.LinksTo) > 0 {
+				fmt.Fprintf(&sb, "   links to: %s\n", strings.Join(r.LinksTo, ", "))
+			}
+			if r.Snippet != "" {
+				fmt.Fprintf(&sb, "   %s\n", stripMarkTags(r.Snippet))
+			}
+		}
+		return mcp.NewToolResultText(sb.String()), nil
+	}
+}
+
+func describeRecallRanks(r hybrid.RecallResult) string {
+	var parts []string
+	if r.FTSRank > 0 {
+		parts = append(parts, fmt.Sprintf("keyword #%d", r.FTSRank))
+	}
+	if r.VectorRank > 0 {
+		parts = append(parts, fmt.Sprintf("semantic #%d", r.VectorRank))
+	}
+	if r.GraphRank > 0 {
+		parts = append(parts, fmt.Sprintf("graph #%d", r.GraphRank))
+	}
+	if r.Confidence != nil {
+		parts = append(parts, fmt.Sprintf("confidence %.2f", *r.Confidence))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func describeHybridRanks(r HybridSearchResult) string {

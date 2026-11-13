@@ -183,6 +183,7 @@ the fence as code.
 GET    /api/kiwi/search?q=                 → full-text search (BM25)
 POST   /api/kiwi/search/semantic           → vector search
 GET    /api/kiwi/search/verified           → trust-ranked search (verified pages boosted)
+POST   /api/kiwi/recall                    → keyword + vector + link-graph retrieval fused into one ranking
 POST   /api/kiwi/resolve-links             → resolve [[wiki-links]] to permalinks
 ```
 
@@ -234,6 +235,55 @@ GET /api/kiwi/search?q=Authentcation
 | `path` | Page path in the knowledge root |
 | `title` | Display title |
 | `distance` | Edit distance from the original query (1–`suggest_threshold`) |
+
+### Recall (fused retrieval)
+
+`POST /api/kiwi/recall` answers "what do we know about this?" in one call. It runs keyword (BM25) and vector search in parallel, then expands the 10 best hits one hop along the link graph: every page that links to them is ranked, most-connected first. The three rankings are fused with [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf), `score = Σ 1/(k + rank)`, so a page that cites several relevant pages surfaces even when it shares no words with the query. The MCP server exposes the same retrieval as `kiwi_recall`.
+
+```json
+{
+  "query": "how did we handle the auth migration?",
+  "limit": 10,
+  "sources": ["fts", "vector", "graph"],
+  "scope": "user:alice",
+  "path_prefix": "episodes/",
+  "boost_verified": true,
+  "rrf_k": 60
+}
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `query` | required | What to recall |
+| `limit` | `10` | Results to return (max 200) |
+| `sources` | all | Any of `fts`, `vector`, `graph`. `graph` expands from keyword or vector hits, so it needs at least one of them |
+| `scope` | | Only pages whose frontmatter `scope` matches exactly (SQLite search backend) |
+| `path_prefix` | | Only pages under this path |
+| `boost_verified` | `false` | Multiply each score by `1 + confidence` for pages whose frontmatter `confidence` is a number in (0, 1] (SQLite search backend) |
+| `rrf_k` | `60` | RRF rank constant. Smaller values let one signal's top hit dominate |
+
+```json
+{
+  "query": "how did we handle the auth migration?",
+  "limit": 10,
+  "rrf_k": 60,
+  "engines": ["fts", "graph"],
+  "results": [
+    {
+      "path": "episodes/auth-migration.md",
+      "score": 0.0325,
+      "sources": ["fts", "graph"],
+      "fts_rank": 1,
+      "vector_rank": 0,
+      "graph_rank": 2,
+      "links_to": ["decisions/token-rotation.md"],
+      "snippet": "We decided to..."
+    }
+  ]
+}
+```
+
+Ranks are 1-based; `0` means that signal did not rank the page. `links_to` lists the top hits a graph-ranked page links to, and `confidence` is included when `boost_verified` applied one. Signals that are not configured are skipped rather than failing the request: without a vector index, recall is keyword plus graph; the grep search backend keeps no link index, so it skips the graph too. `engines` lists only the signals that contributed. Requesting `sources: ["vector"]` with no vector index answers `503`; `scope` on the grep backend answers `501`.
 
 ---
 

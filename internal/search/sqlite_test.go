@@ -957,6 +957,62 @@ func TestFilterByScopePreservesInputOrder(t *testing.T) {
 	}
 }
 
+func TestConfidencesReadsOnlyUsableValues(t *testing.T) {
+	s := newTestSQLite(t)
+
+	files := map[string][]byte{
+		"high.md":     []byte("---\nconfidence: 0.9\n---\n# High\n"),
+		"whole.md":    []byte("---\nconfidence: 1\n---\n# Whole\n"),
+		"quoted.md":   []byte("---\nconfidence: \"0.6\"\n---\n# Quoted\n"),
+		"zero.md":     []byte("---\nconfidence: 0\n---\n# Zero\n"),
+		"tooHigh.md":  []byte("---\nconfidence: 7\n---\n# Too high\n"),
+		"unmarked.md": []byte("---\nstatus: draft\n---\n# Unmarked\n"),
+	}
+	for path, content := range files {
+		if err := s.IndexMeta(ctxBG, path, content); err != nil {
+			t.Fatalf("index meta %s: %v", path, err)
+		}
+	}
+
+	got, err := s.Confidences(ctxBG, []string{
+		"high.md", "whole.md", "quoted.md", "zero.md", "tooHigh.md", "unmarked.md", "missing.md",
+	})
+	if err != nil {
+		t.Fatalf("Confidences: %v", err)
+	}
+	want := map[string]float64{"high.md": 0.9, "whole.md": 1}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Confidences = %v, want %v", got, want)
+	}
+
+	empty, err := s.Confidences(ctxBG, nil)
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("Confidences(nil) = %v, %v; want an empty map", empty, err)
+	}
+}
+
+func TestConfidence(t *testing.T) {
+	for _, tc := range []struct {
+		in   any
+		want float64
+		ok   bool
+	}{
+		{0.5, 0.5, true},
+		{1, 1, true},
+		{int64(1), 1, true},
+		{0.0, 0, false},
+		{-0.2, 0, false},
+		{1.5, 0, false},
+		{"0.6", 0, false},
+		{nil, 0, false},
+	} {
+		got, ok := Confidence(tc.in)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("Confidence(%#v) = %v, %v; want %v, %v", tc.in, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
 func TestSearchWithOptionsRecencyWeightRanksNewest(t *testing.T) {
 	s := newTestSQLite(t)
 
