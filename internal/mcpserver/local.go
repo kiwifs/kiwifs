@@ -547,6 +547,22 @@ func (b *LocalBackend) SearchHybrid(ctx context.Context, query string, limit int
 	return out, nil
 }
 
+// Recall fuses keyword, semantic and link-graph retrieval. Signals that are
+// not configured are skipped, as in SearchHybrid.
+func (b *LocalBackend) Recall(ctx context.Context, req RecallRequest) (*hybrid.RecallResponse, error) {
+	if err := b.init(); err != nil {
+		return nil, err
+	}
+	return hybrid.Recall(ctx, b.stack.Searcher, b.stack.Vectors, b.stack.Linker, req.Query, hybrid.RecallOptions{
+		TopK:          req.Limit,
+		K:             req.RRFK,
+		Sources:       req.Sources,
+		Scope:         req.Scope,
+		PathPrefix:    req.PathPrefix,
+		BoostVerified: req.BoostVerified,
+	})
+}
+
 func (b *LocalBackend) SearchSemanticScoped(ctx context.Context, query string, limit int, scope string) ([]SearchResult, error) {
 	if err := b.init(); err != nil {
 		return nil, err

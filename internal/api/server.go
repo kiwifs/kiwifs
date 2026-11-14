@@ -675,6 +675,7 @@ func (s *Server) setupRoutes() {
 	api.GET("/render/d2", h.RenderD2)
 	api.POST("/render/d2", h.RenderD2)
 	api.POST("/brief", h.Brief)
+	api.POST("/recall", h.Recall)
 	api.POST("/webhooks", h.CreateWebhook)
 	api.GET("/webhooks", h.ListWebhooks)
 	api.DELETE("/webhooks/:id", h.DeleteWebhook)
@@ -874,6 +875,17 @@ func apiKeyHandler(key string) echo.MiddlewareFunc {
 	}
 }
 
+// readOnlyPOSTs are endpoints that take POST only because the request is too
+// large or structured for a query string. They change nothing, so a
+// read-scoped key may call them.
+var readOnlyPOSTs = map[string]bool{
+	"/api/kiwi/search/semantic": true,
+	"/api/kiwi/recall":          true,
+	"/api/kiwi/brief":           true,
+	"/api/kiwi/render/d2":       true,
+	"/api/kiwi/resolve-links":   true,
+}
+
 func perSpaceKeyMiddleware(keys []config.APIKeyEntry) echo.MiddlewareFunc {
 	return perSpaceKeyHandler(keys)
 }
@@ -925,7 +937,9 @@ func perSpaceKeyHandler(keys []config.APIKeyEntry) echo.MiddlewareFunc {
 			method := c.Request().Method
 			switch e.scope {
 			case "read":
-				if method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions {
+				readOnly := method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions ||
+					(method == http.MethodPost && readOnlyPOSTs[c.Request().URL.Path])
+				if !readOnly {
 					return echo.NewHTTPError(http.StatusForbidden, "read-only token cannot perform "+method)
 				}
 			case "write":

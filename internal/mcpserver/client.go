@@ -15,6 +15,7 @@ import (
 
 	"github.com/kiwifs/kiwifs/internal/brief"
 	"github.com/kiwifs/kiwifs/internal/claims"
+	"github.com/kiwifs/kiwifs/internal/hybrid"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/refactor"
 	"github.com/kiwifs/kiwifs/internal/similar"
@@ -396,6 +397,14 @@ func (r *RemoteBackend) SearchHybrid(ctx context.Context, query string, limit in
 		return nil, err
 	}
 	return result.Results, nil
+}
+
+func (r *RemoteBackend) Recall(ctx context.Context, req RecallRequest) (*hybrid.RecallResponse, error) {
+	var resp hybrid.RecallResponse
+	if err := r.postJSON(ctx, r.apiPrefix+"/recall", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 func (r *RemoteBackend) SearchSemanticScoped(ctx context.Context, query string, limit int, scope string) ([]SearchResult, error) {

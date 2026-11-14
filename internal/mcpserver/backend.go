@@ -8,6 +8,7 @@ import (
 
 	"github.com/kiwifs/kiwifs/internal/brief"
 	"github.com/kiwifs/kiwifs/internal/claims"
+	"github.com/kiwifs/kiwifs/internal/hybrid"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
 	"github.com/kiwifs/kiwifs/internal/refactor"
 	"github.com/kiwifs/kiwifs/internal/similar"
@@ -45,6 +46,18 @@ type HybridSearchResult struct {
 	Score        float64 `json:"score"`
 	FTSRank      int     `json:"fts_rank"`
 	SemanticRank int     `json:"semantic_rank"`
+}
+
+// RecallRequest asks for keyword, semantic and link-graph retrieval fused
+// into one ranking. Field names match the POST /api/kiwi/recall body.
+type RecallRequest struct {
+	Query         string   `json:"query"`
+	Limit         int      `json:"limit,omitempty"`
+	Sources       []string `json:"sources,omitempty"`
+	Scope         string   `json:"scope,omitempty"`
+	PathPrefix    string   `json:"path_prefix,omitempty"`
+	BoostVerified bool     `json:"boost_verified,omitempty"`
+	RRFK          float64  `json:"rrf_k,omitempty"`
 }
 
 type MetaResult struct {
@@ -223,6 +236,7 @@ type Backend interface {
 	SearchSemantic(ctx context.Context, query string, limit int) ([]SearchResult, error)
 	SearchHybrid(ctx context.Context, query string, limit int, pathPrefix string) ([]HybridSearchResult, error)
 	Brief(ctx context.Context, req BriefRequest) (*brief.Pack, error)
+	Recall(ctx context.Context, req RecallRequest) (*hybrid.RecallResponse, error)
 	QueryMeta(ctx context.Context, filters []string, sort, order string, limit, offset int) ([]MetaResult, error)
 	QueryMetaOr(ctx context.Context, andFilters, orFilters []string, sort, order string, limit, offset int, paths ...string) ([]MetaResult, error)
 	QueryDQL(ctx context.Context, dql string, limit, offset int) (*QueryResult, error)

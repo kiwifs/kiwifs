@@ -21,7 +21,7 @@ kiwifs/
 |   |-- storage/      # Filesystem abstraction
 |   |-- vectorstore/  # Pluggable vector search backends
 |   |-- versioning/   # Git, copy-on-write, noop
-|   |-- mcpserver/    # MCP server (80 tools)
+|   |-- mcpserver/    # MCP server (81 tools)
 |   |-- dataview/     # DQL parser and query engine (Pratt parser)
 |   |-- workflow/     # Workflow state machine engine
 |   |-- claims/       # Task claim system (path-level leases)
@@ -97,7 +97,7 @@ All PRs must pass the `test` CI check (go vet, go test, UI build) before merge.
 ## Key Patterns
 
 - **REST handlers** are in `internal/api/handlers*.go`, registered in `internal/api/server.go`.
-- **MCP tools** are registered in `internal/mcpserver/mcpserver.go` (80 tools: 72
+- **MCP tools** are registered in `internal/mcpserver/mcpserver.go` (81 tools: 73
   there + 2 in memory_tools.go + 1 in widget_tools.go + 5 in refactor_tools.go).
   `TestToolCountMatchesTheDocs` fails when that number drifts from this file.
 - **Widget fences** (` ```array `, ` ```tree `, …) are declared once in

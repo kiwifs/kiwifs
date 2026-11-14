@@ -293,6 +293,38 @@ func TestPerSpaceKeyMiddlewareValidates(t *testing.T) {
 	}
 }
 
+func TestReadScopedKeyMayCallReadOnlyPOSTs(t *testing.T) {
+	dir, pipe, cstore := buildTestPipeline(t)
+	cfg := &config.Config{}
+	cfg.Storage.Root = dir
+	cfg.Auth.Type = "perspace"
+	cfg.Auth.APIKeys = []config.APIKeyEntry{{Key: "reader", Actor: "agent", Scope: "read"}}
+	s := NewServer(cfg, pipe, nil, cstore, nil, nil, nil)
+
+	call := func(method, target, body string) int {
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer reader")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		s.echo.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	for target := range readOnlyPOSTs {
+		if code := call(http.MethodPost, target, "{}"); code == http.StatusForbidden {
+			t.Errorf("POST %s with a read key = 403, want it to reach the handler", target)
+		}
+	}
+	for _, target := range []string{"/api/kiwi/bulk", "/api/kiwi/rename", "/api/kiwi/file/append"} {
+		if code := call(http.MethodPost, target, "{}"); code != http.StatusForbidden {
+			t.Errorf("POST %s with a read key = %d, want 403", target, code)
+		}
+	}
+	if code := call(http.MethodPut, "/api/kiwi/file?path=a.md", "# a\n"); code != http.StatusForbidden {
+		t.Errorf("PUT with a read key = %d, want 403", code)
+	}
+}
+
 // TestCORSAuthNoneRejectsRemoteOrigin guards the Fix 5 contract: with
 // auth=none, only loopback origins get a CORS allow header. Any random
 // remote origin must NOT get echoed back, so a webpage on the open

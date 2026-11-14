@@ -72,7 +72,7 @@ These fields complement `expires_at` / `ttl`: expiration marks content for revie
 
 ## Memory isolation: `scope`
 
-Use **`scope`** to partition memories by user, project, or tenant (e.g. `user:alice`, `project:kiwifs`). Agents writing episodic notes should set `scope` when the observation applies to a single isolation boundary. Pass `scope` to `kiwi_search` / `kiwi_search_semantic` to filter results to that boundary.
+Use **`scope`** to partition memories by user, project, or tenant (e.g. `user:alice`, `project:kiwifs`). Agents writing episodic notes should set `scope` when the observation applies to a single isolation boundary. Pass `scope` to `kiwi_search` / `kiwi_search_semantic` / `kiwi_recall` to filter results to that boundary.
 
 ---
 
