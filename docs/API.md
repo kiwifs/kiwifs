@@ -14,6 +14,7 @@ For the full interactive API reference, see [docs.kiwifs.com/api-reference](http
 
 - [Health](#health)
 - [Files](#files)
+- [Trash](#trash)
 - [Restructuring](#restructuring)
 - [Rendering](#rendering)
 - [Search](#search)
@@ -41,7 +42,7 @@ GET  /health                               → {"status":"ok"}
 GET    /api/kiwi/tree?path=                → directory tree (JSON)
 GET    /api/kiwi/file?path=                → raw markdown + ETag
 PUT    /api/kiwi/file?path=                → write + git commit + re-index
-DELETE /api/kiwi/file?path=                → delete + git commit
+DELETE /api/kiwi/file?path=                → move to the trash + git commit (?permanent=true deletes outright)
 PATCH  /api/kiwi/file/frontmatter?path=    → set/remove frontmatter fields ({"fields":{...}}, null removes; X-Field-Manager + ?force for ownership)
 POST   /api/kiwi/bulk                      → multi-file write, one commit (per-file "if_match")
 POST   /api/kiwi/rename                    → rename one file, relinking ({"from":"...","to":"..."})
@@ -52,6 +53,43 @@ GET    /api/kiwi/backlinks?path=           → pages that link to this page
 GET    /api/kiwi/context                   → schema + playbook + index in one call
 GET    /api/kiwi/changes?since=&limit=     → git-based change feed
 ```
+
+---
+
+## Trash
+
+```
+GET    /api/kiwi/trash                     → trashed files, newest first ({"items":[{id, original_path, deleted_at, actor, size}]})
+POST   /api/kiwi/trash/restore             → move one back to its original path ({"restore_id":"..."})
+DELETE /api/kiwi/trash/:id                 → delete one from the trash for good
+```
+
+`DELETE /api/kiwi/file` moves the file to `.kiwi/trash/<id>/` and answers
+`{"deleted":"notes/a.md","trashed":true,"restore_id":"20261113T101530Z_notes-a.md"}`.
+The removal is committed as `trash: notes/a.md`, the page leaves the search
+and link indexes, and subscribers get the usual `delete` event with
+`"extra":{"trashed":true,"restore_id":"..."}`. Pass `?permanent=true` to
+delete outright (the pre-trash behaviour, answering `{"deleted":"..."}`).
+Directories are always removed outright, since only empty ones can be deleted.
+
+Restoring moves the file back, commits it as `restore: notes/a.md`,
+re-indexes it and sends a `write` event with `"extra":{"restored_from":"..."}`.
+If a file has taken the original path since, restore answers `409` and
+changes nothing; an unknown id answers `404`.
+
+The trash itself is not committed — the file's history stays in git either
+way. `kiwifs init` adds `.kiwi/trash/` to `.gitignore`; add that line to
+workspaces created before the trash existed. Agents get the same operations through `kiwi_delete` (with
+`permanent: true` to skip the trash), `kiwi_trash_list` and
+`kiwi_trash_restore`.
+
+```toml
+[trash]
+enabled        = true   # default; false makes every delete permanent
+retention_days = 30     # default; the scheduled janitor purges older items, -1 keeps them
+```
+
+With the trash disabled, the `/trash` endpoints answer `404`.
 
 ---
 

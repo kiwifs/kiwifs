@@ -26,6 +26,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/kiwifs/kiwifs/internal/tracing"
+	"github.com/kiwifs/kiwifs/internal/trash"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
 	"github.com/kiwifs/kiwifs/internal/versioning"
 	"github.com/kiwifs/kiwifs/internal/webhooks"
@@ -122,6 +123,9 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 		pipe.SelectPages = selector.SelectPaths
 	}
 	pipe.SequenceDirs = cfg.Sequences.Directories
+	if cfg.Trash.IsEnabled() {
+		pipe.Trash = trash.New(root)
+	}
 	if err := pipe.RecoverRefactor(context.Background()); err != nil {
 		log.Printf("%srefactor recovery: %v", prefix, err)
 	}
@@ -469,6 +473,7 @@ func Build(name, root string, cfg *config.Config) (*Stack, error) {
 			Interval:    iv,
 			Jitter:      60 * time.Second,
 			InitialScan: cfg.Janitor.StartupScan,
+			Sweep:       trashSweep(prefix, pipe, cfg.Trash.Retention()),
 		}
 		janitorSched = janitor.NewScheduler(scanner, hub, ver, opts)
 		server.SetJanitorScheduler(janitorSched)
@@ -702,6 +707,23 @@ func generateBootstrapSecret() string {
 	b := make([]byte, 32)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// trashSweep purges trashed files older than retention after each
+// scheduled janitor scan. It returns nil when nothing would ever expire.
+func trashSweep(prefix string, pipe *pipeline.Pipeline, retention time.Duration) func(context.Context) {
+	if !pipe.TrashEnabled() || retention <= 0 {
+		return nil
+	}
+	return func(context.Context) {
+		purged, err := pipe.PurgeTrash(retention)
+		if err != nil {
+			log.Printf("%strash: purge: %v", prefix, err)
+		}
+		if len(purged) > 0 {
+			log.Printf("%strash: purged %d item(s) older than %s", prefix, len(purged), retention)
+		}
+	}
 }
 
 func janitorOpts(cfg *config.Config) []janitor.Option {

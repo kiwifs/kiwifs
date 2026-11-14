@@ -29,6 +29,11 @@ type ScheduleOptions struct {
 	// issue list the first time an admin opens the Janitor panel after a
 	// restart.
 	InitialScan bool
+
+	// Sweep, when set, runs after every scheduled scan, including scans
+	// that failed. Bootstrap uses it to purge expired trash so cleanup
+	// happens on the janitor's cadence without the scanner itself writing.
+	Sweep func(ctx context.Context)
 }
 
 // Scheduler wraps a Scanner with a periodic ticker and pushes a summary
@@ -141,6 +146,9 @@ func (s *Scheduler) loop(ctx context.Context) {
 // thousands of entries and the UI will pull it via the existing
 // /janitor endpoint as soon as the summary arrives.
 func (s *Scheduler) runOnce(ctx context.Context) {
+	if s.opts.Sweep != nil {
+		defer s.opts.Sweep(ctx)
+	}
 	scanCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 

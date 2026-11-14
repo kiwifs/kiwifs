@@ -42,7 +42,7 @@ No. Git runs under the hood (every write is an atomic commit) but users never in
 
 ### Is KiwiFS production-ready?
 
-KiwiFS is in active development (v0.19.x). The core is stable: file CRUD, search, versioning, web UI, MCP (79 tools), data import/export, DQL queries, workflows, schemas, widgets, publishing, and all access protocols work. We use it in production internally. That said, APIs may evolve before v1.0.
+KiwiFS is in active development (v0.19.x). The core is stable: file CRUD, search, versioning, web UI, MCP (81 tools), data import/export, DQL queries, workflows, schemas, widgets, publishing, and all access protocols work. We use it in production internally. That said, APIs may evolve before v1.0.
 
 ---
 
@@ -103,11 +103,11 @@ Three ways, depending on what your agent has access to:
 
 1. **Filesystem** — if you mount KiwiFS via NFS or FUSE, the agent uses `cat`, `echo`, `grep`, `ls` directly. No SDK.
 2. **REST API** — `curl -X PUT localhost:3333/api/kiwi/file?path=page.md -d "content"`.
-3. **MCP** — `kiwifs mcp --root ~/knowledge` gives Claude, Cursor, or any MCP-compatible agent 78 structured tools (`kiwi_read`, `kiwi_write`, `kiwi_search`, `kiwi_task_create`, `kiwi_remember`, etc.).
+3. **MCP** — `kiwifs mcp --root ~/knowledge` gives Claude, Cursor, or any MCP-compatible agent 81 structured tools (`kiwi_read`, `kiwi_write`, `kiwi_search`, `kiwi_task_create`, `kiwi_remember`, etc.).
 
 ### What is MCP and why does KiwiFS support it?
 
-[Model Context Protocol](https://modelcontextprotocol.io) is a standard for connecting AI agents to external tools. KiwiFS's MCP server exposes 78 tools, 4 resources and a plan resource template, so any MCP-compatible agent can read, write, search, query, create tasks, manage workflows, and remember observations without custom integration code. Call `kiwi_context` first to get the schema, playbook, and index in one shot.
+[Model Context Protocol](https://modelcontextprotocol.io) is a standard for connecting AI agents to external tools. KiwiFS's MCP server exposes 81 tools, 4 resources and a plan resource template, so any MCP-compatible agent can read, write, search, query, create tasks, manage workflows, and remember observations without custom integration code. Call `kiwi_context` first to get the schema, playbook, and index in one shot.
 
 ### Can agents use KiwiFS without a running server?
 
