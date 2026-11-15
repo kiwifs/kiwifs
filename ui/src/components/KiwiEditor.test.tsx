@@ -15,9 +15,11 @@ const harness = vi.hoisted(() => ({
   },
   onChange: () => {},
   sourceProps: null as null | Record<string, unknown>,
+  blockNoteOptions: null as null | { uploadFile: (file: File) => Promise<unknown> },
   fileEvent: null as null | ((event: { op: string; path?: string; etag?: string }) => Promise<void> | void),
   readFile: vi.fn(),
   writeFile: vi.fn(),
+  uploadAsset: vi.fn(),
 }));
 
 vi.mock("date-fns", () => ({ formatDistanceToNow: () => "just now" }));
@@ -30,7 +32,10 @@ vi.mock("@kw/lib/blockNoteMarkdown", () => ({
     editor.tryParseMarkdownToBlocks(markdown),
 }));
 vi.mock("@blocknote/react", () => ({
-  useCreateBlockNote: () => harness.editor,
+  useCreateBlockNote: (options: typeof harness.blockNoteOptions) => {
+    harness.blockNoteOptions = options;
+    return harness.editor;
+  },
   FormattingToolbarController: () => null,
   SuggestionMenuController: () => null,
 }));
@@ -44,6 +49,7 @@ vi.mock("@kw/lib/api", () => ({
   api: {
     readFile: harness.readFile,
     writeFile: harness.writeFile,
+    uploadAsset: harness.uploadAsset,
     versions: async () => ({ versions: [] }),
   },
 }));
@@ -449,6 +455,56 @@ describe("live preview mode", () => {
     await act(async () => { await navigate("other.md"); });
     expect(harness.writeFile).toHaveBeenCalledWith("note.md", "Body [[other]]\n", '"initial"');
     expect(onNavigate).toHaveBeenCalledWith("other.md");
+  });
+
+  it("uploads images pasted into the text editor next to the page", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "live");
+    await mount("# Page\n", "notes/day.md");
+    harness.uploadAsset.mockResolvedValue("/raw/notes/paste-20260623-143022.png");
+    const upload = harness.sourceProps!.onUploadImage as (file: File) => Promise<string>;
+    const file = new File(["png"], "paste-20260623-143022.png", { type: "image/png" });
+
+    await expect(upload(file)).resolves.toBe("/raw/notes/paste-20260623-143022.png");
+    expect(harness.uploadAsset).toHaveBeenCalledWith(file, "notes");
+  });
+
+  it("shows a failed image upload until it is dismissed", async () => {
+    localStorage.setItem("kiwifs-editor-mode", "source");
+    await mount("# Page\n");
+    const report = harness.sourceProps!.onUploadError as (message: string) => void;
+    await act(async () => report("Could not upload shot.png: File too large (max 100 MB)"));
+    const alert = document.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Could not upload shot.png: File too large (max 100 MB)");
+    await click("Dismiss");
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("stores a clipboard image pasted in visual mode under a name of its own", async () => {
+    await mount("Body\n", "notes/day.md");
+    harness.uploadAsset.mockImplementation(async (file: File, dir: string) => `/raw/${dir}/${file.name}`);
+    const upload = harness.blockNoteOptions!.uploadFile;
+
+    const pasted = (await upload(new File(["png"], "image.png", { type: "image/png" }))) as {
+      props: { url: string; name: string };
+    };
+    expect(pasted.props.name).toMatch(/^paste-\d{8}-\d{6}(-\d+)?\.png$/);
+    expect(pasted.props.url).toBe(`/raw/notes/${pasted.props.name}`);
+    expect((harness.uploadAsset.mock.calls[0][0] as File).name).toBe(pasted.props.name);
+
+    await expect(upload(new File(["png"], "diagram.png", { type: "image/png" }))).resolves.toBe("/raw/notes/diagram.png");
+  });
+
+  it("reports an image upload that fails in visual mode", async () => {
+    await mount("Body\n");
+    harness.uploadAsset.mockRejectedValue(new Error("File too large (max 100 MB)"));
+    await act(async () => {
+      await expect(
+        harness.blockNoteOptions!.uploadFile(new File(["png"], "huge.png", { type: "image/png" })),
+      ).rejects.toThrow("File too large");
+    });
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      "Could not upload huge.png: File too large (max 100 MB)",
+    );
   });
 
   it("toggles Vim keybindings and remembers the choice", async () => {

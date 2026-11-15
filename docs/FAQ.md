@@ -211,6 +211,13 @@ the page while you have it open, Live and Source take the change in place
 when you have no unsaved edits; otherwise, and always in Visual mode, the
 editor asks whether to reload or keep your version.
 
+Paste an image (PNG, JPEG, GIF or WebP) or drop one onto the page in any
+mode to upload it to the page's folder and insert it as `![alt](/raw/...)`.
+A screenshot or copied image has no name of its own, so it is stored as
+`paste-<date>-<time>.png` rather than overwriting the last one. In Live and
+Source, an "Uploading…" marker holds the spot until the upload finishes; the
+marker is not part of the text, so a save meanwhile writes no placeholder.
+
 ### Does the web UI work on mobile?
 
 The UI is responsive. Editing on a phone or tablet defaults to Live mode,
