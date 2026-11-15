@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.94](https://github.com/kiwifs/kiwifs/compare/v0.19.93...v0.19.94) (2026-11-15)
+
+
+### Features
+
+* **ui:** paste and drop images in the live and source editors ([#425](https://github.com/kiwifs/kiwifs/issues/425)) ([#595](https://github.com/kiwifs/kiwifs/issues/595)) ([79058b9](https://github.com/kiwifs/kiwifs/commit/79058b97f8c09f2d508aa3bec575f3e20c4be512))
+
+
+### Bug Fixes
+
+* **ui:** accept image drops in the live and source editors ([#597](https://github.com/kiwifs/kiwifs/issues/597)) ([a97a9c3](https://github.com/kiwifs/kiwifs/commit/a97a9c326821423e1884cd82e0c2d1427c18c345))
+
 ## [0.19.93](https://github.com/kiwifs/kiwifs/compare/v0.19.92...v0.19.93) (2026-11-15)
 
 
