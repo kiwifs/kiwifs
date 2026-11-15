@@ -158,7 +158,7 @@ describe("imageUpload", () => {
 
     pending.resolve("/raw/diagram.png");
     await settle();
-    expect(view.state.doc.toString()).toBe("Text![diagram](/raw/diagram.png)");
+    expect(view.state.doc.toString()).toBe("Text\n![diagram](/raw/diagram.png)");
     expect(view.dom.querySelector(".cm-image-uploading")).toBeNull();
   });
 
@@ -172,7 +172,7 @@ describe("imageUpload", () => {
     view.dispatch({ changes: { from: view.state.doc.length, insert: " three" } });
     pending.resolve("/raw/diagram.png");
     await settle();
-    expect(view.state.doc.toString()).toBe("zero\none\n![diagram](/raw/diagram.png)two three");
+    expect(view.state.doc.toString()).toBe("zero\none\n![diagram](/raw/diagram.png)\ntwo three");
   });
 
   it("inserts several images in the order they were pasted", async () => {
@@ -187,6 +187,19 @@ describe("imageUpload", () => {
     first.resolve("/raw/a.png");
     await settle();
     expect(view.state.doc.toString()).toBe("![a](/raw/a.png)\n![b](/raw/b.png)");
+  });
+
+  it("takes a drop that the file tree's drag-and-drop already cancelled", async () => {
+    const cancel = (event: Event) => event.preventDefault();
+    window.addEventListener("drop", cancel, true);
+    try {
+      const { view } = editor("", async (file) => `/raw/${file.name}`);
+      drop(view, transfer([png("a.png")]));
+      await settle();
+      expect(view.state.doc.toString()).toBe("![a](/raw/a.png)");
+    } finally {
+      window.removeEventListener("drop", cancel, true);
+    }
   });
 
   it("reports a failed upload and removes its marker", async () => {

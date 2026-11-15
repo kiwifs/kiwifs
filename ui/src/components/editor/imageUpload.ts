@@ -1,5 +1,5 @@
 import { type Extension, StateEffect, StateField } from "@codemirror/state";
-import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, WidgetType } from "@codemirror/view";
 
 /** Image types the text editor uploads when they are pasted or dropped. */
 export const UPLOADABLE_IMAGE_TYPES: Readonly<Record<string, string>> = {
@@ -162,7 +162,14 @@ async function uploadImages(view: EditorView, dropped: File[], pos: number, opti
 
   const at = uploadPos(view, id);
   if (at === null) return;
-  const insert = markdown.join("\n");
+  const { doc } = view.state;
+  // An image that would butt against a word (dropped onto the start of a
+  // paragraph, pasted right after a full stop) goes on a line of its own;
+  // one placed between spaces was meant to sit inline.
+  const butts = (from: number, to: number) => from >= 0 && to <= doc.length && /\S/.test(doc.sliceString(from, to));
+  const before = butts(at - 1, at) ? "\n" : "";
+  const after = butts(at, at + 1) ? "\n" : "";
+  const insert = markdown.length ? before + markdown.join("\n") + after : "";
   const sel = view.state.selection.main;
   view.dispatch({
     changes: insert ? { from: at, insert } : undefined,
@@ -201,15 +208,21 @@ export function imageUpload(options: ImageUploadOptions): Extension {
         void uploadImages(view, files, from, options);
         return true;
       },
-      drop(event, view) {
-        if (view.state.readOnly) return false;
+    }),
+    ViewPlugin.define((view) => {
+      // A plain capture listener rather than a CodeMirror handler: react-dnd
+      // (the file tree) cancels every OS file drop on window in the capture
+      // phase, and CodeMirror ignores events that arrive already cancelled.
+      const onDrop = (event: DragEvent) => {
+        if (view.state.readOnly) return;
         const files = imageFiles(event.dataTransfer);
-        if (files.length === 0) return false;
+        if (files.length === 0) return;
         event.preventDefault();
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head;
         void uploadImages(view, files, pos, options);
-        return true;
-      },
+      };
+      view.dom.addEventListener("drop", onDrop, true);
+      return { destroy: () => view.dom.removeEventListener("drop", onDrop, true) };
     }),
   ];
 }
