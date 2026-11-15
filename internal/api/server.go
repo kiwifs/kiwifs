@@ -875,6 +875,12 @@ func apiKeyHandler(key string) echo.MiddlewareFunc {
 	}
 }
 
+// keyPathScopeCtxKey holds a func(path string) bool reporting whether the
+// request's API key may touch path. The middleware can only check the path
+// query param and /bulk bodies, so handlers that resolve paths from ids
+// (the trash) must check this themselves.
+const keyPathScopeCtxKey = "kiwi.keyPathScope"
+
 // readOnlyPOSTs are endpoints that take POST only because the request is too
 // large or structured for a query string. They change nothing, so a
 // read-scoped key may call them.
@@ -1002,6 +1008,11 @@ func perSpaceKeyHandler(keys []config.APIKeyEntry) echo.MiddlewareFunc {
 				}
 			}
 
+			if e.space != "" || e.prefix != "" {
+				c.Set(keyPathScopeCtxKey, func(path string) bool {
+					return inScope(e.space, path) && inPrefix(e.prefix, path)
+				})
+			}
 			c.Request().Header.Set("X-Actor", e.actor)
 			if e.space != "" {
 				c.Request().Header.Set("X-Space", e.space)

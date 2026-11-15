@@ -43,7 +43,13 @@ func (h *Handlers) ListTrash(c echo.Context) error {
 	if err != nil {
 		return trashError(err)
 	}
-	return c.JSON(http.StatusOK, listTrashResponse{Items: items})
+	visible := items[:0]
+	for _, it := range items {
+		if keyMayReach(c, it.OriginalPath) {
+			visible = append(visible, it)
+		}
+	}
+	return c.JSON(http.StatusOK, listTrashResponse{Items: visible})
 }
 
 // RestoreTrash godoc
@@ -68,6 +74,9 @@ func (h *Handlers) RestoreTrash(c echo.Context) error {
 	if req.RestoreID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "restore_id is required")
 	}
+	if err := h.checkTrashItemScope(c, req.RestoreID); err != nil {
+		return err
+	}
 	actor := sanitizeActor(c.Request().Header.Get("X-Actor"))
 	item, res, err := h.pipe.RestoreFromTrash(c.Request().Context(), req.RestoreID, actor)
 	if err != nil {
@@ -91,11 +100,41 @@ func (h *Handlers) RestoreTrash(c echo.Context) error {
 //	@Failure		500	{object}	map[string]string
 //	@Router			/api/kiwi/trash/{id} [delete]
 func (h *Handlers) PurgeTrashItem(c echo.Context) error {
-	item, err := h.pipe.DeleteFromTrash(c.Param("id"))
+	id := c.Param("id")
+	if err := h.checkTrashItemScope(c, id); err != nil {
+		return err
+	}
+	item, err := h.pipe.DeleteFromTrash(id)
 	if err != nil {
 		return trashError(err)
 	}
 	return c.JSON(http.StatusOK, purgeTrashResponse{Purged: item})
+}
+
+// checkTrashItemScope reports an item outside the key's space or prefix as
+// not found, so a scoped key can't probe which ids exist elsewhere.
+func (h *Handlers) checkTrashItemScope(c echo.Context, id string) error {
+	if _, scoped := c.Get(keyPathScopeCtxKey).(func(string) bool); !scoped {
+		return nil
+	}
+	item, err := h.pipe.TrashItem(id)
+	if err != nil {
+		return trashError(err)
+	}
+	if !keyMayReach(c, item.OriginalPath) {
+		return trashError(trash.ErrNotFound)
+	}
+	return nil
+}
+
+// keyMayReach accepts path with or without a leading slash, since keys'
+// spaces and prefixes are configured in either form.
+func keyMayReach(c echo.Context, path string) bool {
+	allowed, ok := c.Get(keyPathScopeCtxKey).(func(string) bool)
+	if !ok {
+		return true
+	}
+	return allowed(path) || allowed("/"+path)
 }
 
 func trashError(err error) error {

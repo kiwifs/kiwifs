@@ -155,6 +155,14 @@ func (p *Pipeline) ListTrash() ([]trash.Item, error) {
 	return p.Trash.List()
 }
 
+// TrashItem returns one trashed file's manifest entry.
+func (p *Pipeline) TrashItem(id string) (trash.Item, error) {
+	if p.Trash == nil {
+		return trash.Item{}, ErrTrashDisabled
+	}
+	return p.Trash.Get(id)
+}
+
 // DeleteFromTrash permanently removes one trashed file. The file's history
 // stays in git; only the trash copy goes.
 func (p *Pipeline) DeleteFromTrash(id string) (trash.Item, error) {
