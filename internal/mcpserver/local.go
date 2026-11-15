@@ -36,6 +36,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/similar"
 	"github.com/kiwifs/kiwifs/internal/storage"
 	"github.com/kiwifs/kiwifs/internal/tracing"
+	"github.com/kiwifs/kiwifs/internal/trash"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
 	"github.com/kiwifs/kiwifs/internal/workflow"
 )
@@ -360,15 +361,37 @@ func (b *LocalBackend) RefactorApply(ctx context.Context, m *refactor.Manifest, 
 	return &RefactorApplyResult{Applied: res, Plan: plan}, err
 }
 
-func (b *LocalBackend) DeleteFile(ctx context.Context, path, actor string) error {
+func (b *LocalBackend) DeleteFile(ctx context.Context, path, actor string, permanent bool) (*DeleteResult, error) {
 	if err := b.init(); err != nil {
-		return err
+		return nil, err
 	}
-	err := b.stack.Pipeline.Delete(ctx, path, actor)
-	if err == nil {
-		tracing.Record(ctx, tracing.Event{Kind: tracing.KindDelete, Path: path})
+	item, err := b.stack.Pipeline.DeleteOrTrash(ctx, path, actor, permanent)
+	if err != nil {
+		return nil, err
 	}
-	return err
+	tracing.Record(ctx, tracing.Event{Kind: tracing.KindDelete, Path: path})
+	if item == nil {
+		return &DeleteResult{}, nil
+	}
+	return &DeleteResult{Trashed: true, RestoreID: item.ID}, nil
+}
+
+func (b *LocalBackend) TrashList(_ context.Context) ([]trash.Item, error) {
+	if err := b.init(); err != nil {
+		return nil, err
+	}
+	return b.stack.Pipeline.ListTrash()
+}
+
+func (b *LocalBackend) TrashRestore(ctx context.Context, id, actor string) (*trash.Item, error) {
+	if err := b.init(); err != nil {
+		return nil, err
+	}
+	item, _, err := b.stack.Pipeline.RestoreFromTrash(ctx, id, actor)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
 }
 
 func (b *LocalBackend) Append(ctx context.Context, path, content, separator, actor string) (string, error) {

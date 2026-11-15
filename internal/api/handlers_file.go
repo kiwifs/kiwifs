@@ -978,33 +978,51 @@ func (h *Handlers) AppendFile(c echo.Context) error {
 // DeleteFile godoc
 //
 //	@Summary		Delete a file
-//	@Description	Deletes a file from the repository.
+//	@Description	Moves a file to the trash (.kiwi/trash/) so it can be restored with POST /api/kiwi/trash/restore. Pass permanent=true, or disable [trash] in config.toml, to delete it outright.
 //	@Tags			files
 //	@Security		BearerAuth
-//	@Param			path	query		string	true	"Path of the file to delete (must start with '/')"
-//	@Param			X-Actor	header		string	false	"Actor identity performing the delete"
-//	@Success		200		{object}	map[string]string
-//	@Failure		400		{object}	map[string]string
-//	@Failure		404		{object}	map[string]string
-//	@Failure		500		{object}	map[string]string
+//	@Param			path		query		string	true	"Path of the file to delete (must start with '/')"
+//	@Param			permanent	query		bool	false	"Skip the trash and delete the file outright"
+//	@Param			X-Actor		header		string	false	"Actor identity performing the delete"
+//	@Success		200			{object}	deleteFileResponse
+//	@Failure		400			{object}	map[string]string
+//	@Failure		404			{object}	map[string]string
+//	@Failure		500			{object}	map[string]string
 //	@Router			/api/kiwi/file [delete]
 func (h *Handlers) DeleteFile(c echo.Context) error {
 	path, err := requirePath(c)
 	if err != nil {
 		return err
 	}
-	if !h.store.Exists(c.Request().Context(), path) {
+	ctx := c.Request().Context()
+	if !h.store.Exists(ctx, path) {
 		return echo.NewHTTPError(http.StatusNotFound, "file not found")
 	}
+	actor := sanitizeActor(c.Request().Header.Get("X-Actor"))
 
-	if err := h.pipe.Delete(c.Request().Context(), path, sanitizeActor(c.Request().Header.Get("X-Actor"))); err != nil {
+	item, err := h.pipe.DeleteOrTrash(ctx, path, actor, c.QueryParam("permanent") == "true")
+	if err != nil {
 		if errors.Is(err, storage.ErrPathDenied) {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
+		if errors.Is(err, os.ErrNotExist) {
+			return echo.NewHTTPError(http.StatusNotFound, "file not found")
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	tracing.Record(c.Request().Context(), tracing.Event{Kind: tracing.KindDelete, Path: path})
-	return c.JSON(http.StatusOK, map[string]string{"deleted": path})
+	tracing.Record(ctx, tracing.Event{Kind: tracing.KindDelete, Path: path})
+	resp := deleteFileResponse{Deleted: path}
+	if item != nil {
+		resp.Trashed = true
+		resp.RestoreID = item.ID
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+type deleteFileResponse struct {
+	Deleted   string `json:"deleted"`
+	Trashed   bool   `json:"trashed,omitempty"`
+	RestoreID string `json:"restore_id,omitempty"`
 }
 
 // meDir resolves the personal state directory for the current user.

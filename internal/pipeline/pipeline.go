@@ -23,6 +23,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/refactor"
 	"github.com/kiwifs/kiwifs/internal/search"
 	"github.com/kiwifs/kiwifs/internal/storage"
+	"github.com/kiwifs/kiwifs/internal/trash"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
 	"github.com/kiwifs/kiwifs/internal/versioning"
 )
@@ -100,6 +101,10 @@ type Pipeline struct {
 	pendingApprovals sync.Map
 	rawMoves         rawMoveTracker
 	fieldOwners      fieldOwnerStore
+
+	// Trash, when set, lets deletes move files into .kiwi/trash/ instead
+	// of removing them (MoveToTrash). Nil means deletes are permanent.
+	Trash *trash.Bin
 
 	// Root is the absolute storage root. WriteStream spools oversized
 	// uploads into `.kiwi-stream-*` tempfiles under this directory so

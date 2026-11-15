@@ -9,7 +9,7 @@ import (
 
 // The tool count appears in AGENTS.md and docs/FAQ.md, where it goes stale
 // silently. Assert it here so adding a tool forces the docs to be updated.
-const documentedToolCount = 79
+const documentedToolCount = 81
 
 func TestToolCountMatchesTheDocs(t *testing.T) {
 	dir := t.TempDir()

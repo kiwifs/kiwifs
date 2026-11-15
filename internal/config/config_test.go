@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/kiwifs/kiwifs/internal/links"
 )
@@ -1013,5 +1014,35 @@ external_link_cache_ttl = "12h"
 	}
 	if cfg.Janitor.ExternalLinkCheck {
 		t.Fatal("external link check must default to off")
+	}
+}
+
+func TestLoadTrash(t *testing.T) {
+	dir := t.TempDir()
+	cfgDir := filepath.Join(dir, ".kiwi")
+	_ = os.MkdirAll(cfgDir, 0755)
+	write := func(body string) TrashConfig {
+		t.Helper()
+		_ = os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0644)
+		cfg, err := Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.Trash
+	}
+
+	tr := write("[janitor]\nstale_days = 90\n")
+	if !tr.IsEnabled() || tr.Retention() != DefaultTrashRetentionDays*24*time.Hour {
+		t.Fatalf("defaults: enabled=%v retention=%s", tr.IsEnabled(), tr.Retention())
+	}
+
+	tr = write("[trash]\nenabled = false\nretention_days = 7\n")
+	if tr.IsEnabled() || tr.Retention() != 7*24*time.Hour {
+		t.Fatalf("explicit: enabled=%v retention=%s", tr.IsEnabled(), tr.Retention())
+	}
+
+	tr = write("[trash]\nretention_days = -1\n")
+	if !tr.IsEnabled() || tr.Retention() != 0 {
+		t.Fatalf("keep forever: enabled=%v retention=%s", tr.IsEnabled(), tr.Retention())
 	}
 }

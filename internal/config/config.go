@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/kiwifs/kiwifs/internal/links"
@@ -38,6 +39,7 @@ type Config struct {
 	Import     ImportConfig     `toml:"import"`
 	Links      LinksConfig      `toml:"links"`
 	Refactor   RefactorConfig   `toml:"refactor"`
+	Trash      TrashConfig      `toml:"trash"`
 	// Space holds per-space settings (visibility, etc.) loaded from
 	// the space's own .kiwi/config.toml [space] section.
 	Space SpaceSettingsConfig `toml:"space"`
@@ -117,6 +119,41 @@ func (l LinksConfig) TypedLinkFields() []string {
 		return links.SanitizeTypedLinkFields(l.TypedFields)
 	}
 	return links.DefaultTypedLinkFields()
+}
+
+// DefaultTrashRetentionDays is how long trashed files are kept when
+// [trash] retention_days is unset.
+const DefaultTrashRetentionDays = 30
+
+// TrashConfig controls soft deletes. With the trash enabled (the default),
+// DELETE /api/kiwi/file and kiwi_delete move files into .kiwi/trash/ where
+// they can be listed and restored; ?permanent=true still hard-deletes. The
+// scheduled janitor purges items older than retention_days.
+//
+//	[trash]
+//	enabled        = true   # default
+//	retention_days = 30     # default; a negative value keeps items until purged by hand
+type TrashConfig struct {
+	Enabled       *bool `toml:"enabled"`
+	RetentionDays int   `toml:"retention_days"`
+}
+
+// IsEnabled returns true unless explicitly set to false.
+func (t TrashConfig) IsEnabled() bool {
+	return t.Enabled == nil || *t.Enabled
+}
+
+// Retention is how long trashed files are kept before the janitor purges
+// them. Zero means they are never purged automatically.
+func (t TrashConfig) Retention() time.Duration {
+	days := t.RetentionDays
+	if days == 0 {
+		days = DefaultTrashRetentionDays
+	}
+	if days < 0 {
+		return 0
+	}
+	return time.Duration(days) * 24 * time.Hour
 }
 
 // RefactorConfig holds the standing rules for restructuring

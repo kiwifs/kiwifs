@@ -73,7 +73,7 @@ func TestDeleteFile(t *testing.T) {
 	b, tmp := setupTestBackend(t)
 	defer b.Close()
 
-	err := b.DeleteFile(context.Background(), "index.md", "test-agent")
+	_, err := b.DeleteFile(context.Background(), "index.md", "test-agent", false)
 	if err != nil {
 		t.Fatalf("DeleteFile: %v", err)
 	}
@@ -490,8 +490,8 @@ func TestToolHandlerDelete(t *testing.T) {
 	defer b.Close()
 
 	text := mustCallTool(t, handleDelete(b), "kiwi_delete", map[string]any{"path": "index.md"})
-	if !strings.Contains(text, "Deleted index.md") {
-		t.Fatalf("expected 'Deleted' message, got: %s", text)
+	if !strings.Contains(text, "Moved index.md to the trash") {
+		t.Fatalf("expected a trash message, got: %s", text)
 	}
 }
 
@@ -583,7 +583,7 @@ func TestRemoteDeleteFileSendsActor(t *testing.T) {
 	defer srv.Close()
 
 	rb := NewRemoteBackend(srv.URL, "", "default")
-	err := rb.DeleteFile(context.Background(), "test.md", "my-agent")
+	_, err := rb.DeleteFile(context.Background(), "test.md", "my-agent", false)
 	if err != nil {
 		t.Fatalf("DeleteFile: %v", err)
 	}
