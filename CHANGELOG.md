@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.93](https://github.com/kiwifs/kiwifs/compare/v0.19.92...v0.19.93) (2026-11-15)
+
+
+### Features
+
+* **api:** trash deleted files and restore them ([#420](https://github.com/kiwifs/kiwifs/issues/420)) ([#589](https://github.com/kiwifs/kiwifs/issues/589)) ([a46a0bf](https://github.com/kiwifs/kiwifs/commit/a46a0bffb44436924a609f7eb61a1c19fa097c8d))
+
+
+### Bug Fixes
+
+* **api:** scope trash routes to the API key's space and prefix ([#594](https://github.com/kiwifs/kiwifs/issues/594)) ([cee9025](https://github.com/kiwifs/kiwifs/commit/cee9025bf0bc93fd17af9d29dfd64e9e4ca559c9))
+
 ## [0.19.92](https://github.com/kiwifs/kiwifs/compare/v0.19.91...v0.19.92) (2026-11-13)
 
 
