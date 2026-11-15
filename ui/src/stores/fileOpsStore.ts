@@ -54,7 +54,7 @@ export async function undoFileOp(): Promise<string | null> {
       return `Moved back to ${op.from}`;
 
     case "upload":
-      await api.deleteFile(op.path);
+      await api.deleteFile(op.path, { permanent: true });
       return `Removed uploaded file ${op.path}`;
 
     default:

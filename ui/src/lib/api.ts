@@ -530,8 +530,12 @@ export const api = {
     });
   },
 
-  async deleteFile(path: string): Promise<{ deleted: string }> {
+  async deleteFile(
+    path: string,
+    opts: { permanent?: boolean } = {},
+  ): Promise<{ deleted: string; trashed?: boolean; restore_id?: string }> {
     const qs = new URLSearchParams({ path });
+    if (opts.permanent) qs.set("permanent", "true");
     return request(`${kiwiBase()}/file?${qs}`, { method: "DELETE" });
   },
 

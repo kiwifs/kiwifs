@@ -216,3 +216,65 @@ func TestTrashDisabled(t *testing.T) {
 		}
 	}
 }
+
+func TestTrashRoutesHonourKeyPrefix(t *testing.T) {
+	dir, pipe, cstore := buildTestPipeline(t)
+	pipe.Root = dir
+	pipe.Trash = trash.New(dir)
+	cfg := &config.Config{}
+	cfg.Storage.Root = dir
+	cfg.Auth.Type = "perspace"
+	cfg.Auth.APIKeys = []config.APIKeyEntry{
+		{Key: "admin", Actor: "admin", Scope: "admin"},
+		{Key: "alice", Actor: "alice", Scope: "write", Prefix: "alice/"},
+	}
+	s := NewServer(cfg, pipe, nil, cstore, nil, nil, nil)
+
+	call := func(key, method, target, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+key)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		s.echo.ServeHTTP(rec, req)
+		return rec
+	}
+	trashFile := func(path string) string {
+		if rec := call("admin", http.MethodPut, "/api/kiwi/file?path="+path, "# x\n"); rec.Code != http.StatusOK {
+			t.Fatalf("PUT %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		rec := call("admin", http.MethodDelete, "/api/kiwi/file?path="+path, "")
+		var del deleteFileResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &del); err != nil || del.RestoreID == "" {
+			t.Fatalf("DELETE %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		return del.RestoreID
+	}
+	bobID := trashFile("bob/secret.md")
+	aliceID := trashFile("alice/notes.md")
+
+	rec := call("alice", http.MethodGet, "/api/kiwi/trash", "")
+	var list listTrashResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Items) != 1 || list.Items[0].ID != aliceID {
+		t.Fatalf("alice's trash list = %+v, want only %s", list.Items, aliceID)
+	}
+
+	if rec := call("alice", http.MethodPost, "/api/kiwi/trash/restore", `{"restore_id":"`+bobID+`"}`); rec.Code != http.StatusNotFound {
+		t.Errorf("alice restoring bob's file: %d, want 404", rec.Code)
+	}
+	if rec := call("alice", http.MethodDelete, "/api/kiwi/trash/"+bobID, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("alice purging bob's file: %d, want 404", rec.Code)
+	}
+	if rec := call("admin", http.MethodGet, "/api/kiwi/trash", ""); !strings.Contains(rec.Body.String(), bobID) {
+		t.Errorf("bob's item gone from the trash after alice's attempts: %s", rec.Body.String())
+	}
+
+	if rec := call("alice", http.MethodPost, "/api/kiwi/trash/restore", `{"restore_id":"`+aliceID+`"}`); rec.Code != http.StatusOK {
+		t.Errorf("alice restoring her own file: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := call("admin", http.MethodDelete, "/api/kiwi/trash/"+bobID, ""); rec.Code != http.StatusOK {
+		t.Errorf("admin purging bob's file: %d %s", rec.Code, rec.Body.String())
+	}
+}

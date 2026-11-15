@@ -80,7 +80,7 @@ export function PageActions({ path, onDeleted, onDuplicated, onMoved }: Props) {
     try {
       const { content } = await api.readFile(path);
       await api.writeFile(target, content);
-      await api.deleteFile(path);
+      await api.deleteFile(path, { permanent: true });
       setMoveOpen(false);
       onMoved?.(target);
     } catch (e) {
@@ -198,7 +198,7 @@ export function PageActions({ path, onDeleted, onDuplicated, onMoved }: Props) {
           <DialogHeader>
             <DialogTitle>Delete page</DialogTitle>
             <DialogDescription>
-              This will permanently delete <code className="font-mono">{path}</code>. This action cannot be undone.
+              Delete <code className="font-mono">{path}</code>? Deleted pages go to the trash and can be restored, unless the trash is turned off on this server.
             </DialogDescription>
           </DialogHeader>
           {error && <div className="text-sm text-destructive font-mono">{error}</div>}
