@@ -27,6 +27,7 @@ import {
   samePreviewTarget,
   type FencePreviewTarget,
 } from "./fenceAssist";
+import { imageUpload } from "./imageUpload";
 import { livePreview as livePreviewExtension, type LivePreviewOptions, WidgetPortals } from "./livePreview";
 import { FenceBlock, resolveFence } from "../FenceBlock";
 import { ErrorBoundary } from "../ErrorBoundary";
@@ -61,6 +62,13 @@ export type MarkdownSourceEditorProps = {
   resolveWikiLink?: (target: string) => string | null;
   /** Open another page, from a wiki link or a Cmd/Ctrl-clicked link. */
   onNavigate?: (path: string) => void;
+  /**
+   * Stores an image pasted or dropped into the editor and resolves to the URL
+   * to link to. Without it, images are left to the browser.
+   */
+  onUploadImage?: (file: File) => Promise<string>;
+  /** Reports an image upload that failed. */
+  onUploadError?: (message: string) => void;
 };
 
 /** Fences that draw a widget in live preview; plain code stays text. */
@@ -91,6 +99,8 @@ export function MarkdownSourceEditor({
   pagePath = "",
   resolveWikiLink,
   onNavigate,
+  onUploadImage,
+  onUploadError,
 }: MarkdownSourceEditorProps) {
   // Through a ref, so a parent passing a fresh arrow each render doesn't
   // rebuild every extension.
@@ -107,6 +117,13 @@ export function MarkdownSourceEditor({
     navigateRef.current = onNavigate;
     resolveRef.current = resolveWikiLink;
   }, [onNavigate, resolveWikiLink]);
+  const uploadRef = useRef(onUploadImage);
+  const uploadErrorRef = useRef(onUploadError);
+  useEffect(() => {
+    uploadRef.current = onUploadImage;
+    uploadErrorRef.current = onUploadError;
+  }, [onUploadImage, onUploadError]);
+  const wantsUpload = onUploadImage !== undefined;
 
   const portals = useMemo(() => new WidgetPortals(), []);
   const widgets = useSyncExternalStore(portals.subscribe, portals.getSnapshot, portals.getSnapshot);
@@ -203,6 +220,13 @@ export function MarkdownSourceEditor({
       saveKeymap,
       fenceLinter(),
       preview ?? [],
+      wantsUpload
+        ? imageUpload({
+            upload: (file) =>
+              uploadRef.current ? uploadRef.current(file) : Promise.reject(new Error("uploads are turned off")),
+            onError: (message) => uploadErrorRef.current?.(message),
+          })
+        : [],
     ];
 
     if (wantsFence) {
@@ -226,6 +250,7 @@ export function MarkdownSourceEditor({
     customSlashCommands,
     builtinSlashSource,
     wantsFence,
+    wantsUpload,
     vim,
     livePreview,
     preview,

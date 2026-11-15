@@ -43,6 +43,7 @@ import { visualSaveBody } from "@kw/lib/visualSave";
 import { formatDistanceToNow } from "date-fns";
 import { MarkdownSourceEditor } from "./editor/MarkdownSourceEditor";
 import { FencePreview } from "./editor/FencePreview";
+import { uploadableFile, uploadErrorMessage } from "./editor/imageUpload";
 import { splitFenceExample, widgetCommandName } from "./editor/markdownSlashCommands";
 import type { FencePreviewTarget } from "./editor/fenceAssist";
 import { blockNoteSlashItems, uniqueSlashItemTitles } from "@kw/lib/editorSlashCommands";
@@ -564,14 +565,33 @@ function EditorInner({
     },
     [path],
   );
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  // A clipboard image comes named image.png; it is stored under a name of its
+  // own so one paste does not overwrite the last, and the block shows that
+  // name. (The text editors rename it in their own paste handler.) BlockNote
+  // drops a failed upload without a word, so the failure is reported here.
+  const uploadVisualFile = useCallback(
+    async (file: File) => {
+      const named = uploadableFile(file);
+      let url: string;
+      try {
+        url = await uploadFile(named);
+      } catch (e) {
+        setUploadError(uploadErrorMessage(named, e));
+        throw e;
+      }
+      return named === file ? url : { props: { url, name: named.name } };
+    },
+    [uploadFile],
+  );
 
   const editorOptions = useMemo(
     () => ({
-      uploadFile,
+      uploadFile: uploadVisualFile,
       resolveFileUrl: resolveRawUrl,
       extensions: [wikiLinkExtension()],
     }),
-    [uploadFile],
+    [uploadVisualFile],
   );
   const editor = useCreateBlockNote(editorOptions);
 
@@ -1093,6 +1113,8 @@ function EditorInner({
                   pagePath={path}
                   resolveWikiLink={resolveWikiLink}
                   onNavigate={onNavigate ? navigateFromEditor : undefined}
+                  onUploadImage={uploadFile}
+                  onUploadError={setUploadError}
                 />
                 {/* Only while the caret is in a widget fence, so the pane does
                     not take height from ordinary prose editing. Live preview
@@ -1202,25 +1224,34 @@ function EditorInner({
         onDiscardAndSwitch={handleModeSwitchDiscard}
         busy={saving}
       />
-      {slashCommandError && (
-        <div
-          role="alert"
-          className="fixed bottom-4 right-4 z-50 max-w-sm rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-lg"
-        >
-          <div className="flex items-start gap-2">
-            <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" />
-            <p className="flex-1">{slashCommandError}</p>
-            <button
-              type="button"
-              className="text-destructive/80 hover:text-destructive"
-              aria-label="Dismiss"
-              onClick={() => setSlashCommandError(null)}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+      {(slashCommandError || uploadError) && (
+        <div className="fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2">
+          {uploadError && <EditorAlert message={uploadError} onDismiss={() => setUploadError(null)} />}
+          {slashCommandError && <EditorAlert message={slashCommandError} onDismiss={() => setSlashCommandError(null)} />}
         </div>
       )}
+    </div>
+  );
+}
+
+function EditorAlert({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div
+      role="alert"
+      className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-lg"
+    >
+      <div className="flex items-start gap-2">
+        <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" />
+        <p className="flex-1">{message}</p>
+        <button
+          type="button"
+          className="text-destructive/80 hover:text-destructive"
+          aria-label="Dismiss"
+          onClick={onDismiss}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }
