@@ -1,6 +1,8 @@
 package importer
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/csv"
 	"fmt"
@@ -46,7 +48,13 @@ func (s *CSVSource) Stream(ctx context.Context) (<-chan Record, <-chan error) {
 		}
 		defer f.Close()
 
-		reader := csv.NewReader(f)
+		// Excel's "CSV UTF-8" starts with a byte order mark; drop it so it doesn't end up in the first header.
+		br := bufio.NewReader(f)
+		if bom, _ := br.Peek(3); bytes.Equal(bom, []byte{0xEF, 0xBB, 0xBF}) {
+			_, _ = br.Discard(3)
+		}
+
+		reader := csv.NewReader(br)
 		reader.LazyQuotes = true
 		reader.TrimLeadingSpace = true
 
