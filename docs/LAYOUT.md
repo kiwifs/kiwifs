@@ -63,6 +63,7 @@ Fills the remaining width (`flex-1`). Renders one of:
 - **Whiteboard** (`KiwiWhiteboardScreen`) — Excalidraw editor for `.excalidraw.md` files.
 - **Kanban** (`KiwiKanban`) — workflow boards grouped by state.
 - **Timeline** (`KiwiTimeline`) — recent git-backed activity.
+- **Calendar** (`KiwiCalendar`) — pages on a month grid by a frontmatter date field (`date`, `due`, …), colored by tag or workflow state.
 - **Data sources** (`KiwiData`) — import connections with sync controls.
 - **Theme editor** (`KiwiThemeEditor`) — live color/font customization.
 - **Analytics** (`KiwiAnalytics`) — page views, search analytics, content gaps, trends.
