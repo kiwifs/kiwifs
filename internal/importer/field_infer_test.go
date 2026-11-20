@@ -1,9 +1,13 @@
 package importer
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestInferMappingFields_mixedTypes(t *testing.T) {
@@ -76,5 +80,38 @@ func TestInferCSVSchemaMatchesImport(t *testing.T) {
 		if p["type"] != w {
 			t.Errorf("%s: %v, want %q", col, p["type"], w)
 		}
+	}
+}
+
+func TestSampleSourceFieldsStopsAtLimit(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("id,name\n")
+	for i := 0; i < 500; i++ {
+		fmt.Fprintf(&b, "%d,n%d\n", i, i)
+	}
+	path := filepath.Join(t.TempDir(), "big.csv")
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src, err := NewCSV(path, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type result struct {
+		rows []map[string]any
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		rows, err := SampleSourceFields(context.Background(), src, 100)
+		done <- result{rows, err}
+	}()
+	select {
+	case r := <-done:
+		if r.err != nil || len(r.rows) != 100 {
+			t.Fatalf("got %d rows, err %v; want 100", len(r.rows), r.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("SampleSourceFields blocked on a source longer than the limit")
 	}
 }
