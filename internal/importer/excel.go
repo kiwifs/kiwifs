@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -77,12 +76,8 @@ func (s *ExcelSource) Stream(ctx context.Context) (<-chan Record, <-chan error) 
 				}
 				val := row[j]
 				if numericCols[h] {
-					if n, err := strconv.ParseFloat(val, 64); err == nil {
-						if n == float64(int64(n)) {
-							fields[h] = int64(n)
-						} else {
-							fields[h] = n
-						}
+					if n, ok := parseSpreadsheetNumber(val); ok {
+						fields[h] = n
 						continue
 					}
 				}
@@ -127,7 +122,7 @@ func detectNumericExcelColumns(rows [][]string, headers []string) map[string]boo
 			if val == "" {
 				continue
 			}
-			if _, err := strconv.ParseFloat(val, 64); err != nil {
+			if _, ok := parseSpreadsheetNumber(val); !ok {
 				numeric[h] = false
 			}
 		}
