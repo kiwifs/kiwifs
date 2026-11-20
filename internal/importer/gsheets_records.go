@@ -2,7 +2,6 @@ package importer
 
 import (
 	"fmt"
-	"strconv"
 )
 
 // RecordsFromSheetValues converts Google Sheets Values responses into importer Records.
@@ -28,12 +27,8 @@ func RecordsFromSheetValues(values [][]interface{}, spreadsheetID, sheetName str
 			}
 			val := fmt.Sprintf("%v", row[j])
 			if numericCols[h] {
-				if n, err := strconv.ParseFloat(val, 64); err == nil {
-					if n == float64(int64(n)) {
-						fields[h] = int64(n)
-					} else {
-						fields[h] = n
-					}
+				if n, ok := parseSpreadsheetNumber(val); ok {
+					fields[h] = n
 					continue
 				}
 			}

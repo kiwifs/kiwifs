@@ -369,6 +369,38 @@ func TestCSVWithByteOrderMark(t *testing.T) {
 	}
 }
 
+func TestCSVKeepsIdentifiersAsText(t *testing.T) {
+	csvData := "order_id,zip,phone,amount\n4111111111111111111,02134,0412345678,12.50\n41111111111111111112,10001,0298765432,7\n"
+	csvFile := filepath.Join(t.TempDir(), "orders.csv")
+	os.WriteFile(csvFile, []byte(csvData), 0644)
+
+	src, _ := NewCSV(csvFile, true)
+	ch, _ := src.Stream(context.Background())
+
+	rec := <-ch
+	for col, want := range map[string]any{"order_id": "4111111111111111111", "zip": "02134", "phone": "0412345678", "amount": 12.5} {
+		if rec.Fields[col] != want {
+			t.Fatalf("%s = %#v, want %#v", col, rec.Fields[col], want)
+		}
+	}
+	if rec := <-ch; rec.Fields["order_id"] != "41111111111111111112" {
+		t.Fatalf("order_id = %#v, want the full digits", rec.Fields["order_id"])
+	}
+}
+
+func TestParseSpreadsheetNumber(t *testing.T) {
+	for in, want := range map[string]any{"95": int64(95), "-3": int64(-3), "0": int64(0), "0.5": 0.5, "7.0": int64(7), "4111111111111111111": int64(4111111111111111111)} {
+		if got, ok := parseSpreadsheetNumber(in); !ok || got != want {
+			t.Fatalf("parseSpreadsheetNumber(%q) = %#v, %v; want %#v", in, got, ok, want)
+		}
+	}
+	for _, in := range []string{"02134", "-007", "41111111111111111112", "NaN", "Inf", "abc"} {
+		if got, ok := parseSpreadsheetNumber(in); ok {
+			t.Fatalf("parseSpreadsheetNumber(%q) = %#v, want text", in, got)
+		}
+	}
+}
+
 func TestExcelImport(t *testing.T) {
 	f := excelize.NewFile()
 	defer f.Close()
@@ -415,6 +447,23 @@ func TestExcelImport(t *testing.T) {
 	}
 	if !strings.Contains(s, "_source: students") {
 		t.Fatalf("missing _source: %s", s)
+	}
+}
+
+func TestExcelKeepsZipAsText(t *testing.T) {
+	f := excelize.NewFile()
+	defer f.Close()
+	f.SetCellValue("Sheet1", "A1", "zip")
+	f.SetCellValue("Sheet1", "A2", "02134")
+	xlsxPath := filepath.Join(t.TempDir(), "contacts.xlsx")
+	if err := f.SaveAs(xlsxPath); err != nil {
+		t.Fatalf("save xlsx: %v", err)
+	}
+
+	src, _ := NewExcel(xlsxPath, "")
+	ch, _ := src.Stream(context.Background())
+	if rec := <-ch; rec.Fields["zip"] != "02134" {
+		t.Fatalf("zip = %#v, want \"02134\"", rec.Fields["zip"])
 	}
 }
 

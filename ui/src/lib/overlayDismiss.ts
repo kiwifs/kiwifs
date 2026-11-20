@@ -11,6 +11,7 @@ export type OverlayState = {
   canvasOpen: boolean;
   whiteboardOpen: boolean;
   timelineOpen: boolean;
+  calendarOpen?: boolean;
   kanbanOpen: boolean;
 };
 
@@ -26,6 +27,7 @@ export type OverlayDismissTarget =
   | "canvas"
   | "whiteboard"
   | "timeline"
+  | "calendar"
   | "kanban";
 
 /** Returns the topmost overlay to dismiss, or null when nothing is open. */
@@ -41,6 +43,7 @@ export function resolveOverlayDismiss(state: OverlayState): OverlayDismissTarget
   if (state.canvasOpen) return "canvas";
   if (state.whiteboardOpen) return "whiteboard";
   if (state.timelineOpen) return "timeline";
+  if (state.calendarOpen) return "calendar";
   if (state.kanbanOpen) return "kanban";
   return null;
 }

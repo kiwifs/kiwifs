@@ -38,5 +38,7 @@ describe("resolveOverlayDismiss", () => {
     expect(resolveOverlayDismiss({ ...closed, graphOpen: true, kanbanOpen: true })).toBe("graph");
     expect(resolveOverlayDismiss({ ...closed, historyOpen: true, dataOpen: true })).toBe("history");
     expect(resolveOverlayDismiss({ ...closed, kanbanOpen: true })).toBe("kanban");
+    expect(resolveOverlayDismiss({ ...closed, calendarOpen: true })).toBe("calendar");
+    expect(resolveOverlayDismiss({ ...closed, timelineOpen: true, calendarOpen: true })).toBe("timeline");
   });
 });

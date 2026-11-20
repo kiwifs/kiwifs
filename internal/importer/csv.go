@@ -97,12 +97,8 @@ func (s *CSVSource) Stream(ctx context.Context) (<-chan Record, <-chan error) {
 				}
 				val := row[j]
 				if numericCols[h] {
-					if n, err := strconv.ParseFloat(val, 64); err == nil {
-						if n == float64(int64(n)) {
-							fields[h] = int64(n)
-						} else {
-							fields[h] = n
-						}
+					if n, ok := parseSpreadsheetNumber(val); ok {
+						fields[h] = n
 						continue
 					}
 				}
@@ -135,6 +131,31 @@ func (s *CSVSource) Stream(ctx context.Context) (<-chan Record, <-chan error) {
 
 func (s *CSVSource) Close() error { return nil }
 
+// parseSpreadsheetNumber converts a cell to int64 or float64 when that keeps its value.
+// Text with a leading zero ("02134", "0412345678") is an identifier such as a ZIP or phone
+// number, and integers too long for int64 would lose digits as float64, so both stay text.
+func parseSpreadsheetNumber(s string) (any, bool) {
+	s = strings.TrimSpace(s)
+	digits := strings.TrimLeft(s, "+-")
+	if len(digits) > 1 && digits[0] == '0' && digits[1] >= '0' && digits[1] <= '9' {
+		return nil, false
+	}
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return n, true
+	}
+	if !strings.ContainsAny(s, ".eE") {
+		return nil, false // integer overflow, or "Inf"/"NaN"
+	}
+	n, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return nil, false
+	}
+	if n == float64(int64(n)) {
+		return int64(n), true
+	}
+	return n, true
+}
+
 func detectNumericColumns(rows [][]string, headers []string) map[string]bool {
 	if len(rows) == 0 {
 		return nil
@@ -153,7 +174,7 @@ func detectNumericColumns(rows [][]string, headers []string) map[string]bool {
 			if val == "" {
 				continue
 			}
-			if _, err := strconv.ParseFloat(val, 64); err != nil {
+			if _, ok := parseSpreadsheetNumber(val); !ok {
 				numeric[h] = false
 			}
 		}
