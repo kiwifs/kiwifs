@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.19.95](https://github.com/kiwifs/kiwifs/compare/v0.19.94...v0.19.95) (2026-11-20)
+
+
+### Features
+
+* **ui:** calendar view for frontmatter dates ([#427](https://github.com/kiwifs/kiwifs/issues/427)) ([#600](https://github.com/kiwifs/kiwifs/issues/600)) ([c631acb](https://github.com/kiwifs/kiwifs/commit/c631acb7b4001179f884f2323162bec13b4d4b77))
+
+
+### Bug Fixes
+
+* **importer:** drop the UTF-8 byte order mark from CSV files ([#599](https://github.com/kiwifs/kiwifs/issues/599)) ([f9a0ef5](https://github.com/kiwifs/kiwifs/commit/f9a0ef5ea9fa3d41ee43b3cf64ff4e5ac858796e))
+* **importer:** keep identifiers as text in type inference; stop sampler hang ([#603](https://github.com/kiwifs/kiwifs/issues/603)) ([9e21fbc](https://github.com/kiwifs/kiwifs/commit/9e21fbca5903b1e6fdaf72adeb2c238fbc5470ba))
+* **importer:** keep leading-zero values and long integer IDs as text ([#598](https://github.com/kiwifs/kiwifs/issues/598)) ([54dc6b9](https://github.com/kiwifs/kiwifs/commit/54dc6b98ccbb05ce92491ef7696e9e811e51cbac))
+
 ## [0.19.94](https://github.com/kiwifs/kiwifs/compare/v0.19.93...v0.19.94) (2026-11-15)
 
 
