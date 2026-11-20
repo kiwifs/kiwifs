@@ -44,5 +44,26 @@ jobs:
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/gitlab_mirror -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
 
           git fetch --force --tags origin
-          git push --force git@gitlab.com:kiwifs/kiwifs.git HEAD:refs/heads/main
-          git push --force --tags git@gitlab.com:kiwifs/kiwifs.git
+
+          # GitLab's pre_receive hook occasionally returns HTTP 401 from its
+          # internal API; the push itself is fine. Retry with backoff like
+          # release-please.yml does for transient GitHub API errors.
+          push_with_retry() {
+            local attempt=1
+            local max=4
+            local waits=(0 30 60 90)
+            while [ "$attempt" -le "$max" ]; do
+              local delay="${waits[$((attempt - 1))]}"
+              if [ "$delay" -gt 0 ]; then
+                sleep "$delay"
+              fi
+              if "$@"; then
+                return 0
+              fi
+              attempt=$((attempt + 1))
+            done
+            return 1
+          }
+
+          push_with_retry git push --force git@gitlab.com:kiwifs/kiwifs.git HEAD:refs/heads/main
+          push_with_retry git push --force --tags git@gitlab.com:kiwifs/kiwifs.git
