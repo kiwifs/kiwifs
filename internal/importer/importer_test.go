@@ -358,6 +358,17 @@ func TestCSVNumericDetection(t *testing.T) {
 	}
 }
 
+func TestCSVWithByteOrderMark(t *testing.T) {
+	csvFile := filepath.Join(t.TempDir(), "contacts.csv")
+	os.WriteFile(csvFile, []byte("\ufeffid,name\r\n7,Alice\r\n"), 0644)
+
+	src, _ := NewCSV(csvFile, true)
+	ch, _ := src.Stream(context.Background())
+	if rec := <-ch; rec.Fields["id"] != int64(7) {
+		t.Fatalf("fields = %#v, want id 7", rec.Fields)
+	}
+}
+
 func TestCSVKeepsIdentifiersAsText(t *testing.T) {
 	csvData := "order_id,zip,phone,amount\n4111111111111111111,02134,0412345678,12.50\n41111111111111111112,10001,0298765432,7\n"
 	csvFile := filepath.Join(t.TempDir(), "orders.csv")
