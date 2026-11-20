@@ -1,6 +1,10 @@
 package importer
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestInferMappingFields_mixedTypes(t *testing.T) {
 	rows := []map[string]any{
@@ -31,5 +35,46 @@ func TestInferMappingFields_skipsInternalKeys(t *testing.T) {
 	fields := InferMappingFields(rows)
 	if len(fields) != 1 || fields[0].Source != "title" {
 		t.Fatalf("got %+v", fields)
+	}
+}
+
+func TestInferMappingFieldsKeepsIdentifiersAsText(t *testing.T) {
+	rows := []map[string]any{
+		{"zip": "02134", "order_id": "41111111111111111112", "qty": "3", "price": "12.50"},
+		{"zip": "10001", "order_id": "41111111111111111113", "qty": "4", "price": "7"},
+	}
+	types := make(map[string]string)
+	for _, f := range InferMappingFields(rows) {
+		types[f.Source] = f.Type
+	}
+	want := map[string]string{"zip": "string", "order_id": "string", "qty": "number", "price": "number"}
+	for col, w := range want {
+		if types[col] != w {
+			t.Errorf("%s: %q, want %q", col, types[col], w)
+		}
+	}
+}
+
+func TestInferCSVSchemaMatchesImport(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "contacts.csv")
+	data := "\ufeffid,zip,amount,ratio\r\n1,02134,12,0.5\r\n2,10001,7.0,1\r\n"
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := SampleCSVRows(path, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	props := InferFieldTypes(rows)
+	want := map[string]string{"id": "integer", "zip": "string", "amount": "integer", "ratio": "number"}
+	for col, w := range want {
+		p, ok := props[col].(map[string]any)
+		if !ok {
+			t.Errorf("no property %q in %v", col, props)
+			continue
+		}
+		if p["type"] != w {
+			t.Errorf("%s: %v, want %q", col, p["type"], w)
+		}
 	}
 }

@@ -134,7 +134,14 @@ export function groupCalendarRows(
   mode: CalendarColorMode,
 ): Map<string, CalendarEntry[]> {
   const byDay = new Map<string, CalendarEntry[]>();
-  for (const row of rows) {
+  // The query sorts by the field alone, so pages sharing a date come back in
+  // no particular order; datetimes keep their time order, ties go by title.
+  const sorted = [...rows].sort(
+    (a, b) =>
+      String(a[field] ?? "").localeCompare(String(b[field] ?? "")) ||
+      String(a.title ?? a._path ?? "").localeCompare(String(b.title ?? b._path ?? ""), undefined, { numeric: true }),
+  );
+  for (const row of sorted) {
     const day = calendarDayKey(row[field]);
     const path = nonEmptyString(row._path) ?? nonEmptyString(row.path);
     if (!day || !path) continue;
@@ -183,10 +190,13 @@ export function discoverDateFields(results: MetaResult[]): string[] {
 
 /**
  * The field to show: a remembered choice wins, then `date`, then the first
- * discovered date field.
+ * discovered date field. The choice is stored per browser, not per space, so
+ * one this space doesn't use is ignored once discovery has run.
  */
 export function pickCalendarField(discovered: string[], stored: string | null): string {
-  if (stored && isCalendarField(stored)) return stored;
+  if (stored && isCalendarField(stored) && (discovered.length === 0 || discovered.includes(stored))) {
+    return stored;
+  }
   if (discovered.length === 0 || discovered.includes(DEFAULT_CALENDAR_FIELD)) {
     return DEFAULT_CALENDAR_FIELD;
   }

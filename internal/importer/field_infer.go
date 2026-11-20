@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -103,11 +102,11 @@ func inferMappingType(vals []any) string {
 			if low != "true" && low != "false" && low != "1" && low != "0" {
 				allBool = false
 			}
-			if _, err := strconv.ParseInt(s, 10, 64); err != nil {
+			if n, ok := parseSpreadsheetNumber(s); !ok {
 				allInt = false
-			}
-			if _, err := strconv.ParseFloat(s, 64); err != nil {
 				allNum = false
+			} else if _, isInt := n.(int64); !isInt {
+				allInt = false
 			}
 			if !isDateString(s) {
 				allDate = false
