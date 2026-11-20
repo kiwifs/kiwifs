@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -52,12 +51,18 @@ func SampleSourceFields(ctx context.Context, src Source, limit int) ([]map[strin
 	if limit <= 0 {
 		limit = 100
 	}
+	// Sources close errs only once they stop sending, so stop them at the
+	// limit and drain the rest; leaving the loop early would block on errs.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	records, errs := src.Stream(ctx)
 	rows := make([]map[string]any, 0, limit)
 	for rec := range records {
-		rows = append(rows, rec.Fields)
-		if len(rows) >= limit {
-			break
+		if len(rows) < limit {
+			rows = append(rows, rec.Fields)
+			if len(rows) == limit {
+				cancel()
+			}
 		}
 	}
 	for err := range errs {
@@ -103,11 +108,11 @@ func inferMappingType(vals []any) string {
 			if low != "true" && low != "false" && low != "1" && low != "0" {
 				allBool = false
 			}
-			if _, err := strconv.ParseInt(s, 10, 64); err != nil {
+			if n, ok := parseSpreadsheetNumber(s); !ok {
 				allInt = false
-			}
-			if _, err := strconv.ParseFloat(s, 64); err != nil {
 				allNum = false
+			} else if _, isInt := n.(int64); !isInt {
+				allInt = false
 			}
 			if !isDateString(s) {
 				allDate = false

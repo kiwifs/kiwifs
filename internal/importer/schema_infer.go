@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -22,6 +21,9 @@ func SampleCSVRows(path string, maxRows int) ([]map[string]string, error) {
 	header, err := r.Read()
 	if err != nil {
 		return nil, fmt.Errorf("csv header: %w", err)
+	}
+	if len(header) > 0 {
+		header[0] = strings.TrimPrefix(header[0], "\ufeff")
 	}
 	var rows []map[string]string
 	for len(rows) < maxRows {
@@ -70,11 +72,11 @@ func inferColumnType(vals []string) string {
 		if low != "true" && low != "false" && low != "1" && low != "0" {
 			allBool = false
 		}
-		if _, err := strconv.ParseInt(v, 10, 64); err != nil {
+		if n, ok := parseSpreadsheetNumber(v); !ok {
 			allInt = false
-		}
-		if _, err := strconv.ParseFloat(v, 64); err != nil {
 			allNum = false
+		} else if _, isInt := n.(int64); !isInt {
+			allInt = false
 		}
 		if _, err := time.Parse(time.RFC3339, v); err != nil {
 			if _, err2 := time.Parse("2006-01-02", v); err2 != nil {

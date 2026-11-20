@@ -133,6 +133,25 @@ describe("groupCalendarRows", () => {
     ]);
   });
 
+  it("orders a day's pages by time, then title", () => {
+    const byDay = groupCalendarRows(
+      [
+        { _path: "s10.md", title: "Standup 10", date: "2026-06-05" },
+        { _path: "late.md", title: "A late call", date: "2026-06-05T17:00:00Z" },
+        { _path: "s2.md", title: "Standup 2", date: "2026-06-05" },
+        { _path: "early.md", title: "Z early call", date: "2026-06-05T08:00:00Z" },
+      ],
+      "date",
+      "none",
+    );
+    expect(byDay.get("2026-06-05")?.map((e) => e.title)).toEqual([
+      "Standup 2",
+      "Standup 10",
+      "Z early call",
+      "A late call",
+    ]);
+  });
+
   it("builds a sorted legend of the color keys in view", () => {
     const byDay = groupCalendarRows(
       [
@@ -175,6 +194,11 @@ describe("date field selection", () => {
     expect(pickCalendarField(["date", "due"], null)).toBe("date");
     expect(pickCalendarField([], null)).toBe("date");
     expect(pickCalendarField(["due"], "bad-name")).toBe("due");
+  });
+
+  it("drops a stored choice this space has no pages for", () => {
+    expect(pickCalendarField(["date", "verified_at"], "due")).toBe("date");
+    expect(pickCalendarField([], "due")).toBe("due");
   });
 
   it("keeps the current field in the options even when it was not sampled", () => {
