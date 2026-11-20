@@ -58,10 +58,11 @@ export const Month: Story = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText("ADR-001: Use SQLite for search")).toBeInTheDocument();
     await expect(canvas.getByRole("button", { name: /June 2026/ })).toBeInTheDocument();
-    // Five pages on the 15th: three fit in the cell, the rest sit behind "+2 more".
+    // Five pages on the 15th: three fit in the cell, the rest sit behind
+    // "+2 more". The 16:00 release sorts after the all-day pages.
     await userEvent.click(canvas.getByRole("button", { name: "+2 more" }));
     const popover = within(document.body);
-    await expect(await popover.findByText("v0.20 retro")).toBeInTheDocument();
+    await expect(await popover.findByText("Release v0.20")).toBeInTheDocument();
   },
 };
 
