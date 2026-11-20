@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  CalendarDays,
   Clock4,
   Columns3,
   Database,
@@ -32,6 +33,7 @@ import { KiwiBases } from "./components/KiwiBases";
 import { KiwiCanvasScreen } from "./components/KiwiCanvasScreen";
 import { KiwiWhiteboardScreen } from "./components/KiwiWhiteboardScreen";
 import { KiwiTimeline } from "./components/KiwiTimeline";
+import { KiwiCalendar } from "./components/KiwiCalendar";
 import { KiwiKanban } from "./components/KiwiKanban";
 import { KiwiRecentStart } from "./components/KiwiRecentStart";
 import { KanbanDragProvider } from "./components/kanban/KanbanDragProvider";
@@ -138,6 +140,7 @@ export default function App() {
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [initialWhiteboardPath, setInitialWhiteboardPath] = useState<string | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [kanbanOpen, setKanbanOpen] = useState(false);
   const [treeRevealRequest, setTreeRevealRequest] = useState<TreeRevealRequest | null>(null);
   const treeRef = useRef<KiwiTreeHandle>(null);
@@ -160,6 +163,7 @@ export default function App() {
     setCanvasOpen(false);
     setWhiteboardOpen(false);
     setTimelineOpen(false);
+    setCalendarOpen(false);
     setKanbanOpen(false);
     setDataOpen(false);
     setRefactorOpen(false);
@@ -245,6 +249,7 @@ export default function App() {
     canvasOpen,
     whiteboardOpen,
     timelineOpen,
+    calendarOpen,
     kanbanOpen,
   });
   stateRef.current = {
@@ -261,6 +266,7 @@ export default function App() {
     canvasOpen,
     whiteboardOpen,
     timelineOpen,
+    calendarOpen,
     kanbanOpen,
   };
 
@@ -499,6 +505,9 @@ export default function App() {
             case "timeline":
               setTimelineOpen(false);
               break;
+            case "calendar":
+              setCalendarOpen(false);
+              break;
             case "kanban":
               setKanbanOpen(false);
               break;
@@ -520,6 +529,7 @@ const handleSpaceSwitch = useCallback(() => {
     setBasesOpen(false);
     setCanvasOpen(false);
     setTimelineOpen(false);
+    setCalendarOpen(false);
     setKanbanOpen(false);
     setSpaceKey((k) => k + 1);
     setRefreshKey((k) => k + 1);
@@ -623,6 +633,9 @@ const handleSpaceSwitch = useCallback(() => {
       case "timeline":
         setTimelineOpen(true);
         break;
+      case "calendar":
+        setCalendarOpen(true);
+        break;
       case "canvas":
         setCanvasOpen(true);
         break;
@@ -692,6 +705,7 @@ const handleSpaceSwitch = useCallback(() => {
       setBasesOpen(false);
       setCanvasOpen(false);
       setTimelineOpen(false);
+      setCalendarOpen(false);
       setKanbanOpen(false);
     };
     window.addEventListener("popstate", onPopState);
@@ -744,6 +758,7 @@ const handleSpaceSwitch = useCallback(() => {
     setCanvasOpen(false);
     setWhiteboardOpen(false);
     setTimelineOpen(false);
+    setCalendarOpen(false);
     setKanbanOpen(false);
     recordVisit(path);
     if (isMobile) setSidebarOpen(false);
@@ -814,6 +829,7 @@ const handleSpaceSwitch = useCallback(() => {
                   canvas: canvasOpen,
                   whiteboard: whiteboardOpen,
                   timeline: timelineOpen,
+                  calendar: calendarOpen,
                   kanban: kanbanOpen,
                   data: dataOpen,
                 }[id];
@@ -833,6 +849,9 @@ const handleSpaceSwitch = useCallback(() => {
                     break;
                   case "timeline":
                     setTimelineOpen(!wasOpen);
+                    break;
+                  case "calendar":
+                    setCalendarOpen(!wasOpen);
                     break;
                   case "kanban":
                     setKanbanOpen(!wasOpen);
@@ -928,7 +947,7 @@ const handleSpaceSwitch = useCallback(() => {
           )}
 
           {/* Main content area */}
-          <main className={`flex-1 relative ${basesOpen || canvasOpen || whiteboardOpen || timelineOpen || kanbanOpen || dataOpen || graphOpen ? "overflow-hidden" : "overflow-auto kiwi-scroll"}`}>
+          <main className={`flex-1 relative ${basesOpen || canvasOpen || whiteboardOpen || timelineOpen || calendarOpen || kanbanOpen || dataOpen || graphOpen ? "overflow-hidden" : "overflow-auto kiwi-scroll"}`}>
             {basesOpen ? (
               <KiwiBases
                 onClose={() => setBasesOpen(false)}
@@ -952,6 +971,12 @@ const handleSpaceSwitch = useCallback(() => {
               <KiwiTimeline
                 onClose={() => setTimelineOpen(false)}
                 onNavigate={(p) => { setTimelineOpen(false); navigate(p); }}
+              />
+            ) : calendarOpen ? (
+              <KiwiCalendar
+                compact={isMobile}
+                onClose={() => setCalendarOpen(false)}
+                onNavigate={(p) => { setCalendarOpen(false); navigate(p); }}
               />
             ) : kanbanOpen ? (
               <KiwiKanban
@@ -1172,6 +1197,7 @@ const BUILTIN_TOOLBAR_BUTTONS: Record<
   canvas: { label: "Canvas", Icon: Presentation },
   whiteboard: { label: "Whiteboard", Icon: PenTool },
   timeline: { label: "Timeline", Icon: Clock4 },
+  calendar: { label: "Calendar", Icon: CalendarDays },
   kanban: { label: "Kanban", Icon: Columns3 },
   data: { label: "Data sources", Icon: Database },
 };
