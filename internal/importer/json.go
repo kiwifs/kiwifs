@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,6 +80,10 @@ func (s *JSONSource) Stream(ctx context.Context) (<-chan Record, <-chan error) {
 				dec.UseNumber()
 				if err := dec.Decode(&obj); err != nil {
 					errs <- fmt.Errorf("decode jsonl line: %w", err)
+					return
+				}
+				if _, err := dec.Token(); err != io.EOF {
+					errs <- fmt.Errorf("decode jsonl line: unexpected data after the object")
 					return
 				}
 				objects = append(objects, obj)

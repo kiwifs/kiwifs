@@ -143,6 +143,28 @@ func TestJSONImportKeepsIntegerIDs(t *testing.T) {
 	}
 }
 
+func TestJSONLImportRejectsDataAfterObject(t *testing.T) {
+	for _, line := range []string{`{"id":1}{"id":2}`, `{"id":1} junk`, `{"id":1}]`} {
+		jsonlFile := filepath.Join(t.TempDir(), "rows.jsonl")
+		if err := os.WriteFile(jsonlFile, []byte(line+"\n{\"id\":3}\n"), 0644); err != nil {
+			t.Fatalf("write jsonl: %v", err)
+		}
+
+		src, err := NewJSON(jsonlFile)
+		if err != nil {
+			t.Fatalf("new json: %v", err)
+		}
+
+		records, errs := src.Stream(context.Background())
+		for range records {
+		}
+		if err := <-errs; err == nil {
+			t.Errorf("%s: expected an error", line)
+		}
+		src.Close()
+	}
+}
+
 func TestJSONLImport(t *testing.T) {
 	data := `{"id": "a", "name": "X"}
 {"id": "b", "name": "Y"}`
