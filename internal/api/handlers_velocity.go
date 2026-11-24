@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/storage"
+	"github.com/kiwifs/kiwifs/internal/versioning"
 	"github.com/labstack/echo/v4"
 )
 
@@ -104,7 +105,7 @@ func (h *Handlers) Velocity(c echo.Context) error {
 		}
 		adds, _ := strconv.Atoi(parts[0])
 		dels, _ := strconv.Atoi(parts[1])
-		path := parts[2]
+		path := versioning.UnquotePath(parts[2])
 		if !strings.HasSuffix(path, ".md") {
 			continue
 		}

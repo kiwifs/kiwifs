@@ -3,11 +3,13 @@ package recentpages
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/kiwifs/kiwifs/internal/storage"
+	"github.com/kiwifs/kiwifs/internal/versioning"
 )
 
 func TestParseGitRecent_DedupesMarkdown(t *testing.T) {
@@ -64,5 +66,51 @@ func TestListFromStore_SortsByModTime(t *testing.T) {
 func TestTitleize(t *testing.T) {
 	if got := titleize("pages/my-note.md"); got != "My Note" {
 		t.Fatalf("titleize = %q", got)
+	}
+}
+
+func TestList_NonASCIIPath(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not in PATH")
+	}
+	ctx := context.Background()
+	root := t.TempDir()
+	store, err := storage.NewLocal(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := versioning.NewGit(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []struct{ path, body string }{
+		{"plain.md", "body"},
+		{"élan-vital.md", "body"},
+		{"日本語.md", "---\ntitle: Japanese\n---\n"},
+	} {
+		if err := os.WriteFile(filepath.Join(root, f.path), []byte(f.body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := g.Commit(ctx, f.path, "alice", "add "+f.path); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	pages, err := List(ctx, root, store, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []struct{ path, title string }{
+		{"日本語.md", "Japanese"},
+		{"élan-vital.md", "Élan Vital"},
+		{"plain.md", "Plain"},
+	}
+	if len(pages) != len(want) {
+		t.Fatalf("got %d pages, want %d: %+v", len(pages), len(want), pages)
+	}
+	for i, w := range want {
+		if pages[i].Path != w.path || pages[i].Title != w.title || pages[i].Actor != "alice" {
+			t.Errorf("page %d = %+v, want path %q title %q", i, pages[i], w.path, w.title)
+		}
 	}
 }

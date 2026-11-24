@@ -38,6 +38,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/tracing"
 	"github.com/kiwifs/kiwifs/internal/trash"
 	"github.com/kiwifs/kiwifs/internal/vectorstore"
+	"github.com/kiwifs/kiwifs/internal/versioning"
 	"github.com/kiwifs/kiwifs/internal/workflow"
 )
 
@@ -1918,7 +1919,7 @@ func (b *LocalBackend) Velocity(ctx context.Context, period string, limit int, p
 		}
 		adds, _ := strconv.Atoi(parts[0])
 		dels, _ := strconv.Atoi(parts[1])
-		path := parts[2]
+		path := versioning.UnquotePath(parts[2])
 		if !strings.HasSuffix(path, ".md") {
 			continue
 		}
@@ -2323,7 +2324,7 @@ func (b *LocalBackend) parseTimelineLog(output, actorFilter, typeFilter, pathPre
 		}
 
 		status := fields[0]
-		path := fields[1]
+		path := versioning.UnquotePath(fields[1])
 
 		// Skip files in .kiwi directory
 		if strings.HasPrefix(path, ".kiwi/") {
@@ -2346,12 +2347,12 @@ func (b *LocalBackend) parseTimelineLog(output, actorFilter, typeFilter, pathPre
 			eventType = "write"
 			// For renames, git shows R100\told\tnew, use the new name
 			if len(fields) > 2 {
-				path = fields[2]
+				path = versioning.UnquotePath(fields[2])
 			}
 		case 'C': // Copied - treat as write
 			eventType = "write"
 			if len(fields) > 2 {
-				path = fields[2]
+				path = versioning.UnquotePath(fields[2])
 			}
 		default:
 			continue

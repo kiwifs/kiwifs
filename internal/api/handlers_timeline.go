@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kiwifs/kiwifs/internal/versioning"
 	"github.com/labstack/echo/v4"
 )
 
@@ -179,7 +180,7 @@ func parseGitLog(output, actorFilter, typeFilter, pathPrefix string) ([]timeline
 		if status == "" {
 			continue
 		}
-		path := fields[1]
+		path := versioning.UnquotePath(fields[1])
 
 		// Skip files in .kiwi directory
 		if strings.HasPrefix(path, ".kiwi/") {
@@ -197,12 +198,12 @@ func parseGitLog(output, actorFilter, typeFilter, pathPrefix string) ([]timeline
 			eventType = "write"
 			// For renames, git shows R100\told\tnew, use the new name
 			if len(fields) > 2 {
-				path = fields[2]
+				path = versioning.UnquotePath(fields[2])
 			}
 		case 'C': // Copied - treat as write
 			eventType = "write"
 			if len(fields) > 2 {
-				path = fields[2]
+				path = versioning.UnquotePath(fields[2])
 			}
 		default:
 			continue
