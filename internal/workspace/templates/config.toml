@@ -90,6 +90,7 @@ type = "none"
 # canvas = false
 # whiteboard = false
 # timeline = false
+# calendar = false
 # bases = false
 # data_sources = false
 # edit = false

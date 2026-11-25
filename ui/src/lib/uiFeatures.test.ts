@@ -21,6 +21,7 @@ describe("uiFeatures", () => {
   it("maps view routes to feature keys", () => {
     expect(viewFeatureFromPathname("/view/kanban")).toBe("kanban");
     expect(viewFeatureFromPathname("/view/data")).toBe("data_sources");
+    expect(viewFeatureFromPathname("/view/calendar")).toBe("calendar");
     expect(viewFeatureFromPathname("/page/foo.md")).toBeNull();
   });
 
@@ -28,5 +29,6 @@ describe("uiFeatures", () => {
     const features = resolveUIFeatures({ kanban: false });
     expect(isViewRouteAllowed("/view/kanban", features)).toBe(false);
     expect(isViewRouteAllowed("/view/graph", features)).toBe(true);
+    expect(isViewRouteAllowed("/view/calendar", resolveUIFeatures({ calendar: false }))).toBe(false);
   });
 });

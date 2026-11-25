@@ -69,4 +69,13 @@ describe("filterToolbarViewsByFeatures", () => {
       ),
     ).toEqual(["graph"]);
   });
+
+  it("hides the calendar button when the calendar feature is off", () => {
+    expect(
+      filterToolbarViewsByFeatures(
+        ["timeline", "calendar"],
+        { ...DEFAULT_UI_FEATURES, calendar: false },
+      ),
+    ).toEqual(["timeline"]);
+  });
 });

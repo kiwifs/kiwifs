@@ -106,6 +106,65 @@ func TestJSONImport(t *testing.T) {
 	}
 }
 
+func TestJSONImportKeepsIntegerIDs(t *testing.T) {
+	data := `[
+		{"id": 12345678, "amount": 2500000},
+		{"id": 1234567890123456789},
+		{"id": 1234567890123456788}
+	]`
+	jsonFile := filepath.Join(t.TempDir(), "orders.json")
+	if err := os.WriteFile(jsonFile, []byte(data), 0644); err != nil {
+		t.Fatalf("write json: %v", err)
+	}
+
+	src, err := NewJSON(jsonFile)
+	if err != nil {
+		t.Fatalf("new json: %v", err)
+	}
+	defer src.Close()
+
+	pipe, store := testPipeline(t)
+	ctx := context.Background()
+	if _, err := Run(ctx, src, pipe, Options{Actor: "test"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	content, err := store.Read(ctx, "orders/12345678.md")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(content), "amount: 2500000") {
+		t.Fatalf("amount not kept as an integer: %s", content)
+	}
+	for _, id := range []string{"1234567890123456789", "1234567890123456788"} {
+		if _, err := store.Read(ctx, "orders/"+id+".md"); err != nil {
+			t.Fatalf("record %s: %v", id, err)
+		}
+	}
+}
+
+func TestJSONLImportRejectsDataAfterObject(t *testing.T) {
+	for _, line := range []string{`{"id":1}{"id":2}`, `{"id":1} junk`, `{"id":1}]`} {
+		jsonlFile := filepath.Join(t.TempDir(), "rows.jsonl")
+		if err := os.WriteFile(jsonlFile, []byte(line+"\n{\"id\":3}\n"), 0644); err != nil {
+			t.Fatalf("write jsonl: %v", err)
+		}
+
+		src, err := NewJSON(jsonlFile)
+		if err != nil {
+			t.Fatalf("new json: %v", err)
+		}
+
+		records, errs := src.Stream(context.Background())
+		for range records {
+		}
+		if err := <-errs; err == nil {
+			t.Errorf("%s: expected an error", line)
+		}
+		src.Close()
+	}
+}
+
 func TestJSONLImport(t *testing.T) {
 	data := `{"id": "a", "name": "X"}
 {"id": "b", "name": "Y"}`
@@ -358,6 +417,49 @@ func TestCSVNumericDetection(t *testing.T) {
 	}
 }
 
+func TestCSVWithByteOrderMark(t *testing.T) {
+	csvFile := filepath.Join(t.TempDir(), "contacts.csv")
+	os.WriteFile(csvFile, []byte("\ufeffid,name\r\n7,Alice\r\n"), 0644)
+
+	src, _ := NewCSV(csvFile, true)
+	ch, _ := src.Stream(context.Background())
+	if rec := <-ch; rec.Fields["id"] != int64(7) {
+		t.Fatalf("fields = %#v, want id 7", rec.Fields)
+	}
+}
+
+func TestCSVKeepsIdentifiersAsText(t *testing.T) {
+	csvData := "order_id,zip,phone,amount\n4111111111111111111,02134,0412345678,12.50\n41111111111111111112,10001,0298765432,7\n"
+	csvFile := filepath.Join(t.TempDir(), "orders.csv")
+	os.WriteFile(csvFile, []byte(csvData), 0644)
+
+	src, _ := NewCSV(csvFile, true)
+	ch, _ := src.Stream(context.Background())
+
+	rec := <-ch
+	for col, want := range map[string]any{"order_id": "4111111111111111111", "zip": "02134", "phone": "0412345678", "amount": 12.5} {
+		if rec.Fields[col] != want {
+			t.Fatalf("%s = %#v, want %#v", col, rec.Fields[col], want)
+		}
+	}
+	if rec := <-ch; rec.Fields["order_id"] != "41111111111111111112" {
+		t.Fatalf("order_id = %#v, want the full digits", rec.Fields["order_id"])
+	}
+}
+
+func TestParseSpreadsheetNumber(t *testing.T) {
+	for in, want := range map[string]any{"95": int64(95), "-3": int64(-3), "0": int64(0), "0.5": 0.5, "7.0": int64(7), "4111111111111111111": int64(4111111111111111111)} {
+		if got, ok := parseSpreadsheetNumber(in); !ok || got != want {
+			t.Fatalf("parseSpreadsheetNumber(%q) = %#v, %v; want %#v", in, got, ok, want)
+		}
+	}
+	for _, in := range []string{"02134", "-007", "41111111111111111112", "NaN", "Inf", "abc"} {
+		if got, ok := parseSpreadsheetNumber(in); ok {
+			t.Fatalf("parseSpreadsheetNumber(%q) = %#v, want text", in, got)
+		}
+	}
+}
+
 func TestExcelImport(t *testing.T) {
 	f := excelize.NewFile()
 	defer f.Close()
@@ -404,6 +506,23 @@ func TestExcelImport(t *testing.T) {
 	}
 	if !strings.Contains(s, "_source: students") {
 		t.Fatalf("missing _source: %s", s)
+	}
+}
+
+func TestExcelKeepsZipAsText(t *testing.T) {
+	f := excelize.NewFile()
+	defer f.Close()
+	f.SetCellValue("Sheet1", "A1", "zip")
+	f.SetCellValue("Sheet1", "A2", "02134")
+	xlsxPath := filepath.Join(t.TempDir(), "contacts.xlsx")
+	if err := f.SaveAs(xlsxPath); err != nil {
+		t.Fatalf("save xlsx: %v", err)
+	}
+
+	src, _ := NewExcel(xlsxPath, "")
+	ch, _ := src.Stream(context.Background())
+	if rec := <-ch; rec.Fields["zip"] != "02134" {
+		t.Fatalf("zip = %#v, want \"02134\"", rec.Fields["zip"])
 	}
 }
 

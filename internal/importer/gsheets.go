@@ -3,7 +3,6 @@ package importer
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"google.golang.org/api/option"
@@ -83,7 +82,7 @@ func detectNumericSheetColumns(rows [][]interface{}, headers []string) map[strin
 			if val == "" {
 				continue
 			}
-			if _, err := strconv.ParseFloat(val, 64); err != nil {
+			if _, ok := parseSpreadsheetNumber(val); !ok {
 				numeric[h] = false
 			}
 		}

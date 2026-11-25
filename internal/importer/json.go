@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,6 +61,7 @@ func (s *JSONSource) Stream(ctx context.Context) (<-chan Record, <-chan error) {
 		if firstByte == '[' {
 			// JSON array
 			dec := json.NewDecoder(reader)
+			dec.UseNumber()
 			if err := dec.Decode(&objects); err != nil {
 				errs <- fmt.Errorf("decode json array: %w", err)
 				return
@@ -74,8 +76,14 @@ func (s *JSONSource) Stream(ctx context.Context) (<-chan Record, <-chan error) {
 					continue
 				}
 				var obj map[string]any
-				if err := json.Unmarshal([]byte(line), &obj); err != nil {
+				dec := json.NewDecoder(strings.NewReader(line))
+				dec.UseNumber()
+				if err := dec.Decode(&obj); err != nil {
 					errs <- fmt.Errorf("decode jsonl line: %w", err)
+					return
+				}
+				if _, err := dec.Token(); err != io.EOF {
+					errs <- fmt.Errorf("decode jsonl line: unexpected data after the object")
 					return
 				}
 				objects = append(objects, obj)
@@ -90,6 +98,7 @@ func (s *JSONSource) Stream(ctx context.Context) (<-chan Record, <-chan error) {
 			if ctx.Err() != nil {
 				return
 			}
+			obj = jsonNumbers(obj).(map[string]any)
 
 			pk := fmt.Sprintf("%d", i)
 			if id, ok := obj["id"]; ok {
@@ -131,4 +140,31 @@ func peekFirstNonSpace(r *bufio.Reader) (byte, error) {
 		}
 		return b, nil
 	}
+}
+
+// jsonNumbers replaces the json.Number values in v, decoded with UseNumber, with an
+// int64 when it fits, a float64 when it has a fraction or exponent, and otherwise
+// the digits as text, so ids keep their exact value.
+func jsonNumbers(v any) any {
+	switch t := v.(type) {
+	case json.Number:
+		if n, err := t.Int64(); err == nil {
+			return n
+		}
+		if strings.ContainsAny(t.String(), ".eE") {
+			if f, err := t.Float64(); err == nil {
+				return f
+			}
+		}
+		return t.String()
+	case map[string]any:
+		for k, item := range t {
+			t[k] = jsonNumbers(item)
+		}
+	case []any:
+		for i, item := range t {
+			t[i] = jsonNumbers(item)
+		}
+	}
+	return v
 }
