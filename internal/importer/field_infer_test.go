@@ -115,3 +115,26 @@ func TestSampleSourceFieldsStopsAtLimit(t *testing.T) {
 		t.Fatal("SampleSourceFields blocked on a source longer than the limit")
 	}
 }
+
+func TestInferJSONSchemaMatchesImport(t *testing.T) {
+	dir := t.TempDir()
+	for name, data := range map[string]string{
+		"orders.json":  `[{"id": 12345678, "snowflake": 123456789012345678901, "price": 2.5}, {"id": 7, "snowflake": 123456789012345678902, "price": 3}]`,
+		"orders.jsonl": "{\"id\": 12345678, \"snowflake\": 123456789012345678901, \"price\": 2.5}\n{\"id\": 7, \"snowflake\": 123456789012345678902, \"price\": 3}\n",
+	} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := SampleJSONRowsNative(path, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		props := InferFieldTypesNative(rows)
+		for col, want := range map[string]string{"id": "integer", "snowflake": "string", "price": "number"} {
+			if got := props[col].(map[string]any)["type"]; got != want {
+				t.Errorf("%s: %s: %v, want %q", name, col, got, want)
+			}
+		}
+	}
+}

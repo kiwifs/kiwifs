@@ -140,10 +140,15 @@ func inferNativeType(vals []any) string {
 			_ = val
 		case float64:
 			allBool = false
+			allStr = false
 			allArr = false
 			if val != float64(int64(val)) {
 				allInt = false
 			}
+		case int64:
+			allBool = false
+			allStr = false
+			allArr = false
 		case string:
 			allBool = false
 			allInt = false

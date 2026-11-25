@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Render formats a QueryResult into the requested output format.
@@ -201,9 +202,8 @@ func formatColumnHeader(col string) string {
 	col = strings.ReplaceAll(col, "_", " ")
 	words := strings.Fields(col)
 	for i, w := range words {
-		if len(w) > 0 {
-			words[i] = strings.ToUpper(w[:1]) + w[1:]
-		}
+		_, size := utf8.DecodeRuneInString(w)
+		words[i] = strings.ToUpper(w[:size]) + w[size:]
 	}
 	return strings.Join(words, " ")
 }
