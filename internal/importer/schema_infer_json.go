@@ -2,6 +2,7 @@ package importer
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,11 +30,14 @@ func SampleJSONRowsNative(path string, maxRows int) ([]map[string]any, error) {
 		return sampleJSONLNative(path, maxRows)
 	}
 	var arr []map[string]any
-	if err := json.Unmarshal(data, &arr); err != nil {
+	if err := decodeJSONNumbers(data, &arr); err != nil {
 		return nil, fmt.Errorf("parse json array: %w", err)
 	}
 	if len(arr) > maxRows {
 		arr = arr[:maxRows]
+	}
+	for i := range arr {
+		arr[i] = jsonNumbers(arr[i]).(map[string]any)
 	}
 	return arr, nil
 }
@@ -52,12 +56,20 @@ func sampleJSONLNative(path string, maxRows int) ([]map[string]any, error) {
 			continue
 		}
 		var obj map[string]any
-		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+		if err := decodeJSONNumbers([]byte(line), &obj); err != nil {
 			return nil, err
 		}
-		arr = append(arr, obj)
+		arr = append(arr, jsonNumbers(obj).(map[string]any))
 	}
 	return arr, sc.Err()
+}
+
+// decodeJSONNumbers decodes like the JSON importer does, keeping numbers as
+// json.Number so jsonNumbers can type them the same way the import will.
+func decodeJSONNumbers(data []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	return dec.Decode(v)
 }
 
 func mapsToStringRows(arr []map[string]any, maxRows int) []map[string]string {
