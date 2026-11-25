@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.96](https://github.com/kiwifs/kiwifs/compare/v0.19.95...v0.19.96) (2026-11-25)
+
+
+### Bug Fixes
+
+* **api:** show pages with non-ASCII names in recent pages, timeline and velocity ([#605](https://github.com/kiwifs/kiwifs/issues/605)) ([d13d199](https://github.com/kiwifs/kiwifs/commit/d13d199ca82de6e1bf6b745f94516a453413a558))
+* **importer:** keep integer ids exact in JSON and JSONL imports ([#604](https://github.com/kiwifs/kiwifs/issues/604)) ([188ecfb](https://github.com/kiwifs/kiwifs/commit/188ecfb31ec08609d7a8a5edb85f447572dc2185))
+* type JSON schema inference like the import; title-case non-ASCII column headers ([#607](https://github.com/kiwifs/kiwifs/issues/607)) ([b805fd6](https://github.com/kiwifs/kiwifs/commit/b805fd64698e7455161d289b39b9984306985239))
+
 ## [0.19.95](https://github.com/kiwifs/kiwifs/compare/v0.19.94...v0.19.95) (2026-11-20)
 
 
