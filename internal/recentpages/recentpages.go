@@ -8,9 +8,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/storage"
+	"github.com/kiwifs/kiwifs/internal/versioning"
 )
 
 // Page is one recently edited markdown file for the startup recent view.
@@ -100,11 +102,11 @@ func parseGitRecent(output string, limit int) []Page {
 		if status == "" {
 			continue
 		}
-		path := fields[1]
+		path := versioning.UnquotePath(fields[1])
 		switch status[0] {
 		case 'R', 'C':
 			if len(fields) > 2 {
-				path = fields[2]
+				path = versioning.UnquotePath(fields[2])
 			}
 			fallthrough
 		case 'A', 'M':
@@ -184,7 +186,8 @@ func titleize(path string) string {
 		if w == "" {
 			continue
 		}
-		words[i] = strings.ToUpper(w[:1]) + w[1:]
+		_, size := utf8.DecodeRuneInString(w)
+		words[i] = strings.ToUpper(w[:size]) + w[size:]
 	}
 	return strings.Join(words, " ")
 }
