@@ -106,6 +106,65 @@ func TestJSONImport(t *testing.T) {
 	}
 }
 
+func TestJSONImportKeepsIntegerIDs(t *testing.T) {
+	data := `[
+		{"id": 12345678, "amount": 2500000},
+		{"id": 1234567890123456789},
+		{"id": 1234567890123456788}
+	]`
+	jsonFile := filepath.Join(t.TempDir(), "orders.json")
+	if err := os.WriteFile(jsonFile, []byte(data), 0644); err != nil {
+		t.Fatalf("write json: %v", err)
+	}
+
+	src, err := NewJSON(jsonFile)
+	if err != nil {
+		t.Fatalf("new json: %v", err)
+	}
+	defer src.Close()
+
+	pipe, store := testPipeline(t)
+	ctx := context.Background()
+	if _, err := Run(ctx, src, pipe, Options{Actor: "test"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	content, err := store.Read(ctx, "orders/12345678.md")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(content), "amount: 2500000") {
+		t.Fatalf("amount not kept as an integer: %s", content)
+	}
+	for _, id := range []string{"1234567890123456789", "1234567890123456788"} {
+		if _, err := store.Read(ctx, "orders/"+id+".md"); err != nil {
+			t.Fatalf("record %s: %v", id, err)
+		}
+	}
+}
+
+func TestJSONLImportRejectsDataAfterObject(t *testing.T) {
+	for _, line := range []string{`{"id":1}{"id":2}`, `{"id":1} junk`, `{"id":1}]`} {
+		jsonlFile := filepath.Join(t.TempDir(), "rows.jsonl")
+		if err := os.WriteFile(jsonlFile, []byte(line+"\n{\"id\":3}\n"), 0644); err != nil {
+			t.Fatalf("write jsonl: %v", err)
+		}
+
+		src, err := NewJSON(jsonlFile)
+		if err != nil {
+			t.Fatalf("new json: %v", err)
+		}
+
+		records, errs := src.Stream(context.Background())
+		for range records {
+		}
+		if err := <-errs; err == nil {
+			t.Errorf("%s: expected an error", line)
+		}
+		src.Close()
+	}
+}
+
 func TestJSONLImport(t *testing.T) {
 	data := `{"id": "a", "name": "X"}
 {"id": "b", "name": "Y"}`
