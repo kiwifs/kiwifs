@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +25,7 @@ import (
 	"github.com/kiwifs/kiwifs/internal/markdown"
 	"github.com/kiwifs/kiwifs/internal/memory"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
+	"github.com/kiwifs/kiwifs/internal/protoauth"
 	"github.com/kiwifs/kiwifs/internal/tracing"
 	"github.com/kiwifs/kiwifs/internal/trash"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -3275,57 +3275,53 @@ func Serve(opts Options) error {
 
 func serveHTTP(s *server.MCPServer, opts Options) error {
 	addr := fmt.Sprintf(":%d", opts.Port)
-	authToken, err := httpAuthToken(opts)
+	auth, err := httpAuth(opts)
 	if err != nil {
 		return err
 	}
 	stderr.Printf("serving MCP Streamable HTTP on http://localhost:%d/mcp", opts.Port)
-	return http.ListenAndServe(addr, newHTTPHandler(s, time.Now(), authToken))
+	return http.ListenAndServe(addr, newHTTPHandler(s, time.Now(), auth))
 }
 
-func httpAuthToken(opts Options) (string, error) {
-	if opts.Root == "" {
-		return "", nil
-	}
-
-	cfgPath := filepath.Join(opts.Root, ".kiwi", "config.toml")
-	if _, err := os.Stat(cfgPath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", nil
+// httpAuth enforces the knowledge base's [auth] on MCP over HTTP. Its tools
+// read and write the whole tree, so it takes the apikey key or a perspace key
+// with write access and no space or prefix, and can't serve under oidc.
+func httpAuth(opts Options) (*protoauth.Checker, error) {
+	var auth config.AuthConfig
+	if opts.Root != "" {
+		cfgPath := filepath.Join(opts.Root, ".kiwi", "config.toml")
+		if _, err := os.Stat(cfgPath); err == nil {
+			cfg, err := config.Load(opts.Root)
+			if err != nil {
+				return nil, fmt.Errorf("load MCP HTTP auth config: %w", err)
+			}
+			auth = cfg.Auth
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
 		}
-		return "", err
 	}
-
-	cfg, err := config.Load(opts.Root)
+	c, err := protoauth.New(auth)
 	if err != nil {
-		return "", fmt.Errorf("load MCP HTTP auth config: %w", err)
+		return nil, fmt.Errorf("MCP over HTTP: %w — use stdio, `kiwifs serve`, or auth.type = \"apikey\" or \"perspace\"", err)
 	}
-	return AuthTokenFromConfig(cfg), nil
+	if c.IsOpen() {
+		stderr.Printf("WARNING: MCP over HTTP accepts unauthenticated reads and writes (auth.type=%q)", auth.Type)
+	}
+	return c, nil
 }
 
-// AuthTokenFromConfig returns the bearer token for MCP HTTP when apikey auth is enabled.
-func AuthTokenFromConfig(cfg *config.Config) string {
-	if cfg == nil {
-		return ""
-	}
-	if cfg.Auth.Type == "apikey" && cfg.Auth.APIKey != "" {
-		return cfg.Auth.APIKey
-	}
-	return ""
-}
-
-// StreamableHTTPHandler returns an http.Handler for MCP Streamable HTTP transport.
-func StreamableHTTPHandler(s *server.MCPServer, authToken string) http.Handler {
-	mcpHandler := server.NewStreamableHTTPServer(
+// StreamableHTTPHandler returns an http.Handler for MCP Streamable HTTP
+// transport. It does no authentication; the caller must.
+func StreamableHTTPHandler(s *server.MCPServer) http.Handler {
+	return server.NewStreamableHTTPServer(
 		s,
 		server.WithEndpointPath("/mcp"),
 		server.WithStateLess(true),
 	)
-	return bearerAuth(authToken, mcpHandler)
 }
 
-func newHTTPHandler(s *server.MCPServer, started time.Time, authToken string) http.Handler {
-	mcpHandler := StreamableHTTPHandler(s, authToken)
+func newHTTPHandler(s *server.MCPServer, started time.Time, auth *protoauth.Checker) http.Handler {
+	mcpHandler := requireKey(auth, StreamableHTTPHandler(s))
 
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcpHandler)
@@ -3512,14 +3508,13 @@ func handleClip(b Backend) server.ToolHandlerFunc {
 	}
 }
 
-func bearerAuth(token string, next http.Handler) http.Handler {
-	if token == "" {
-		return next
-	}
-	expected := []byte("Bearer " + token)
+func requireKey(auth *protoauth.Checker, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got := []byte(r.Header.Get("Authorization"))
-		if subtle.ConstantTimeCompare(got, expected) != 1 {
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok {
+			token = ""
+		}
+		if !auth.Allow(token, true) {
 			http.Error(w, "invalid API key", http.StatusUnauthorized)
 			return
 		}

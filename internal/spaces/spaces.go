@@ -21,8 +21,9 @@ import (
 
 // SpaceMeta holds summary metadata for a space.
 type SpaceMeta struct {
-	Name      string     `json:"name"`
-	Root      string     `json:"root"`
+	Name string `json:"name"`
+	// Root is an absolute server path, so it stays off the wire.
+	Root      string     `json:"-"`
 	FileCount int        `json:"fileCount"`
 	LastMod   *time.Time `json:"lastModified,omitempty"`
 	SizeBytes int64      `json:"sizeBytes"`
@@ -121,6 +122,7 @@ func (m *Manager) LoadDynamic() int {
 			log.Printf("spaces: failed to restore %q: %v", e.Name, err)
 			continue
 		}
+		m.markDynamic(e.Name)
 		log.Printf("space %q restored from spaces.json → %s", e.Name, e.Root)
 		loaded++
 	}
@@ -145,6 +147,10 @@ type Space struct {
 	// callers retain ownership of the lifetime — typical for the
 	// default space that already has its own defer chain in serve.go.
 	ownStack bool
+
+	// dynamic marks spaces created over HTTP (CreateSpace, or restored from
+	// spaces.json); only those may be deleted over HTTP.
+	dynamic bool
 
 	backup *backup.Syncer
 }
@@ -405,10 +411,32 @@ func (m *Manager) CreateSpace(name, root, template string) (*SpaceMeta, error) {
 	if err := m.AddSpace(name, root, cfg); err != nil {
 		return nil, err
 	}
+	m.markDynamic(name)
 	m.mu.RLock()
 	m.saveDynamic()
 	m.mu.RUnlock()
 	return m.SpaceInfo(name)
+}
+
+func (m *Manager) markDynamic(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if sp, ok := m.spaces[name]; ok {
+		sp.dynamic = true
+	}
+}
+
+// primaryServer is the first registered space's server, whose [auth]
+// guards space management.
+func (m *Manager) primaryServer() *api.Server {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, name := range m.order {
+		if sp, ok := m.spaces[name]; ok && sp.Server != nil {
+			return sp.Server
+		}
+	}
+	return nil
 }
 
 // ResolveRoot joins a space root against the primary workspace root when
@@ -527,6 +555,26 @@ func (m *Manager) Handler() http.Handler {
 		return c.JSON(http.StatusOK, map[string]interface{}{"templates": list})
 	})
 
+	// Space management sits in front of every space's router, so it borrows
+	// the primary space's [auth]; with no space there is nothing to check
+	// credentials against, so it refuses.
+	withAuth := func(fullAccess bool) echo.MiddlewareFunc {
+		return func(next echo.HandlerFunc) echo.HandlerFunc {
+			return func(c echo.Context) error {
+				srv := m.primaryServer()
+				if srv == nil {
+					return echo.NewHTTPError(http.StatusServiceUnavailable, "no space configured")
+				}
+				mw := srv.AuthMiddleware()
+				if fullAccess {
+					mw = srv.FullAccessMiddleware()
+				}
+				return mw(next)(c)
+			}
+		}
+	}
+	readAuth, adminAuth := withAuth(false), withAuth(true)
+
 	e.GET("/api/spaces", func(c echo.Context) error {
 		names := m.ListSpaces()
 		out := make([]SpaceMeta, 0, len(names))
@@ -536,7 +584,7 @@ func (m *Manager) Handler() http.Handler {
 			}
 		}
 		return c.JSON(http.StatusOK, map[string]interface{}{"spaces": out})
-	})
+	}, readAuth)
 
 	e.GET("/api/spaces/:name", func(c echo.Context) error {
 		name := c.Param("name")
@@ -545,7 +593,7 @@ func (m *Manager) Handler() http.Handler {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
 		}
 		return c.JSON(http.StatusOK, info)
-	})
+	}, readAuth)
 
 	e.POST("/api/spaces", func(c echo.Context) error {
 		var body struct {
@@ -556,7 +604,12 @@ func (m *Manager) Handler() http.Handler {
 		if err := c.Bind(&body); err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid JSON body")
 		}
-		info, err := m.CreateSpace(body.Name, body.Root, body.Template)
+		// A caller-chosen root would let HTTP clients turn any directory the
+		// server can write into a space; spaces elsewhere go in [[spaces]].
+		if body.Root != "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "root can't be set over HTTP; add the space to [[spaces]] in .kiwi/config.toml instead")
+		}
+		info, err := m.CreateSpace(body.Name, "", body.Template)
 		if err != nil {
 			if strings.Contains(err.Error(), "already exists") {
 				return echo.NewHTTPError(http.StatusConflict, err.Error())
@@ -564,15 +617,25 @@ func (m *Manager) Handler() http.Handler {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 		return c.JSON(http.StatusCreated, info)
-	})
+	}, adminAuth)
 
 	e.DELETE("/api/spaces/:name", func(c echo.Context) error {
 		name := c.Param("name")
+		m.mu.RLock()
+		sp, ok := m.spaces[name]
+		dynamic := ok && sp.dynamic
+		m.mu.RUnlock()
+		if !ok {
+			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("space %q not found", name))
+		}
+		if !dynamic {
+			return echo.NewHTTPError(http.StatusForbidden, "only spaces created over HTTP can be deleted over HTTP")
+		}
 		if err := m.RemoveSpace(name); err != nil {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
 		}
 		return c.JSON(http.StatusOK, map[string]string{"deleted": name})
-	})
+	}, adminAuth)
 
 	// Catch-all: resolve space, rewrite path, forward to the space's server.
 	e.Any("/*", func(c echo.Context) error {

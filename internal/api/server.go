@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	pathpkg "path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -96,7 +97,13 @@ func (s *Server) SetMCPHandler(handler http.Handler) {
 		return
 	}
 	s.mcpHandler = handler
-	s.echo.Any("/mcp", echo.WrapHandler(handler))
+	s.mountMCP()
+}
+
+// mountMCP serves MCP behind the REST API's auth: its tools read and write
+// the whole tree, so a key that can't do the same over REST can't use it.
+func (s *Server) mountMCP() {
+	s.echo.Any("/mcp", echo.WrapHandler(s.mcpHandler), s.FullAccessMiddleware())
 }
 
 type ProtocolHealthProbe struct {
@@ -344,7 +351,33 @@ func (s *Server) setupMiddleware() {
 
 func (s *Server) authMiddleware() echo.MiddlewareFunc {
 	s.installAuth(&s.cfg.Auth)
+	return s.authenticate(false)
+}
+
+// AuthMiddleware applies this server's [auth] to routes mounted outside it,
+// such as the multi-space router's /api/spaces.
+func (s *Server) AuthMiddleware() echo.MiddlewareFunc {
+	return s.authenticate(false)
+}
+
+// FullAccessMiddleware guards routes that reach the whole knowledge base or
+// server (MCP, creating and deleting spaces). It ignores [space] visibility
+// and refuses read-only keys and keys limited to a space or prefix.
+func (s *Server) FullAccessMiddleware() echo.MiddlewareFunc {
+	return s.authenticate(true)
+}
+
+func (s *Server) authenticate(fullAccess bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		if fullAccess {
+			inner := next
+			next = func(c echo.Context) error {
+				if c.Get(keyPathScopeCtxKey) != nil || c.Get(keyScopeCtxKey) == "read" {
+					return echo.NewHTTPError(http.StatusForbidden, "this endpoint needs a key with write access to the whole knowledge base")
+				}
+				return inner(c)
+			}
+		}
 		return func(c echo.Context) error {
 			la := s.auth.Load()
 			if la == nil {
@@ -355,7 +388,7 @@ func (s *Server) authMiddleware() echo.MiddlewareFunc {
 			// Read live from s.cfg so that PUT /space/visibility
 			// takes effect immediately without an auth reload.
 			method := c.Request().Method
-			if method == http.MethodGet || method == http.MethodHead {
+			if !fullAccess && (method == http.MethodGet || method == http.MethodHead) {
 				vis := s.cfg.Space.Visibility
 				switch vis {
 				case "public":
@@ -764,7 +797,7 @@ func (s *Server) setupRoutes() {
 	s.echo.GET("/llms-full.txt", h.LLMsFullTxt)
 
 	if s.mcpHandler != nil {
-		s.echo.Any("/mcp", echo.WrapHandler(s.mcpHandler))
+		s.mountMCP()
 	}
 
 	webui.SetBranding(s.cfg.UI.Branding)
@@ -876,10 +909,106 @@ func apiKeyHandler(key string) echo.MiddlewareFunc {
 }
 
 // keyPathScopeCtxKey holds a func(path string) bool reporting whether the
-// request's API key may touch path. The middleware can only check the path
-// query param and /bulk bodies, so handlers that resolve paths from ids
-// (the trash) must check this themselves.
+// request's API key may touch path. The middleware checks ?path= and known
+// request bodies, so handlers that resolve paths from ids (the trash) must
+// check this themselves.
 const keyPathScopeCtxKey = "kiwi.keyPathScope"
+
+// keyScopeCtxKey holds the per-space key's scope: read, write or admin.
+const keyScopeCtxKey = "kiwi.keyScope"
+
+type scopedRouteCheck int
+
+const (
+	scopedByQueryPath scopedRouteCheck = iota + 1
+	scopedByBody
+	scopedByHandler
+	scopedNoPaths
+)
+
+// scopedKeyRoutes are the only routes a key limited to a space or prefix may
+// call, keyed by method and route. Every other route reads or writes paths
+// the middleware can't see (search, query, export, publish, ...), so such
+// keys are refused there rather than let out of their folder.
+var scopedKeyRoutes = map[string]scopedRouteCheck{
+	"GET /api/kiwi/file":               scopedByQueryPath,
+	"PUT /api/kiwi/file":               scopedByQueryPath,
+	"PATCH /api/kiwi/file":             scopedByQueryPath,
+	"DELETE /api/kiwi/file":            scopedByQueryPath,
+	"PATCH /api/kiwi/file/frontmatter": scopedByQueryPath,
+	"POST /api/kiwi/file/append":       scopedByQueryPath,
+	"GET /api/kiwi/tree":               scopedByQueryPath,
+	"GET /api/kiwi/readlink":           scopedByQueryPath,
+	"GET /api/kiwi/versions":           scopedByQueryPath,
+	"GET /api/kiwi/version":            scopedByQueryPath,
+	"GET /api/kiwi/diff":               scopedByQueryPath,
+	"GET /api/kiwi/blame":              scopedByQueryPath,
+	"GET /api/kiwi/peek":               scopedByQueryPath,
+	"GET /api/kiwi/section":            scopedByQueryPath,
+	"GET /api/kiwi/toc":                scopedByQueryPath,
+	"POST /api/kiwi/assets":            scopedByQueryPath,
+	"GET /api/kiwi/raw-sign":           scopedByQueryPath,
+	"GET /raw/*":                       scopedByQueryPath,
+	"GET /api/kiwi/raw/*":              scopedByQueryPath,
+	"POST /api/kiwi/bulk":              scopedByBody,
+	"POST /api/kiwi/rename":            scopedByBody,
+	"POST /api/kiwi/rename-dir":        scopedByBody,
+	"POST /api/kiwi/share":             scopedByBody,
+	"GET /api/kiwi/trash":              scopedByHandler,
+	"POST /api/kiwi/trash/restore":     scopedByHandler,
+	"DELETE /api/kiwi/trash/:id":       scopedByHandler,
+	// Space names and file counts, for the UI's space switcher.
+	"GET /api/spaces":       scopedNoPaths,
+	"GET /api/spaces/:name": scopedNoPaths,
+}
+
+// scopedBodyPaths returns the paths a scopedByBody request targets.
+func scopedBodyPaths(route string, body []byte) ([]string, error) {
+	var paths []string
+	switch route {
+	case "POST /api/kiwi/bulk":
+		var req bulkRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			return nil, err
+		}
+		for _, f := range req.Files {
+			paths = append(paths, f.Path)
+		}
+	case "POST /api/kiwi/rename", "POST /api/kiwi/rename-dir":
+		var req renameRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			return nil, err
+		}
+		paths = append(paths, req.From, req.To)
+	case "POST /api/kiwi/share":
+		var req createShareRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			return nil, err
+		}
+		paths = append(paths, req.Path)
+	}
+	return paths, nil
+}
+
+// keyScopePath puts a request path in the form keys' spaces and prefixes are
+// compared against: cleaned, so "a/../b" can't pass as "a/...", and without
+// a leading slash, since keys are configured in either form.
+func keyScopePath(p string) string {
+	return strings.TrimPrefix(pathpkg.Clean("/"+p), "/")
+}
+
+// keyMayTouch reports whether a key limited to space and prefix may touch p.
+// The root ("") is outside any restriction.
+func keyMayTouch(space, prefix, p string) bool {
+	p = keyScopePath(p)
+	if space = strings.Trim(space, "/"); space != "" && p != space && !strings.HasPrefix(p, space+"/") {
+		return false
+	}
+	if prefix = strings.TrimPrefix(prefix, "/"); prefix != "" && !strings.HasPrefix(p+"/", prefix) {
+		return false
+	}
+	return true
+}
 
 // readOnlyPOSTs are endpoints that take POST only because the request is too
 // large or structured for a query string. They change nothing, so a
@@ -913,19 +1042,6 @@ func perSpaceKeyHandler(keys []config.APIKeyEntry) echo.MiddlewareFunc {
 		}
 		km[h] = entry{hash: h, space: k.Space, actor: k.Actor, scope: scope, prefix: k.Prefix}
 	}
-	inScope := func(space, path string) bool {
-		if space == "" || path == "" {
-			return true
-		}
-		return path == space || strings.HasPrefix(path, space+"/")
-	}
-	// B.2: check path prefix restriction
-	inPrefix := func(prefix, path string) bool {
-		if prefix == "" || path == "" {
-			return true
-		}
-		return path == prefix || strings.HasPrefix(path, prefix)
-	}
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			auth := c.Request().Header.Get("Authorization")
@@ -955,64 +1071,36 @@ func perSpaceKeyHandler(keys []config.APIKeyEntry) echo.MiddlewareFunc {
 			}
 			// "admin" can do everything — no restriction.
 
-			// Space scope check
-			if e.space != "" {
-				if !inScope(e.space, c.QueryParam("path")) {
-					return echo.NewHTTPError(http.StatusForbidden, "path outside key scope")
-				}
-				if method == http.MethodPost && strings.HasSuffix(c.Path(), "/bulk") {
-					body, err := io.ReadAll(c.Request().Body)
-					if err != nil {
-						return echo.NewHTTPError(http.StatusBadRequest, "failed to read body")
-					}
-					c.Request().Body = io.NopCloser(bytes.NewReader(body))
-					var parsed struct {
-						Files []struct {
-							Path string `json:"path"`
-						} `json:"files"`
-					}
-					if err := json.Unmarshal(body, &parsed); err == nil {
-						for _, f := range parsed.Files {
-							if !inScope(e.space, f.Path) {
-								return echo.NewHTTPError(http.StatusForbidden, "bulk path outside key scope")
-							}
-						}
-					}
-				}
-			}
-
-			// B.2: enforce path prefix
-			if e.prefix != "" {
-				reqPath := c.QueryParam("path")
-				if reqPath != "" && !inPrefix(e.prefix, reqPath) {
-					return echo.NewHTTPError(http.StatusForbidden, "path outside token prefix scope")
-				}
-				if method == http.MethodPost && strings.HasSuffix(c.Path(), "/bulk") {
-					body, err := io.ReadAll(c.Request().Body)
-					if err != nil {
-						return echo.NewHTTPError(http.StatusBadRequest, "failed to read body")
-					}
-					c.Request().Body = io.NopCloser(bytes.NewReader(body))
-					var parsed struct {
-						Files []struct {
-							Path string `json:"path"`
-						} `json:"files"`
-					}
-					if err := json.Unmarshal(body, &parsed); err == nil {
-						for _, f := range parsed.Files {
-							if !inPrefix(e.prefix, f.Path) {
-								return echo.NewHTTPError(http.StatusForbidden, "bulk path outside token prefix scope")
-							}
-						}
-					}
-				}
-			}
-
 			if e.space != "" || e.prefix != "" {
-				c.Set(keyPathScopeCtxKey, func(path string) bool {
-					return inScope(e.space, path) && inPrefix(e.prefix, path)
-				})
+				mayTouch := func(path string) bool { return keyMayTouch(e.space, e.prefix, path) }
+				route := method + " " + c.Path()
+				switch scopedKeyRoutes[route] {
+				case scopedByQueryPath:
+					if !mayTouch(c.QueryParam("path")) {
+						return echo.NewHTTPError(http.StatusForbidden, "path outside key scope")
+					}
+				case scopedByBody:
+					body, err := io.ReadAll(c.Request().Body)
+					if err != nil {
+						return echo.NewHTTPError(http.StatusBadRequest, "failed to read body")
+					}
+					c.Request().Body = io.NopCloser(bytes.NewReader(body))
+					paths, err := scopedBodyPaths(route, body)
+					if err != nil {
+						return echo.NewHTTPError(http.StatusBadRequest, "invalid JSON body")
+					}
+					for _, p := range paths {
+						if !mayTouch(p) {
+							return echo.NewHTTPError(http.StatusForbidden, "path outside key scope")
+						}
+					}
+				case scopedByHandler, scopedNoPaths:
+				default:
+					return echo.NewHTTPError(http.StatusForbidden, "endpoint not available to keys limited to a space or prefix")
+				}
+				c.Set(keyPathScopeCtxKey, mayTouch)
 			}
+			c.Set(keyScopeCtxKey, e.scope)
 			c.Request().Header.Set("X-Actor", e.actor)
 			if e.space != "" {
 				c.Request().Header.Set("X-Space", e.space)

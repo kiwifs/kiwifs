@@ -293,9 +293,8 @@ func TestHTTPCreateSpaceWithTemplate(t *testing.T) {
 	defer m.Close()
 
 	h := m.Handler()
-	spaceRoot := filepath.Join(t.TempDir(), "wiki-space")
 
-	body := `{"name":"wikispace","root":"` + spaceRoot + `","template":"wiki"}`
+	body := `{"name":"wikispace","template":"wiki"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/spaces", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -304,8 +303,28 @@ func TestHTTPCreateSpaceWithTemplate(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/spaces status = %d, want 201; body: %s", rec.Code, rec.Body.String())
 	}
-	if _, err := os.Stat(filepath.Join(spaceRoot, "welcome.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, ".spaces", "wikispace", "welcome.md")); err != nil {
 		t.Fatalf("wiki template should create welcome.md: %v", err)
+	}
+}
+
+func TestHTTPCreateSpaceRejectsRoot(t *testing.T) {
+	m := NewManager(minimalCfg())
+	m.AddSpace("seed", t.TempDir(), minimalCfg())
+	defer m.Close()
+
+	target := t.TempDir()
+	body := `{"name":"elsewhere","root":"` + target + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/spaces", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST with root status = %d, want 400; body: %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(target, ".kiwi")); !os.IsNotExist(err) {
+		t.Fatalf("POST with root must not initialise %s (stat .kiwi: %v)", target, err)
 	}
 }
 
@@ -395,6 +414,8 @@ func TestHTTPGetSpace(t *testing.T) {
 
 func TestHTTPGetSpaceNotFound(t *testing.T) {
 	m := NewManager(nil)
+	m.AddSpace("seed", t.TempDir(), minimalCfg())
+	defer m.Close()
 	h := m.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/spaces/nonexistent", nil)
@@ -407,15 +428,22 @@ func TestHTTPGetSpaceNotFound(t *testing.T) {
 }
 
 func TestHTTPDeleteSpace(t *testing.T) {
-	m := NewManager(nil)
-	dir := t.TempDir()
-	m.AddSpace("ephemeral", dir, minimalCfg())
+	m := NewManager(minimalCfg())
+	m.AddSpace("seed", t.TempDir(), minimalCfg())
 	defer m.Close()
 
 	h := m.Handler()
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/spaces/ephemeral", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/spaces", strings.NewReader(`{"name":"ephemeral"}`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/spaces status = %d, want 201; body: %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/spaces/ephemeral", nil)
+	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -427,8 +455,36 @@ func TestHTTPDeleteSpace(t *testing.T) {
 	}
 }
 
+func TestHTTPDeleteSpaceRefusesConfiguredSpaces(t *testing.T) {
+	m := NewManager(nil)
+	primary, configured := t.TempDir(), t.TempDir()
+	m.AddSpace("primary", primary, minimalCfg())
+	m.AddSpace("configured", configured, minimalCfg())
+	defer m.Close()
+
+	h := m.Handler()
+	for _, name := range []string{"primary", "configured"} {
+		req := httptest.NewRequest(http.MethodDelete, "/api/spaces/"+name, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("DELETE /api/spaces/%s status = %d, want 403; body: %s", name, rec.Code, rec.Body.String())
+		}
+		if _, ok := m.GetSpace(name); !ok {
+			t.Fatalf("space %q should survive a refused DELETE", name)
+		}
+	}
+	for _, dir := range []string{primary, configured} {
+		if _, err := os.Stat(dir); err != nil {
+			t.Fatalf("refused DELETE must leave %s in place: %v", dir, err)
+		}
+	}
+}
+
 func TestHTTPDeleteSpaceNotFound(t *testing.T) {
 	m := NewManager(nil)
+	m.AddSpace("seed", t.TempDir(), minimalCfg())
+	defer m.Close()
 	h := m.Handler()
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/spaces/ghost", nil)
@@ -437,6 +493,95 @@ func TestHTTPDeleteSpaceNotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("DELETE nonexistent space status = %d, want 404", rec.Code)
+	}
+}
+
+func TestHTTPSpacesRefuseWithoutAnySpace(t *testing.T) {
+	h := NewManager(nil).Handler()
+	for _, tc := range []struct{ method, target, body string }{
+		{http.MethodGet, "/api/spaces", ""},
+		{http.MethodPost, "/api/spaces", `{"name":"x"}`},
+		{http.MethodDelete, "/api/spaces/x", ""},
+	} {
+		req := httptest.NewRequest(tc.method, tc.target, strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("%s %s with no space = %d, want 503", tc.method, tc.target, rec.Code)
+		}
+	}
+}
+
+func TestHTTPSpacesEnforcePrimaryAuth(t *testing.T) {
+	perspace := minimalCfg()
+	perspace.Auth = config.AuthConfig{Type: "perspace", APIKeys: []config.APIKeyEntry{
+		{Key: "admin-key"},
+		{Key: "write-key", Scope: "write"},
+		{Key: "read-key", Scope: "read"},
+		{Key: "prefix-key", Prefix: "public/"},
+	}}
+	apikey := minimalCfg()
+	apikey.Auth = config.AuthConfig{Type: "apikey", APIKey: "k"}
+	oidc := minimalCfg()
+	oidc.Auth = config.AuthConfig{Type: "oidc"}
+
+	type step struct {
+		method, target, body, bearer string
+		want                         int
+	}
+	cases := []struct {
+		name  string
+		cfg   *config.Config
+		steps []step
+	}{
+		{"perspace", perspace, []step{
+			{http.MethodGet, "/api/spaces", "", "", http.StatusUnauthorized},
+			{http.MethodGet, "/api/spaces/primary", "", "", http.StatusUnauthorized},
+			{http.MethodPost, "/api/spaces", `{"name":"anon"}`, "", http.StatusUnauthorized},
+			{http.MethodDelete, "/api/spaces/primary", "", "", http.StatusUnauthorized},
+			{http.MethodGet, "/api/spaces", "", "read-key", http.StatusOK},
+			{http.MethodGet, "/api/spaces", "", "prefix-key", http.StatusOK},
+			{http.MethodPost, "/api/spaces", `{"name":"ro"}`, "read-key", http.StatusForbidden},
+			{http.MethodPost, "/api/spaces", `{"name":"scoped"}`, "prefix-key", http.StatusForbidden},
+			{http.MethodPost, "/api/spaces", `{"name":"made"}`, "write-key", http.StatusCreated},
+			{http.MethodDelete, "/api/spaces/made", "", "prefix-key", http.StatusForbidden},
+			{http.MethodDelete, "/api/spaces/made", "", "admin-key", http.StatusOK},
+		}},
+		{"apikey", apikey, []step{
+			{http.MethodGet, "/api/spaces", "", "", http.StatusUnauthorized},
+			{http.MethodPost, "/api/spaces", `{"name":"anon"}`, "", http.StatusUnauthorized},
+			{http.MethodPost, "/api/spaces", `{"name":"made"}`, "k", http.StatusCreated},
+		}},
+		{"oidc without issuer", oidc, []step{
+			{http.MethodGet, "/api/spaces", "", "", http.StatusServiceUnavailable},
+			{http.MethodPost, "/api/spaces", `{"name":"anon"}`, "", http.StatusServiceUnavailable},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := NewManager(tc.cfg)
+			if err := m.AddSpace("primary", t.TempDir(), tc.cfg); err != nil {
+				t.Fatal(err)
+			}
+			defer m.Close()
+			h := m.Handler()
+			for _, s := range tc.steps {
+				req := httptest.NewRequest(s.method, s.target, strings.NewReader(s.body))
+				req.Header.Set("Content-Type", "application/json")
+				if s.bearer != "" {
+					req.Header.Set("Authorization", "Bearer "+s.bearer)
+				}
+				rec := httptest.NewRecorder()
+				h.ServeHTTP(rec, req)
+				if rec.Code != s.want {
+					t.Fatalf("%s %s as %q = %d, want %d; body: %s", s.method, s.target, s.bearer, rec.Code, s.want, rec.Body.String())
+				}
+				if strings.Contains(rec.Body.String(), `"root"`) {
+					t.Fatalf("%s %s leaked a server path: %s", s.method, s.target, rec.Body.String())
+				}
+			}
+		})
 	}
 }
 

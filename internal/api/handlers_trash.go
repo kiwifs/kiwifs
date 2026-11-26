@@ -127,14 +127,12 @@ func (h *Handlers) checkTrashItemScope(c echo.Context, id string) error {
 	return nil
 }
 
-// keyMayReach accepts path with or without a leading slash, since keys'
-// spaces and prefixes are configured in either form.
 func keyMayReach(c echo.Context, path string) bool {
 	allowed, ok := c.Get(keyPathScopeCtxKey).(func(string) bool)
 	if !ok {
 		return true
 	}
-	return allowed(path) || allowed("/"+path)
+	return allowed(path)
 }
 
 func trashError(err error) error {

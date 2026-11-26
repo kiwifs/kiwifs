@@ -332,7 +332,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			log.Printf("mcp init for space: %v", err)
 			return
 		}
-		s.Server.SetMCPHandler(mcpserver.StreamableHTTPHandler(mcpSrv, mcpserver.AuthTokenFromConfig(s.Config)))
+		s.Server.SetMCPHandler(mcpserver.StreamableHTTPHandler(mcpSrv))
 	}
 	if err := spaceMgr.RegisterStack(primaryName, root, stack); err != nil {
 		return fmt.Errorf("register %q space: %w", primaryName, err)
@@ -492,7 +492,7 @@ func wireMCPHTTP(stack *bootstrap.Stack) error {
 	if err != nil {
 		return fmt.Errorf("mcp init: %w", err)
 	}
-	stack.Server.SetMCPHandler(mcpserver.StreamableHTTPHandler(mcpSrv, mcpserver.AuthTokenFromConfig(stack.Config)))
+	stack.Server.SetMCPHandler(mcpserver.StreamableHTTPHandler(mcpSrv))
 	return nil
 }
 

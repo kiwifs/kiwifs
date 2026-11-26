@@ -658,7 +658,7 @@ function createMockFetch(overrides: MockOverrides = {}) {
       if (url.includes("/api/spaces")) {
         return jsonResponse({
           spaces: [
-            { name: "default", root: "/tmp/kiwi", fileCount: 6, sizeBytes: 14200 },
+            { name: "default", fileCount: 6, sizeBytes: 14200 },
           ],
         });
       }

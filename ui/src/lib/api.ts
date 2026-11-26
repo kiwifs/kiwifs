@@ -137,7 +137,6 @@ export type BackupStatusResponse = {
 
 export type SpaceMeta = {
   name: string;
-  root: string;
   fileCount: number;
   lastModified?: string;
   sizeBytes: number;
@@ -352,15 +351,11 @@ export const api = {
     return request(`/api/spaces/${encodeURIComponent(name)}`);
   },
 
-  async createSpace(
-    name: string,
-    root: string,
-    template?: string
-  ): Promise<SpaceMeta> {
+  async createSpace(name: string, template?: string): Promise<SpaceMeta> {
     return request("/api/spaces", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, root, template: template ?? "blank" }),
+      body: JSON.stringify({ name, template: template ?? "blank" }),
     });
   },
 

@@ -76,7 +76,7 @@ export function SpaceSelector({
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      await api.createSpace(newName.trim(), "");
+      await api.createSpace(newName.trim());
       setDialogOpen(false);
       setNewName("");
       load();

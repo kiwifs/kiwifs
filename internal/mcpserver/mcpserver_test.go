@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kiwifs/kiwifs/internal/config"
 	"github.com/kiwifs/kiwifs/internal/pipeline"
+	"github.com/kiwifs/kiwifs/internal/protoauth"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -237,7 +239,7 @@ func TestHTTPHandlerHealth(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
-	newHTTPHandler(s, time.Now(), "").ServeHTTP(rec, req)
+	newHTTPHandler(s, time.Now(), protoauth.None()).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("health status = %d, want %d", rec.Code, http.StatusOK)
 	}
@@ -246,115 +248,114 @@ func TestHTTPHandlerHealth(t *testing.T) {
 	}
 }
 
-func TestHTTPHandlerHealthBypassesBearerAuth(t *testing.T) {
+func TestHTTPHandlerHealthBypassesAuth(t *testing.T) {
 	s, backend, err := New(Options{Root: t.TempDir()})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	defer backend.Close()
+	auth, err := protoauth.New(config.AuthConfig{Type: "apikey", APIKey: "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
-	newHTTPHandler(s, time.Now(), "secret").ServeHTTP(rec, req)
+	newHTTPHandler(s, time.Now(), auth).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("health status = %d, want %d", rec.Code, http.StatusOK)
 	}
 }
 
-func TestBearerAuth(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	t.Run("disabled without token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
-		rec := httptest.NewRecorder()
-		bearerAuth("", next).ServeHTTP(rec, req)
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
-		}
-	})
-
-	t.Run("rejects missing token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
-		rec := httptest.NewRecorder()
-		bearerAuth("secret", next).ServeHTTP(rec, req)
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
-		}
-	})
-
-	t.Run("rejects wrong token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
-		req.Header.Set("Authorization", "Bearer wrong")
-		rec := httptest.NewRecorder()
-		bearerAuth("secret", next).ServeHTTP(rec, req)
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
-		}
-	})
-
-	t.Run("accepts matching bearer token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
-		req.Header.Set("Authorization", "Bearer secret")
-		rec := httptest.NewRecorder()
-		bearerAuth("secret", next).ServeHTTP(rec, req)
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
-		}
-	})
-}
-
-func TestHTTPAuthTokenFromRootConfig(t *testing.T) {
-	tmp := t.TempDir()
-	kiwiDir := filepath.Join(tmp, ".kiwi")
+func writeMCPAuthConfig(t *testing.T, auth string) string {
+	t.Helper()
+	root := t.TempDir()
+	kiwiDir := filepath.Join(root, ".kiwi")
 	if err := os.MkdirAll(kiwiDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(kiwiDir, "config.toml"), []byte(auth), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func TestHTTPAuthEnforcesRootConfig(t *testing.T) {
 	t.Setenv("KIWI_MCP_TEST_KEY", "secret")
-	if err := os.WriteFile(filepath.Join(kiwiDir, "config.toml"), []byte(`
+	apikey := writeMCPAuthConfig(t, `
 [auth]
 type = "apikey"
 api_key = "${KIWI_MCP_TEST_KEY}"
-`), 0o644); err != nil {
-		t.Fatal(err)
+`)
+	perspace := writeMCPAuthConfig(t, `
+[auth]
+type = "perspace"
+[[auth.api_keys]]
+key = "admin-key"
+[[auth.api_keys]]
+key = "read-key"
+scope = "read"
+[[auth.api_keys]]
+key = "folder-key"
+space = "team-a"
+[[auth.api_keys]]
+key = "prefix-key"
+prefix = "public/"
+`)
+	none := writeMCPAuthConfig(t, `
+[auth]
+type = "none"
+`)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	cases := []struct {
+		name   string
+		root   string
+		header string
+		want   int
+	}{
+		{"apikey anonymous", apikey, "", http.StatusUnauthorized},
+		{"apikey wrong key", apikey, "Bearer wrong", http.StatusUnauthorized},
+		{"apikey key without Bearer", apikey, "secret", http.StatusUnauthorized},
+		{"apikey key", apikey, "Bearer secret", http.StatusNoContent},
+		{"perspace anonymous", perspace, "", http.StatusUnauthorized},
+		{"perspace admin key", perspace, "Bearer admin-key", http.StatusNoContent},
+		{"perspace read-only key", perspace, "Bearer read-key", http.StatusUnauthorized},
+		{"perspace folder key", perspace, "Bearer folder-key", http.StatusUnauthorized},
+		{"perspace prefix key", perspace, "Bearer prefix-key", http.StatusUnauthorized},
+		{"none is open", none, "", http.StatusNoContent},
+		{"missing config is open", t.TempDir(), "", http.StatusNoContent},
 	}
-
-	got, err := httpAuthToken(Options{Root: tmp})
-	if err != nil {
-		t.Fatalf("httpAuthToken: %v", err)
-	}
-	if got != "secret" {
-		t.Fatalf("token = %q, want %q", got, "secret")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			auth, err := httpAuth(Options{Root: tc.root})
+			if err != nil {
+				t.Fatalf("httpAuth: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+			if tc.header != "" {
+				req.Header.Set("Authorization", tc.header)
+			}
+			rec := httptest.NewRecorder()
+			requireKey(auth, next).ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.want)
+			}
+		})
 	}
 }
 
-func TestHTTPAuthTokenIgnoresMissingOrUnsupportedConfig(t *testing.T) {
-	got, err := httpAuthToken(Options{Root: t.TempDir()})
-	if err != nil {
-		t.Fatalf("httpAuthToken missing config: %v", err)
-	}
-	if got != "" {
-		t.Fatalf("token = %q, want empty", got)
-	}
-
-	tmp := t.TempDir()
-	kiwiDir := filepath.Join(tmp, ".kiwi")
-	if err := os.MkdirAll(kiwiDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(kiwiDir, "config.toml"), []byte(`
+func TestHTTPAuthRefusesOIDC(t *testing.T) {
+	root := writeMCPAuthConfig(t, `
 [auth]
-type = "none"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	got, err = httpAuthToken(Options{Root: tmp})
-	if err != nil {
-		t.Fatalf("httpAuthToken unsupported config: %v", err)
-	}
-	if got != "" {
-		t.Fatalf("token = %q, want empty", got)
+type = "oidc"
+[auth.oidc]
+issuer = "https://idp.example.com"
+client_id = "kiwi"
+`)
+	if _, err := httpAuth(Options{Root: root}); err == nil {
+		t.Fatal("httpAuth under oidc: want error, got a checker that can't verify OIDC tokens")
 	}
 }
 

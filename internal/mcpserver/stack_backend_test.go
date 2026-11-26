@@ -53,16 +53,3 @@ strategy = "none"
 		t.Fatalf("stack should remain usable after backend Close: %v", err)
 	}
 }
-
-func TestAuthTokenFromConfig(t *testing.T) {
-	if got := AuthTokenFromConfig(nil); got != "" {
-		t.Fatalf("nil cfg = %q, want empty", got)
-	}
-	got := AuthTokenFromConfig(&config.Config{Auth: config.AuthConfig{Type: "apikey", APIKey: "k"}})
-	if got != "k" {
-		t.Fatalf("token = %q, want k", got)
-	}
-	if got := AuthTokenFromConfig(&config.Config{Auth: config.AuthConfig{Type: "none"}}); got != "" {
-		t.Fatalf("none auth = %q, want empty", got)
-	}
-}

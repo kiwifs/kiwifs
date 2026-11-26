@@ -105,7 +105,7 @@ func build(auth config.AuthConfig) (*state, error) {
 	case "perspace":
 		return &state{open: len(auth.APIKeys) == 0, keys: auth.APIKeys}, nil
 	case "oidc":
-		return nil, fmt.Errorf("auth.type = \"oidc\" cannot be enforced on S3 or WebDAV; their clients cannot complete an OIDC login")
+		return nil, fmt.Errorf("auth.type = \"oidc\" cannot be enforced on S3, WebDAV or standalone MCP; their clients cannot complete an OIDC login")
 	default:
 		return nil, fmt.Errorf("unknown auth.type %q", auth.Type)
 	}

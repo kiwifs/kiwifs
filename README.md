@@ -130,6 +130,16 @@ key can attribute a write to any actor. Terminate
 authentication at a gateway that sets `X-Actor` itself and strips any
 client-supplied value before forwarding.
 
+`/mcp` and `/api/spaces` on the main port use the same `[auth]` as REST.
+MCP, and creating or deleting spaces, need a key with write access to the
+whole tree: the `apikey` key, an OIDC token, or a `perspace` key with no
+`space`, no `prefix` and a scope other than `read`. A `perspace` key limited
+to a `space` or `prefix` only works on endpoints that check paths against it
+(file read/write/delete/append, tree, versions, diff, blame, peek, section,
+toc, assets, raw files, bulk, rename, rename-dir, share and trash); every
+other endpoint answers 403. `kiwifs mcp --http` takes the same keys as
+WebDAV and S3 and refuses to start under `oidc`.
+
 ---
 
 ## Vector embedder options
