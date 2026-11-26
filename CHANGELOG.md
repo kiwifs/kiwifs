@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.97](https://github.com/kiwifs/kiwifs/compare/v0.19.96...v0.19.97) (2026-11-26)
+
+
+### Bug Fixes
+
+* require auth on /mcp and /api/spaces and confine scoped keys ([1f7a2c3](https://github.com/kiwifs/kiwifs/commit/1f7a2c357263e0986ac6065ea48b8174ee478112))
+
 ## [0.19.96](https://github.com/kiwifs/kiwifs/compare/v0.19.95...v0.19.96) (2026-11-25)
 
 
